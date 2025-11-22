@@ -8,8 +8,10 @@ struct ActivitySession: Identifiable, Codable {
     let distanceMeters: Double
     let durationSeconds: Double
     let route: [RoutePoint]
+    // NEW: XP breakdown for this activity
+    var xpBreakdown: XPBreakdown?
     
-    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, route: [RoutePoint]) {
+    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil) {
         self.id = id
         self.startDate = startDate
         self.endDate = endDate
@@ -17,5 +19,6 @@ struct ActivitySession: Identifiable, Codable {
         self.distanceMeters = distanceMeters
         self.durationSeconds = durationSeconds
         self.route = route
+        self.xpBreakdown = xpBreakdown
     }
 }

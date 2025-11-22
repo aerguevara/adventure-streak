@@ -30,19 +30,12 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("History")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        viewModel.importFromHealthKit()
-                    }) {
-                        if viewModel.isImporting {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.down.circle")
-                        }
-                    }
-                }
+            .navigationTitle("History")
+            .onAppear {
+                viewModel.loadActivities()
             }
+            // Removed manual import button as requested
+            // .toolbar { ... }
             .onAppear {
                 viewModel.loadActivities()
             }

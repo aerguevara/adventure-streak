@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 class ProfileViewModel: ObservableObject {
@@ -16,6 +17,8 @@ class ProfileViewModel: ObservableObject {
     @Published var totalCellsConquered: Int = 0
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
+    
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Dependencies
     private let activityStore: ActivityStore
@@ -38,6 +41,37 @@ class ProfileViewModel: ObservableObject {
         
         // Initial load
         fetchProfileData()
+        
+        // Observe GamificationService for real-time updates
+        setupObservers()
+    }
+    
+    private func setupObservers() {
+        // When GamificationService updates (e.g. after activity), update local UI
+        gamificationService.$currentXP
+            .receive(on: RunLoop.main)
+            .sink { [weak self] xp in
+                self?.totalXP = xp
+            }
+            .store(in: &cancellables)
+            
+        gamificationService.$currentLevel
+            .receive(on: RunLoop.main)
+            .sink { [weak self] level in
+                self?.level = level
+            }
+            .store(in: &cancellables)
+            
+        // Re-calculate progress when XP/Level changes
+        gamificationService.$currentXP
+            .combineLatest(gamificationService.$currentLevel)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] (xp, level) in
+                guard let self = self else { return }
+                self.nextLevelXP = self.gamificationService.xpForNextLevel(level: level)
+                self.xpProgress = self.gamificationService.progressToNextLevel(currentXP: xp, currentLevel: level)
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Actions
@@ -59,11 +93,12 @@ class ProfileViewModel: ObservableObject {
             self.isLoading = false
             
             if let user = user {
+                print("DEBUG: Fetched user: \(user.displayName ?? "nil"), XP: \(user.xp), Level: \(user.level)")
                 self.updateWithUser(user)
             } else {
+                print("DEBUG: Could not fetch user profile or user is nil")
                 // If fetch fails but we have local auth, maybe show error or just keep defaults
                 // For MVP, we might just rely on defaults or local cache if we had it
-                print("Could not fetch user profile")
             }
         }
     }
@@ -90,11 +125,9 @@ class ProfileViewModel: ObservableObject {
     
     private func updateWithUser(_ user: User) {
         self.userDisplayName = user.displayName ?? "Adventurer"
-        self.level = user.level
-        self.totalXP = user.xp
         
-        // Calculate progress
-        self.nextLevelXP = gamificationService.xpForNextLevel(level: self.level)
-        self.xpProgress = gamificationService.progressToNextLevel(currentXP: self.totalXP, currentLevel: self.level)
+        // Sync GamificationService with fetched data
+        // This will trigger the observers above to update the UI properties
+        gamificationService.syncState(xp: user.xp, level: user.level)
     }
 }

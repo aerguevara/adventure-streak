@@ -1,7 +1,17 @@
 import Foundation
 
 // NEW: Added for multiplayer conquest feature
-class GamificationService: ObservableObject {
+protocol GamificationServiceProtocol {
+    func computeXP(for activity: ActivitySession,
+                   territoryStats: TerritoryStats,
+                   context: XPContext) async throws -> XPBreakdown
+
+    func applyXP(_ breakdown: XPBreakdown,
+                 to userId: String,
+                 at date: Date) async throws
+}
+
+class GamificationService: ObservableObject, GamificationServiceProtocol {
     static let shared = GamificationService()
     
     private let repository = GamificationRepository.shared
@@ -9,55 +19,135 @@ class GamificationService: ObservableObject {
     @Published var currentXP: Int = 0
     @Published var currentLevel: Int = 1
     
-    // NEW: Constants for balancing
-    private let xpPerLevel = 1000
-    private let xpPerConquest = 100
-    private let xpPerRecapture = 150
+    // MARK: - Public Interface
     
-    // NEW: Award XP for conquering a territory
-    func awardConquestXP() {
-        addXP(amount: xpPerConquest)
-    }
-    
-    // NEW: Award Bonus XP for recapturing a lost territory
-    func awardRecaptureBonusXP(cellId: String) {
-        addXP(amount: xpPerRecapture)
-        // Check for "Defensor" badge logic here (simplified)
-        checkBadgeEligibility(badgeId: "defensor")
-    }
-    
-    // NEW: Award XP for weekly distance milestone
-    func awardWeeklyDistanceBonusIfEligible(distance: Double) {
-        if distance > 50000 { // 50km example
-            addXP(amount: 500)
+    func syncState(xp: Int, level: Int) {
+        Task { @MainActor in
+            self.currentXP = xp
+            self.currentLevel = level
         }
     }
     
-    private func addXP(amount: Int) {
-        currentXP += amount
-        checkLevelUp()
-        // Sync with repository
-        // repository.updateUserStats(userId: "current_user_id", xp: currentXP, level: currentLevel)
+    func computeXP(for activity: ActivitySession,
+                   territoryStats: TerritoryStats,
+                   context: XPContext) async throws -> XPBreakdown {
+        
+        // 1. Base XP
+        let xpBase = computeBaseXP(for: activity, context: context)
+        
+        // 2. Territory XP
+        let xpTerritory = computeTerritoryXP(from: territoryStats)
+        
+        // 3. Streak Bonus
+        // Logic: If activity duration > min and it's a new week (simplified for MVP: always check context)
+        // For MVP, let's assume any valid activity maintains streak if not already extended this week
+        let maintainsStreak = activity.durationSeconds >= XPConfig.minDurationSeconds
+        let xpStreak = computeStreakBonus(for: activity, context: context, maintainsStreak: maintainsStreak)
+        
+        // 4. Weekly Record
+        let newWeekDistance = context.currentWeekDistanceKm + (activity.distanceMeters / 1000.0)
+        let xpWeeklyRecord = computeWeeklyRecordBonus(for: activity, context: context, newWeekDistanceKm: newWeekDistance)
+        
+        // 5. Badges (Placeholder for now, would integrate BadgeService)
+        let xpBadges = 0 
+        
+        return XPBreakdown(
+            xpBase: xpBase,
+            xpTerritory: xpTerritory,
+            xpStreak: xpStreak,
+            xpWeeklyRecord: xpWeeklyRecord,
+            xpBadges: xpBadges
+        )
     }
     
-    private func checkLevelUp() {
-        let newLevel = (currentXP / xpPerLevel) + 1
-        if newLevel > currentLevel {
-            currentLevel = newLevel
-            // Trigger level up notification or event
+    func applyXP(_ breakdown: XPBreakdown,
+                 to userId: String,
+                 at date: Date) async throws {
+        
+        // 1. Fetch current state (or use context if passed, but safer to fetch fresh)
+        // For MVP we rely on repository update which merges
+        let context = try await repository.buildXPContext(for: userId)
+        var state = context.gamificationState
+        
+        // 2. Update State
+        state.totalXP += breakdown.total
+        
+        // 3. Recalculate Level (Simple formula: Level = 1 + XP / 1000)
+        let newLevel = 1 + (state.totalXP / 1000)
+        state.level = newLevel
+        
+        // 4. Persist
+        repository.updateUserStats(userId: userId, xp: state.totalXP, level: state.level)
+        
+        // Update local published state
+        let finalXP = state.totalXP
+        let finalLevel = state.level
+        
+        await MainActor.run {
+            self.currentXP = finalXP
+            self.currentLevel = finalLevel
         }
     }
     
-    private func checkBadgeEligibility(badgeId: String) {
-        // Logic to check if badge is already owned, if not, award it
-        // repository.awardBadge(userId: "current_user_id", badgeId: badgeId)
+    // MARK: - Internal Calculation Logic
+    
+    func computeBaseXP(for activity: ActivitySession, context: XPContext) -> Int {
+        let distanceKm = activity.distanceMeters / 1000.0
+        
+        guard distanceKm >= XPConfig.minDistanceKm,
+              activity.durationSeconds >= XPConfig.minDurationSeconds else {
+            return 0
+        }
+        
+        var factor = XPConfig.baseFactorPerKm
+        switch activity.activityType {
+        case .run: factor *= XPConfig.factorRun
+        case .bike: factor *= XPConfig.factorBike
+        case .walk: factor *= XPConfig.factorWalk
+        case .otherOutdoor: factor *= XPConfig.factorOther
+        }
+        
+        let rawXP = Int(distanceKm * factor)
+        
+        // Apply Daily Cap
+        let remainingCap = max(0, XPConfig.dailyBaseXPCap - context.todayBaseXPEarned)
+        return min(rawXP, remainingCap)
     }
-    // NEW: Helper to calculate XP required for next level
+    
+    func computeTerritoryXP(from stats: TerritoryStats) -> Int {
+        let effectiveNewCells = min(stats.newCellsCount, XPConfig.maxNewCellsXPPerActivity)
+        
+        let xpNew = effectiveNewCells * XPConfig.xpPerNewCell
+        let xpDef = stats.defendedCellsCount * XPConfig.xpPerDefendedCell
+        let xpRec = stats.recapturedCellsCount * XPConfig.xpPerRecapturedCell
+        
+        return xpNew + xpDef + xpRec
+    }
+    
+    func computeStreakBonus(for activity: ActivitySession, context: XPContext, maintainsStreak: Bool) -> Int {
+        guard maintainsStreak else { return 0 }
+        // Bonus is proportional to streak length
+        return XPConfig.baseStreakXPPerWeek * context.currentStreakWeeks
+    }
+    
+    func computeWeeklyRecordBonus(for activity: ActivitySession, context: XPContext, newWeekDistanceKm: Double) -> Int {
+        guard let best = context.bestWeeklyDistanceKm, best >= XPConfig.minWeeklyRecordKm else {
+            return 0 // No previous record or record too low
+        }
+        
+        if newWeekDistanceKm > best {
+            let diff = newWeekDistanceKm - best
+            return XPConfig.weeklyRecordBaseXP + Int(diff * Double(XPConfig.weeklyRecordPerKmDiffXP))
+        }
+        
+        return 0
+    }
+    
+    // Helper for UI progress
     func xpForNextLevel(level: Int) -> Int {
-        return level * xpPerLevel
+        return level * 1000
     }
     
-    // NEW: Helper to calculate progress to next level (0.0 - 1.0)
     func progressToNextLevel(currentXP: Int, currentLevel: Int) -> Double {
         let nextLevelThreshold = xpForNextLevel(level: currentLevel)
         let previousLevelThreshold = xpForNextLevel(level: currentLevel - 1)

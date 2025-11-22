@@ -9,13 +9,17 @@ class ActivityStore: ObservableObject {
     }
     
     func saveActivity(_ activity: ActivitySession) {
-        activities.append(activity)
+        saveActivities([activity])
+    }
+    
+    func saveActivities(_ newActivities: [ActivitySession]) {
+        activities.append(contentsOf: newActivities)
         // Sort by date descending
         activities.sort { $0.startDate > $1.startDate }
         do {
             try store.save(activities)
         } catch {
-            print("Failed to save activity: \(error)")
+            print("Failed to save activities: \(error)")
         }
     }
     

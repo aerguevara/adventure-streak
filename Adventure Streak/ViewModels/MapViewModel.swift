@@ -132,18 +132,61 @@ class MapViewModel: ObservableObject {
         guard let start = startTime else { return }
         let end = Date()
         
-        let session = ActivitySession(
-            startDate: start,
-            endDate: end,
-            activityType: type,
-            distanceMeters: currentActivityDistance,
-            durationSeconds: currentActivityDuration,
-            route: locationService.routePoints
-        )
-        
-        activityStore.saveActivity(session)
-        let newCells = territoryService.processActivity(session)
-        print("Conquered \(newCells) new cells")
+        Task {
+            let userId = AuthenticationService.shared.userId ?? "unknown_user"
+            
+            // 1. Process Territories
+            // Create temporary session for territory processing (without XP yet)
+            let tempSession = ActivitySession(
+                startDate: start,
+                endDate: end,
+                activityType: type,
+                distanceMeters: currentActivityDistance,
+                durationSeconds: currentActivityDuration,
+                route: locationService.routePoints
+            )
+            
+            let territoryStats = territoryService.processActivity(tempSession)
+            
+            // 2. Calculate XP
+            var breakdown: XPBreakdown?
+            do {
+                let context = try await GamificationRepository.shared.buildXPContext(for: userId)
+                breakdown = try await GamificationService.shared.computeXP(for: tempSession, territoryStats: territoryStats, context: context)
+                
+                if let breakdown = breakdown {
+                    try await GamificationService.shared.applyXP(breakdown, to: userId, at: end)
+                    print("XP Earned: \(breakdown.total)")
+                }
+            } catch {
+                print("Error calculating XP: \(error)")
+            }
+            
+            // 3. Save Activity with XP
+            let finalSession = ActivitySession(
+                startDate: start,
+                endDate: end,
+                activityType: type,
+                distanceMeters: currentActivityDistance,
+                durationSeconds: currentActivityDuration,
+                route: locationService.routePoints,
+                xpBreakdown: breakdown
+            )
+            
+            activityStore.saveActivity(finalSession)
+            
+            // 4. Post to Feed
+            if territoryStats.newCellsCount > 0 {
+                let event = FeedEvent(
+                    id: nil,
+                    type: "conquest",
+                    message: "Conquered \(territoryStats.newCellsCount) new territories!",
+                    userId: userId,
+                    timestamp: Date()
+                )
+                FeedRepository.shared.postEvent(event)
+            }
+        }
     }
     
     private func calculateDistance(points: [RoutePoint]) {

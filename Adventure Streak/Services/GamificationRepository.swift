@@ -123,4 +123,42 @@ class GamificationRepository: ObservableObject {
         completion([])
         #endif
     }
+    // NEW: Build context for XP calculation
+    func buildXPContext(for userId: String) async throws -> XPContext {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else {
+            // Fallback for preview/testing
+            return XPContext(userId: userId, currentWeekDistanceKm: 0, bestWeeklyDistanceKm: nil, currentStreakWeeks: 0, todayBaseXPEarned: 0, gamificationState: GamificationState(totalXP: 0, level: 1, currentStreakWeeks: 0))
+        }
+        
+        // 1. Fetch User Stats
+        let userDoc = try await db.collection("users").document(userId).getDocument()
+        let data = userDoc.data() ?? [:]
+        
+        let totalXP = data["xp"] as? Int ?? 0
+        let level = data["level"] as? Int ?? 1
+        let streak = data["currentStreakWeeks"] as? Int ?? 0
+        
+        // 2. Fetch Weekly Stats (Mocked for MVP, ideally from a separate collection)
+        // In a real app, we would query ActivityRepository for this week's activities
+        let currentWeekDist = data["currentWeekDistanceKm"] as? Double ?? 0.0
+        let bestWeekDist = data["bestWeeklyDistanceKm"] as? Double
+        
+        // 3. Fetch Today's XP (Mocked)
+        let todayXP = 0 // TODO: Query activities from today and sum base XP
+        
+        let state = GamificationState(totalXP: totalXP, level: level, currentStreakWeeks: streak)
+        
+        return XPContext(
+            userId: userId,
+            currentWeekDistanceKm: currentWeekDist,
+            bestWeeklyDistanceKm: bestWeekDist,
+            currentStreakWeeks: streak,
+            todayBaseXPEarned: todayXP,
+            gamificationState: state
+        )
+        #else
+        return XPContext(userId: userId, currentWeekDistanceKm: 0, bestWeeklyDistanceKm: nil, currentStreakWeeks: 0, todayBaseXPEarned: 0, gamificationState: GamificationState(totalXP: 0, level: 1, currentStreakWeeks: 0))
+        #endif
+    }
 }

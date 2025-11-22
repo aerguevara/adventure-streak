@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 class TerritoryStore: ObservableObject {
     private let store = JSONStore<TerritoryCell>(filename: "territories.json")
     @Published var conqueredCells: [String: TerritoryCell] = [:]
@@ -40,10 +41,17 @@ class TerritoryStore: ObservableObject {
     }
     
     private func persist() {
-        do {
-            try store.save(Array(conqueredCells.values))
-        } catch {
-            print("Failed to save territories: \(error)")
+        let cellsToSave = Array(conqueredCells.values)
+        
+        // Perform heavy JSON encoding and file writing in background
+        Task.detached(priority: .background) {
+            do {
+                // Create a new local instance to avoid capturing MainActor-isolated 'self.store'
+                let localStore = JSONStore<TerritoryCell>(filename: "territories.json") 
+                try localStore.save(cellsToSave)
+            } catch {
+                print("Failed to save territories: \(error)")
+            }
         }
     }
 }
