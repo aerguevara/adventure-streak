@@ -6,6 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DA45082A2ED242EE00D3C493 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = DA4508292ED242EE00D3C493 /* FirebaseFirestore */; };
+		DA45082C2ED2432400D3C493 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = DA45082B2ED2432400D3C493 /* FirebaseAnalytics */; };
+		DA4508382ED2467600D3C493 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = DA4508372ED2467600D3C493 /* FirebaseAuth */; };
+		DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = DA4508392ED2495300D3C493 /* FirebaseCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		DA4507B92ED21A0D00D3C493 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +59,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA45082C2ED2432400D3C493 /* FirebaseAnalytics in Frameworks */,
+				DA4508382ED2467600D3C493 /* FirebaseAuth in Frameworks */,
+				DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */,
+				DA45082A2ED242EE00D3C493 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +89,7 @@
 				DA4507AA2ED21A0B00D3C493 /* Adventure Streak */,
 				DA4507BB2ED21A0D00D3C493 /* Adventure StreakTests */,
 				DA4507C52ED21A0D00D3C493 /* Adventure StreakUITests */,
+				DA4508282ED242EE00D3C493 /* Frameworks */,
 				DA4507A92ED21A0B00D3C493 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +102,13 @@
 				DA4507C22ED21A0D00D3C493 /* Adventure StreakUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		DA4508282ED242EE00D3C493 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +131,10 @@
 			);
 			name = "Adventure Streak";
 			packageProductDependencies = (
+				DA4508292ED242EE00D3C493 /* FirebaseFirestore */,
+				DA45082B2ED2432400D3C493 /* FirebaseAnalytics */,
+				DA4508372ED2467600D3C493 /* FirebaseAuth */,
+				DA4508392ED2495300D3C493 /* FirebaseCore */,
 			);
 			productName = "Adventure Streak";
 			productReference = DA4507A82ED21A0B00D3C493 /* Adventure Streak.app */;
@@ -195,6 +218,9 @@
 			);
 			mainGroup = DA45079F2ED21A0B00D3C493;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA4507A92ED21A0B00D3C493 /* Products */;
 			projectDirPath = "";
@@ -393,12 +419,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Necesitamos acceder a tus entrenamientos para importar tus rutas y conquistar territorios";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Necesitamos tu ubicación para mostrar el mapa";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Necesitamos tu ubicación para registrar tu ruta";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -422,12 +454,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Necesitamos acceder a tus entrenamientos para importar tus rutas y conquistar territorios";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Necesitamos tu ubicación para mostrar el mapa";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Necesitamos tu ubicación para registrar tu ruta";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -558,6 +596,40 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DA4508292ED242EE00D3C493 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		DA45082B2ED2432400D3C493 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		DA4508372ED2467600D3C493 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		DA4508392ED2495300D3C493 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DA4507A02ED21A0B00D3C493 /* Project object */;
 }

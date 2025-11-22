@@ -1,24 +1,43 @@
-//
-//  ContentView.swift
-//  Adventure Streak
-//
-//  Created by Anyelo Reyes on 22/11/25.
-//
-
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+    @StateObject private var authService = AuthenticationService.shared
+    
+    // ViewModels
+    @StateObject private var onboardingViewModel: OnboardingViewModel
+    @StateObject private var mapViewModel: MapViewModel
+    @StateObject private var historyViewModel: HistoryViewModel
+    @StateObject private var profileViewModel: ProfileViewModel
+    
+    init() {
+        // Initialize services
+        let locService = LocationService()
+        let actStore = ActivityStore()
+        let terrStore = TerritoryStore()
+        
+        // Correct way to initialize StateObject with dependencies
+        _onboardingViewModel = StateObject(wrappedValue: OnboardingViewModel(locationService: locService))
+        _mapViewModel = StateObject(wrappedValue: MapViewModel(locationService: locService, territoryStore: terrStore, activityStore: actStore))
+        
+        let terrService = TerritoryService(territoryStore: terrStore)
+        _historyViewModel = StateObject(wrappedValue: HistoryViewModel(activityStore: actStore, territoryService: terrService))
+        
+        _profileViewModel = StateObject(wrappedValue: ProfileViewModel(activityStore: actStore, territoryStore: terrStore))
     }
-}
-
-#Preview {
-    ContentView()
+    
+    var body: some View {
+        Group {
+            if !authService.isAuthenticated {
+                LoginView()
+            } else if !onboardingViewModel.hasCompletedOnboarding {
+                OnboardingView(viewModel: onboardingViewModel)
+            } else {
+                MainTabView(
+                    mapViewModel: mapViewModel,
+                    historyViewModel: historyViewModel,
+                    profileViewModel: profileViewModel
+                )
+            }
+        }
+    }
 }
