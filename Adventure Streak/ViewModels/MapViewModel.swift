@@ -19,6 +19,9 @@ class MapViewModel: ObservableObject {
     @Published var currentActivityDistance: Double = 0.0
     @Published var currentActivityDuration: TimeInterval = 0.0
     
+    // NEW: Loading state removed to allow map to load first
+    // @Published var isLoading = true
+    
     private let locationService: LocationService
     private let territoryStore: TerritoryStore
     private let activityStore: ActivityStore
@@ -54,13 +57,14 @@ class MapViewModel: ObservableObject {
             .map { Array($0.values) }
             .assign(to: &$conqueredTerritories)
             
-        // NEW: Bind remote territories to view model with "Restore from Cloud" logic
+        // NEW: Optimized pipeline - Process on background, update on main
         territoryRepository.$otherTerritories
-            .combineLatest($conqueredTerritories)
-            .receive(on: RunLoop.main)
-            .map { [weak self] (remote, local) -> [RemoteTerritory] in
+            .combineLatest(territoryStore.$conqueredCells)
+            .receive(on: DispatchQueue.global(qos: .userInitiated)) // Process in background
+            .map { [weak self] (remote, localDict) -> [RemoteTerritory] in
                 guard let self = self else { return [] }
                 let currentUserId = AuthenticationService.shared.userId ?? ""
+                let local = Array(localDict.values)
                 let localIds = Set(local.map { $0.id })
                 
                 // 1. Identify my territories that are missing locally (Restore)
@@ -80,17 +84,18 @@ class MapViewModel: ObservableObject {
                             expiresAt: remoteT.expiresAt
                         )
                     }
-                    // Async update to avoid publishing changes during view update
+                    // Async update to store
                     DispatchQueue.main.async {
                         self.territoryStore.upsertCells(restoredCells)
                     }
                 }
                 
-                // 2. Return only TRUE rivals (not me, and not already local)
+                // 2. Return only TRUE rivals
                 return remote.filter { 
                     $0.userId != currentUserId && !localIds.contains($0.id ?? "")
                 }
             }
+            .receive(on: RunLoop.main) // Update UI on main
             .assign(to: &$otherTerritories)
             
         activityStore.$activities

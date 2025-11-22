@@ -13,18 +13,23 @@ struct MapView: View {
                 ForEach(viewModel.otherTerritories) { territory in
                     let polygonCoords = territory.boundary.map { $0.coordinate }
                     
-                    MapPolygon(coordinates: polygonCoords)
-                        .stroke(Color.orange, lineWidth: 1) // Thinner stroke
-                        .foregroundStyle(Color.orange.opacity(0.3))
+                    if polygonCoords.count >= 3 {
+                        MapPolygon(coordinates: polygonCoords)
+                            .stroke(Color.orange, lineWidth: 1)
+                            .foregroundStyle(Color.orange.opacity(0.3))
+                    }
                 }
                 
                 // Local User Territories (Green Boxes)
                 ForEach(viewModel.conqueredTerritories) { cell in
                     let polygonCoords = cell.boundary.map { $0.coordinate }
                     
-                    MapPolygon(coordinates: polygonCoords)
-                        .stroke(Color.green, lineWidth: 1) // Thinner stroke
-                        .foregroundStyle(Color.green.opacity(0.5))
+                    // Validate polygon (must have at least 3 points)
+                    if polygonCoords.count >= 3 {
+                        MapPolygon(coordinates: polygonCoords)
+                            .stroke(Color.green, lineWidth: 1)
+                            .foregroundStyle(Color.green.opacity(0.5))
+                    }
                 }
                 
                 // Activity Routes (Restored as requested)

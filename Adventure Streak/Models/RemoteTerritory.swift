@@ -28,4 +28,42 @@ struct RemoteTerritory: Identifiable, Codable {
     var centerCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: centerLatitude, longitude: centerLongitude)
     }
+    
+    enum CodingKeys: String, CodingKey {
+        case userId, centerLatitude, centerLongitude, boundary, expiresAt, timestamp
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        _id = DocumentID(wrappedValue: nil) // Initialize manually, repository will set it
+        userId = try container.decode(String.self, forKey: .userId)
+        centerLatitude = try container.decode(Double.self, forKey: .centerLatitude)
+        centerLongitude = try container.decode(Double.self, forKey: .centerLongitude)
+        expiresAt = try container.decode(Date.self, forKey: .expiresAt)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        
+        if let storedBoundary = try container.decodeIfPresent([TerritoryPoint].self, forKey: .boundary) {
+            boundary = storedBoundary
+        } else {
+            // Migration: Calculate boundary for legacy documents
+            let halfSize = 0.002 / 2.0
+            boundary = [
+                TerritoryPoint(latitude: centerLatitude + halfSize, longitude: centerLongitude - halfSize),
+                TerritoryPoint(latitude: centerLatitude + halfSize, longitude: centerLongitude + halfSize),
+                TerritoryPoint(latitude: centerLatitude - halfSize, longitude: centerLongitude + halfSize),
+                TerritoryPoint(latitude: centerLatitude - halfSize, longitude: centerLongitude - halfSize)
+            ]
+        }
+    }
+    
+    // Default init
+    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, timestamp: Date) {
+        self.id = id
+        self.userId = userId
+        self.centerLatitude = centerLatitude
+        self.centerLongitude = centerLongitude
+        self.boundary = boundary
+        self.expiresAt = expiresAt
+        self.timestamp = timestamp
+    }
 }

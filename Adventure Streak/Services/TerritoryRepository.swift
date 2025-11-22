@@ -35,10 +35,18 @@ class TerritoryRepository: ObservableObject {
                     return
                 }
                 
-                self?.otherTerritories = documents.compactMap { doc -> RemoteTerritory? in
-                    var territory = try? doc.data(as: RemoteTerritory.self)
-                    territory?.id = doc.documentID // Force assignment of ID
-                    return territory
+                // Perform heavy decoding on background thread to avoid freezing UI
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let territories = documents.compactMap { doc -> RemoteTerritory? in
+                        var territory = try? doc.data(as: RemoteTerritory.self)
+                        territory?.id = doc.documentID // Force assignment of ID
+                        return territory
+                    }
+                    
+                    // Update UI on main thread
+                    DispatchQueue.main.async {
+                        self?.otherTerritories = territories
+                    }
                 }
             }
         #endif

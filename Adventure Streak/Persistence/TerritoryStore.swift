@@ -5,10 +5,18 @@ class TerritoryStore: ObservableObject {
     @Published var conqueredCells: [String: TerritoryCell] = [:]
     
     init() {
-        let cells = store.load()
-        // Convert list to dictionary for faster access
-        self.conqueredCells = Dictionary(uniqueKeysWithValues: cells.map { ($0.id, $0) })
-        removeExpiredCells(now: Date())
+        // Load asynchronously to prevent blocking the main thread (UI)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let cells = self.store.load()
+            
+            // Process and update on Main Actor
+            DispatchQueue.main.async {
+                // Convert list to dictionary for faster access
+                self.conqueredCells = Dictionary(uniqueKeysWithValues: cells.map { ($0.id, $0) })
+                self.removeExpiredCells(now: Date())
+            }
+        }
     }
     
     func upsertCells(_ cells: [TerritoryCell]) {
