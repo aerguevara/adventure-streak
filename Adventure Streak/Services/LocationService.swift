@@ -23,6 +23,11 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.requestWhenInUseAuthorization()
     }
     
+    // NEW: Start getting location updates without recording a route
+    func startMonitoring() {
+        locationManager.startUpdatingLocation()
+    }
+    
     func startTracking() {
         routePoints = []
         isTracking = true
@@ -31,7 +36,10 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     func stopTracking() {
         isTracking = false
-        locationManager.stopUpdatingLocation()
+        // We might want to keep updating location for the map, but for now let's stop to save battery if not needed.
+        // Actually, if we are on the map screen, we want updates.
+        // But let's leave this as is for "stopping a workout".
+        // locationManager.stopUpdatingLocation() 
     }
     
     // MARK: - CLLocationManagerDelegate

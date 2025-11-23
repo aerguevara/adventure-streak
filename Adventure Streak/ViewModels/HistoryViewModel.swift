@@ -119,31 +119,65 @@ class HistoryViewModel: ObservableObject {
                             // 1. Save Activities
                             self.activityStore.saveActivities(newSessions)
                             
-                            // 2. Process Territories & XP
+                            // 2. Process Territories (BATCHED)
                             Task {
                                 let userId = AuthenticationService.shared.userId ?? "unknown_user"
                                 
-                                for session in newSessions {
-                                    // A. Process Territory
-                                    let stats = self.territoryService.processActivity(session)
+                                // A. Batch Process Territories (Updates Store ONCE)
+                                let totalStats = await self.territoryService.processActivities(newSessions)
+                                print("Batch Import: \(totalStats.newCellsCount) new cells.")
+                                
+                                // B. Calculate & Award XP
+                                // We award Base XP for each activity, and Territory XP based on the batch result
+                                do {
+                                    let context = try await GamificationRepository.shared.buildXPContext(for: userId)
                                     
-                                    // B. Calculate & Award XP
-                                    do {
-                                        // We fetch context fresh for each to ensure streaks/records update correctly sequentially
-                                        // Optimization: In a real app, we might batch this or update context locally.
-                                        let context = try await GamificationRepository.shared.buildXPContext(for: userId)
-                                        let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: stats, context: context)
-                                        
-                                        // Update session with breakdown (optional, if we want to persist it back to activityStore)
-                                        // session.xpBreakdown = breakdown 
-                                        // Note: session is a struct, so we'd need to update it in the array and re-save if we want the breakdown stored.
-                                        // For MVP, just applying to User is enough.
-                                        
+                                    // 1. Base XP for each activity
+                                    for session in newSessions {
+                                        // Pass empty stats here, we award territory XP separately
+                                        let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+                                        let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
                                         try await GamificationService.shared.applyXP(breakdown, to: userId, at: session.endDate)
-                                        print("Imported Activity XP: \(breakdown.total)")
-                                    } catch {
-                                        print("Error awarding XP for import: \(error)")
                                     }
+                                    
+                                    // 2. Territory XP (Aggregated)
+                                    // We create a dummy "Import Bonus" breakdown or just apply the XP directly
+                                    // For simplicity, we'll use the last session to attach the territory XP
+                                    // Logic simplified to use the loop below
+                                    
+                                    // SIMPLIFIED APPROACH:
+                                    // Just loop and process Base XP.
+                                    // Then manually award Territory XP if possible.
+                                    // Or, since we are in a rush to fix the crash, let's just award Base XP for imports and ignore Territory XP for now?
+                                    // No, user wants XP.
+                                    // Let's use the "Apply to last session" strategy but be careful not to double count Base XP.
+                                    
+                                    // Actually, let's just loop for Base XP.
+                                    // And then call a direct "addXP" if we can? No.
+                                    
+                                    // Let's stick to the loop for Base XP.
+                                    // And for the Territory XP, we'll just create a "Bonus" transaction?
+                                    // GamificationService.applyXP takes a breakdown.
+                                    
+                                    // Let's just award the Territory XP attached to the last session.
+                                    // We will skip the last session in the loop.
+                                    
+                                    for (index, session) in newSessions.enumerated() {
+                                        if index == newSessions.count - 1 { continue } // Skip last
+                                        
+                                        let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+                                        let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
+                                        try await GamificationService.shared.applyXP(breakdown, to: userId, at: session.endDate)
+                                    }
+                                    
+                                    if let lastSession = newSessions.last {
+                                        // Award Base XP for last session + ALL Territory XP
+                                        let breakdown = try await GamificationService.shared.computeXP(for: lastSession, territoryStats: totalStats, context: context)
+                                        try await GamificationService.shared.applyXP(breakdown, to: userId, at: lastSession.endDate)
+                                    }
+                                    
+                                } catch {
+                                    print("Error awarding XP for import: \(error)")
                                 }
                                 
                                 // Refresh UI

@@ -8,6 +8,7 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             MapView(viewModel: mapViewModel)
+                .ignoresSafeArea(edges: .top)
                 .tabItem {
                     Label("Map", systemImage: "map")
                 }

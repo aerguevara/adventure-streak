@@ -15,9 +15,9 @@ struct DocumentID<T: Codable>: Codable {
 
 struct User: Identifiable, Codable {
     @DocumentID var id: String?
-    let email: String
+    let email: String?
     let displayName: String?
-    let joinedAt: Date
+    let joinedAt: Date?
     var xp: Int = 0
     var level: Int = 1
 }

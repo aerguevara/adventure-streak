@@ -1,84 +1,139 @@
 import SwiftUI
 import MapKit
 
-struct MapView: View {
-    @StateObject var viewModel: MapViewModel
+struct MapView: UIViewRepresentable {
+    @ObservedObject var viewModel: MapViewModel
     
-    var body: some View {
-        ZStack {
-            Map(position: $viewModel.position) {
-                UserAnnotation()
-                
-                // NEW: Multiplayer - Rival Territories (Orange Boxes)
-                ForEach(viewModel.otherTerritories) { territory in
-                    let polygonCoords = territory.boundary.map { $0.coordinate }
-                    
-                    if polygonCoords.count >= 3 {
-                        MapPolygon(coordinates: polygonCoords)
-                            .stroke(Color.orange, lineWidth: 1)
-                            .foregroundStyle(Color.orange.opacity(0.3))
-                    }
-                }
-                
-                // Local User Territories (Green Boxes)
-                ForEach(viewModel.conqueredTerritories) { cell in
-                    let polygonCoords = cell.boundary.map { $0.coordinate }
-                    
-                    // Validate polygon (must have at least 3 points)
-                    if polygonCoords.count >= 3 {
-                        MapPolygon(coordinates: polygonCoords)
-                            .stroke(Color.green, lineWidth: 1)
-                            .foregroundStyle(Color.green.opacity(0.5))
-                    }
-                }
-                
-                // Activity Routes (Restored as requested)
-                ForEach(viewModel.activities) { activity in
-                    if !activity.route.isEmpty {
-                        MapPolyline(coordinates: activity.route.map { $0.coordinate })
-                            .stroke(color(for: activity), lineWidth: 4)
-                    }
-                }
-            }
-            .mapControls {
-                MapUserLocationButton()
-                MapCompass()
-            }
-            
-            VStack {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("Territories: \(viewModel.conqueredTerritories.count)")
-                            .font(.caption)
-                            .padding(6)
-                            .background(Color.black.opacity(0.6))
-                            .cornerRadius(8)
-                            .foregroundColor(.white)
-                    }
-                    Spacer()
-                }
-                .padding()
-                
-                Spacer()
-                
-                // Manual tracking UI removed as requested. Activities are imported from Fitness.
-            }
+    func makeUIView(context: Context) -> MKMapView {
+        let mapView = MKMapView()
+        mapView.delegate = context.coordinator
+        mapView.showsUserLocation = true
+        mapView.isRotateEnabled = false
+        mapView.isPitchEnabled = false
+        
+        // Set initial region
+        mapView.setRegion(viewModel.region, animated: false)
+        
+        return mapView
+    }
+    
+    func updateUIView(_ mapView: MKMapView, context: Context) {
+        // 1. Update Region
+        // Since MapViewModel only updates region ONCE (initial location), it is safe to update here without fighting user.
+        let currentRegion = mapView.region
+        let targetRegion = viewModel.region
+        
+        // Only update if significantly different (to avoid minor floating point loops)
+        if abs(currentRegion.center.latitude - targetRegion.center.latitude) > 0.0001 ||
+           abs(currentRegion.center.longitude - targetRegion.center.longitude) > 0.0001 {
+            mapView.setRegion(viewModel.region, animated: true)
         }
+        
+        // 1. Smart Diffing for Local Territories (Green)
+        updateTerritories(mapView: mapView, context: context)
+        
+        // 2. Smart Diffing for Rival Territories (Orange)
+        updateRivals(mapView: mapView, context: context)
     }
     
-    func formatDuration(_ duration: TimeInterval) -> String {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.hour, .minute, .second]
-        formatter.unitsStyle = .positional
-        formatter.zeroFormattingBehavior = .pad
-        return formatter.string(from: duration) ?? "00:00"
+    private func updateTerritories(mapView: MKMapView, context: Context) {
+        let currentIds = context.coordinator.renderedTerritoryIds
+        let newTerritories = viewModel.visibleTerritories
+        let newIds = Set(newTerritories.map { $0.id })
+        
+        print("DEBUG: MapView updating territories. Current: \(currentIds.count), New: \(newIds.count)")
+        
+        let toRemoveIds = currentIds.subtracting(newIds)
+        let toAddIds = newIds.subtracting(currentIds)
+        
+        if !toRemoveIds.isEmpty {
+            let overlaysToRemove = mapView.overlays.filter { overlay in
+                guard let title = overlay.title, let id = title else { return false }
+                return toRemoveIds.contains(id)
+            }
+            mapView.removeOverlays(overlaysToRemove)
+        }
+        
+        if !toAddIds.isEmpty {
+            let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id) }
+            let newOverlays = territoriesToAdd.compactMap { cell -> MKPolygon? in
+                guard cell.boundary.count >= 3 else { return nil }
+                let coords = cell.boundary.map { $0.coordinate }
+                let polygon = MKPolygon(coordinates: coords, count: coords.count)
+                polygon.title = cell.id // ID stored in title
+                polygon.subtitle = "local" // Tag as local
+                return polygon
+            }
+            mapView.addOverlays(newOverlays)
+        }
+        
+        context.coordinator.renderedTerritoryIds = newIds
     }
     
-    func color(for activity: ActivitySession) -> Color {
-        // Generate a consistent color based on the activity ID
-        let hash = activity.id.hashValue
-        let colors: [Color] = [.red, .orange, .yellow, .green, .mint, .teal, .cyan, .blue, .indigo, .purple, .pink, .brown]
-        let index = abs(hash) % colors.count
-        return colors[index]
+    private func updateRivals(mapView: MKMapView, context: Context) {
+        let currentIds = context.coordinator.renderedRivalIds
+        let newRivals = viewModel.otherTerritories
+        let newIds = Set(newRivals.map { $0.id ?? "" })
+        
+        let toRemoveIds = currentIds.subtracting(newIds)
+        let toAddIds = newIds.subtracting(currentIds)
+        
+        if !toRemoveIds.isEmpty {
+            let overlaysToRemove = mapView.overlays.filter { overlay in
+                guard let title = overlay.title, let id = title else { return false }
+                return toRemoveIds.contains(id)
+            }
+            mapView.removeOverlays(overlaysToRemove)
+        }
+        
+        if !toAddIds.isEmpty {
+            let rivalsToAdd = newRivals.filter { toAddIds.contains($0.id ?? "") }
+            let newOverlays = rivalsToAdd.compactMap { territory -> MKPolygon? in
+                guard territory.boundary.count >= 3 else { return nil }
+                let coords = territory.boundary.map { $0.coordinate }
+                let polygon = MKPolygon(coordinates: coords, count: coords.count)
+                polygon.title = territory.id // ID stored in title
+                polygon.subtitle = "rival" // Tag as rival
+                return polygon
+            }
+            mapView.addOverlays(newOverlays)
+        }
+        
+        context.coordinator.renderedRivalIds = newIds
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, MKMapViewDelegate {
+        var parent: MapView
+        var renderedTerritoryIds: Set<String> = []
+        var renderedRivalIds: Set<String> = []
+        
+        init(_ parent: MapView) {
+            self.parent = parent
+        }
+        
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let polygon = overlay as? MKPolygon {
+                let renderer = MKPolygonRenderer(polygon: polygon)
+                
+                if polygon.subtitle == "rival" {
+                    renderer.strokeColor = .orange
+                    renderer.fillColor = UIColor.orange.withAlphaComponent(0.3)
+                } else {
+                    renderer.strokeColor = .green
+                    renderer.fillColor = UIColor.green.withAlphaComponent(0.5)
+                }
+                renderer.lineWidth = 1
+                return renderer
+            }
+            return MKOverlayRenderer(overlay: overlay)
+        }
+        
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            parent.viewModel.updateVisibleRegion(mapView.region)
+        }
     }
 }

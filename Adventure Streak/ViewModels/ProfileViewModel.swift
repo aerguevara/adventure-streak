@@ -82,23 +82,26 @@ class ProfileViewModel: ObservableObject {
         // 1. Refresh local stats
         refreshLocalStats()
         
-        // 2. Fetch remote user profile
+        // 2. Fetch remote user profile (Real-time)
         guard let userId = authService.userId else {
             isLoading = false
             return
         }
         
-        userRepository.fetchUser(userId: userId) { [weak self] user in
+        print("DEBUG: Observing User ID: \(userId)")
+        
+        // Remove existing listener if any
+        // (In a real app we'd track the listener registration to remove it on deinit)
+        
+        _ = userRepository.observeUser(userId: userId) { [weak self] user in
             guard let self = self else { return }
             self.isLoading = false
             
             if let user = user {
-                print("DEBUG: Fetched user: \(user.displayName ?? "nil"), XP: \(user.xp), Level: \(user.level)")
+                print("DEBUG: Fetched user (ID: \(user.id ?? "nil")): \(user.displayName ?? "nil"), XP: \(user.xp), Level: \(user.level)")
                 self.updateWithUser(user)
             } else {
-                print("DEBUG: Could not fetch user profile or user is nil")
-                // If fetch fails but we have local auth, maybe show error or just keep defaults
-                // For MVP, we might just rely on defaults or local cache if we had it
+                print("DEBUG: Could not fetch user profile or user is nil for ID: \(userId)")
             }
         }
     }

@@ -34,7 +34,7 @@ class UserRepository: ObservableObject {
                 // Create new user
                 let newUser = User(
                     id: user.uid,
-                    email: user.email ?? "",
+                    email: user.email,
                     displayName: name ?? "Adventurer",
                     joinedAt: Date()
                 )
@@ -77,7 +77,32 @@ class UserRepository: ObservableObject {
         completion(nil)
         #endif
     }
+    
+    // NEW: Real-time observation
+    func observeUser(userId: String, completion: @escaping (User?) -> Void) -> ListenerRegistration? {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return nil }
+        
+        return db.collection("users").document(userId).addSnapshotListener { documentSnapshot, error in
+            guard let document = documentSnapshot else {
+                print("Error fetching user snapshot: \(error!)")
+                return
+            }
+            
+            do {
+                let user = try document.data(as: User.self)
+                completion(user)
+            } catch {
+                print("Error decoding user snapshot: \(error)")
+                completion(nil)
+            }
+        }
+        #else
+        return nil
+        #endif
+    }
     #else
     func fetchUser(userId: String, completion: @escaping (Any?) -> Void) { completion(nil) }
+    func observeUser(userId: String, completion: @escaping (Any?) -> Void) -> Any? { return nil }
     #endif
 }

@@ -42,7 +42,13 @@ class MapViewModel: ObservableObject {
         setupBindings()
         // NEW: Start observing remote territories
         territoryRepository.observeTerritories()
+        
+        // Ensure we have location permissions and start updating
+        locationService.requestPermission()
+        locationService.startMonitoring()
     }
+    
+    @Published var visibleTerritories: [TerritoryCell] = []
     
     private func setupBindings() {
         locationService.$currentLocation
@@ -53,6 +59,48 @@ class MapViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
+        // OPTIMIZATION: Filter visible territories
+        // Combine latest territories with latest visible region
+        territoryStore.$conqueredCells
+            .combineLatest($region.debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .userInteractive)))
+            .map { (cellsDict, region) -> [TerritoryCell] in
+                // 1. LOD Check: If zoomed out too far, don't render individual cells
+                // This prevents "Exceeded Metal Buffer" crashes when viewing large areas
+                // Relaxed to 0.2 to allow seeing territories from further away (approx 20km)
+                if region.span.latitudeDelta > 0.2 || region.span.longitudeDelta > 0.2 {
+                    print("DEBUG: Zoomed out too far (Span: \(region.span.latitudeDelta)), hiding territories.")
+                    return []
+                }
+                
+                let allCells = Array(cellsDict.values)
+                
+                // Simple bounding box check
+                let minLat = region.center.latitude - region.span.latitudeDelta / 2
+                let maxLat = region.center.latitude + region.span.latitudeDelta / 2
+                let minLon = region.center.longitude - region.span.longitudeDelta / 2
+                let maxLon = region.center.longitude + region.span.longitudeDelta / 2
+                
+                // Filter cells whose center is within the visible region (plus a small buffer)
+                // AND validate geometry (must have at least 3 points)
+                let visible = allCells.filter { cell in
+                    // Geometry check
+                    guard cell.boundary.count >= 3 else { return false }
+                    
+                    // Visibility check
+                    return cell.centerLatitude >= minLat && cell.centerLatitude <= maxLat &&
+                           cell.centerLongitude >= minLon && cell.centerLongitude <= maxLon
+                }
+                
+                print("DEBUG: Found \(visible.count) visible territories in region.")
+                
+                // 2. Hard Cap: Never return more than 500 polygons to keep UI smooth
+                // We prioritize the first 500 found (randomish due to dictionary order)
+                // In a real app, we might prioritize those closest to center.
+                return Array(visible.prefix(500))
+            }
+            .receive(on: RunLoop.main)
+            .assign(to: &$visibleTerritories)
+        
         territoryStore.$conqueredCells
             .map { Array($0.values) }
             .assign(to: &$conqueredTerritories)
@@ -60,6 +108,7 @@ class MapViewModel: ObservableObject {
         // NEW: Optimized pipeline - Process on background, update on main
         territoryRepository.$otherTerritories
             .combineLatest(territoryStore.$conqueredCells)
+            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .userInitiated)) // Debounce to prevent thrashing
             .receive(on: DispatchQueue.global(qos: .userInitiated)) // Process in background
             .map { [weak self] (remote, localDict) -> [RemoteTerritory] in
                 guard let self = self else { return [] }
@@ -72,6 +121,7 @@ class MapViewModel: ObservableObject {
                     $0.userId == currentUserId && !localIds.contains($0.id ?? "")
                 }
                 
+                // Only restore if we have a significant number or it's a new batch
                 if !myMissingTerritories.isEmpty {
                     print("Restoring \(myMissingTerritories.count) territories from cloud...")
                     let restoredCells = myMissingTerritories.map { remoteT -> TerritoryCell in
@@ -84,7 +134,7 @@ class MapViewModel: ObservableObject {
                             expiresAt: remoteT.expiresAt
                         )
                     }
-                    // Async update to store
+                    // Async update to store - This will trigger the pipeline again, but localIds will be updated next time
                     DispatchQueue.main.async {
                         self.territoryStore.upsertCells(restoredCells)
                     }
@@ -95,6 +145,7 @@ class MapViewModel: ObservableObject {
                     $0.userId != currentUserId && !localIds.contains($0.id ?? "")
                 }
             }
+            .removeDuplicates() // Prevent UI updates if the list of rivals hasn't changed
             .receive(on: RunLoop.main) // Update UI on main
             .assign(to: &$otherTerritories)
             
@@ -106,6 +157,14 @@ class MapViewModel: ObservableObject {
                 self?.calculateDistance(points: points)
             }
             .store(in: &cancellables)
+    }
+    
+    func updateVisibleRegion(_ region: MKCoordinateRegion) {
+        // Sync the view's region with the ViewModel
+        // Wrap in async to avoid "Publishing changes from within view updates" warning
+        DispatchQueue.main.async {
+            self.region = region
+        }
     }
     
     func startActivity(type: ActivityType) {

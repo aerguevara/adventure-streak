@@ -14,7 +14,7 @@ struct DocumentID<T: Codable>: Codable {
 }
 #endif
 
-struct RemoteTerritory: Identifiable, Codable {
+struct RemoteTerritory: Identifiable, Codable, Equatable {
     @DocumentID var id: String? // Format "x_y"
     let userId: String
     let centerLatitude: Double

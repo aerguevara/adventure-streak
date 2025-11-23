@@ -7,9 +7,10 @@ class TerritoryStore: ObservableObject {
     
     init() {
         // Load asynchronously to prevent blocking the main thread (UI)
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            let cells = self.store.load()
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Create local instance to avoid accessing MainActor 'self.store'
+            let localStore = JSONStore<TerritoryCell>(filename: "territories.json")
+            let cells = localStore.load()
             
             // Process and update on Main Actor
             DispatchQueue.main.async {
