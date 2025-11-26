@@ -10,6 +10,7 @@ struct WorkoutItemViewData: Identifiable {
     let pace: String?
     let xp: Int?
     let territoryXP: Int?
+    let territoryCount: Int?
     let isStreak: Bool
     let isRecord: Bool
     let hasBadge: Bool
@@ -56,6 +57,7 @@ class WorkoutsViewModel: ObservableObject {
                 pace: calculatePace(distance: activity.distanceMeters, duration: activity.durationSeconds, type: activity.activityType),
                 xp: activity.xpBreakdown?.total,
                 territoryXP: activity.xpBreakdown?.xpTerritory,
+                territoryCount: activity.territoryStats?.newCellsCount,
                 isStreak: (activity.xpBreakdown?.xpStreak ?? 0) > 0,
                 isRecord: (activity.xpBreakdown?.xpWeeklyRecord ?? 0) > 0,
                 hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0
@@ -175,48 +177,44 @@ class WorkoutsViewModel: ObservableObject {
                     // Save all at once on Main Thread
                     DispatchQueue.main.async {
                         if !newSessions.isEmpty {
-                            print("Saving \(newSessions.count) imported activities...")
+                            // Sort by date ascending to ensure correct historical replay
+                            let sortedSessions = newSessions.sorted { $0.startDate < $1.startDate }
+                            
+                            print("Saving \(sortedSessions.count) imported activities...")
                             
                             // 1. Save Activities
-                            self.activityStore.saveActivities(newSessions)
+                            self.activityStore.saveActivities(sortedSessions)
                             
-                            // 2. Process Territories (BATCHED)
+                            // 2. Process Territories & XP (Individually for accuracy)
                             Task {
                                 let userId = AuthenticationService.shared.userId ?? "unknown_user"
+                                var totalNewCells = 0
                                 
-                                // A. Batch Process Territories
-                                let totalStats = await self.territoryService.processActivities(newSessions)
-                                print("Batch Import: \(totalStats.newCellsCount) new cells.")
-                                
-                                // B. Calculate & Award XP
                                 do {
                                     let context = try await GamificationRepository.shared.buildXPContext(for: userId)
                                     
-                                    for (index, session) in newSessions.enumerated() {
-                                        if index == newSessions.count - 1 { continue } // Skip last
+                                    for session in sortedSessions {
+                                        // A. Process Territories for THIS session
+                                        // This updates the store immediately, so subsequent sessions see the updated state.
+                                        // This ensures that if Session 1 conquers a cell, Session 2 (later) sees it as "Defended", not "New".
+                                        let stats = self.territoryService.processActivity(session)
+                                        totalNewCells += stats.newCellsCount
                                         
-                                        let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
-                                        let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
+                                        // B. Calculate XP
+                                        let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: stats, context: context)
                                         
+                                        // C. Update Session with Stats & XP
                                         var updatedSession = session
                                         updatedSession.xpBreakdown = breakdown
+                                        updatedSession.territoryStats = stats
                                         self.activityStore.updateActivity(updatedSession)
                                         
+                                        // D. Apply XP to User
                                         try await GamificationService.shared.applyXP(breakdown, to: userId, at: session.endDate)
                                     }
                                     
-                                    if let lastSession = newSessions.last {
-                                        let breakdown = try await GamificationService.shared.computeXP(for: lastSession, territoryStats: totalStats, context: context)
-                                        
-                                        var updatedSession = lastSession
-                                        updatedSession.xpBreakdown = breakdown
-                                        self.activityStore.updateActivity(updatedSession)
-                                        
-                                        try await GamificationService.shared.applyXP(breakdown, to: userId, at: lastSession.endDate)
-                                    }
-                                    
-                                    // 3. Post to Feed
-                                    if totalStats.newCellsCount > 0 {
+                                    // 3. Post to Feed (Summary)
+                                    if totalNewCells > 0 {
                                         let userName = AuthenticationService.shared.userName ?? "Un aventurero"
                                         
                                         let event = FeedEvent(
@@ -224,8 +222,8 @@ class WorkoutsViewModel: ObservableObject {
                                             type: .territoryConquered,
                                             date: Date(),
                                             title: "Importación completada",
-                                            subtitle: "Has reclamado \(totalStats.newCellsCount) territorios de tus entrenamientos pasados.",
-                                            xpEarned: totalStats.newCellsCount * 10,
+                                            subtitle: "Has reclamado \(totalNewCells) territorios de tus entrenamientos pasados.",
+                                            xpEarned: totalNewCells * 10,
                                             userId: userId,
                                             relatedUserName: userName,
                                             miniMapRegion: nil,
@@ -237,7 +235,7 @@ class WorkoutsViewModel: ObservableObject {
                                     }
                                     
                                 } catch {
-                                    print("Error awarding XP for import: \(error)")
+                                    print("Error processing import: \(error)")
                                 }
                                 
                                 // Refresh UI

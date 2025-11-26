@@ -110,7 +110,8 @@ struct WorkoutCard: View {
             }
             
             // Territory / Secondary Info
-            if let territoryXP = workout.territoryXP, territoryXP > 0 {
+            // Territory / Secondary Info
+            if let territoryCount = workout.territoryCount, territoryCount > 0 {
                 Divider()
                 HStack {
                     Image(systemName: "globe.europe.africa.fill")
@@ -119,7 +120,25 @@ struct WorkoutCard: View {
                         .font(.caption)
                         .fontWeight(.bold)
                     Spacer()
-                    Text("+\(territoryXP) XP") // Showing XP as proxy for cells
+                    Text("\(territoryCount) Territorios")
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(8)
+            } else if let territoryXP = workout.territoryXP, territoryXP > 0 {
+                // Fallback for old data if count is missing but XP exists
+                Divider()
+                HStack {
+                    Image(systemName: "globe.europe.africa.fill")
+                        .foregroundColor(.green)
+                    Text("Territorio")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                    Spacer()
+                    Text("+\(territoryXP) XP")
                         .font(.subheadline)
                         .foregroundColor(.primary)
                 }

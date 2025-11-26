@@ -240,7 +240,8 @@ class MapViewModel: ObservableObject {
                 distanceMeters: currentActivityDistance,
                 durationSeconds: currentActivityDuration,
                 route: locationService.routePoints,
-                xpBreakdown: breakdown
+                xpBreakdown: breakdown,
+                territoryStats: territoryStats
             )
             
             activityStore.saveActivity(finalSession)

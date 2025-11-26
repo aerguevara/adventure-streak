@@ -51,7 +51,7 @@ struct XPContext {
 }
 
 // 4. Territory Stats for calculation
-struct TerritoryStats {
+struct TerritoryStats: Codable {
     let newCellsCount: Int
     let defendedCellsCount: Int
     let recapturedCellsCount: Int
