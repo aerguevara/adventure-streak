@@ -13,17 +13,18 @@ struct DocumentID<T: Codable>: Codable {
     init(wrappedValue: T) { self.wrappedValue = wrappedValue }
 }
 #endif
+// Ensure Models are available (implicitly in same module)
 
-struct FeedEvent: Identifiable, Codable {
-    // NEW: Model for feed events
-    @DocumentID var id: String?
-    let type: String // "conquest", "streak", "badge"
-    let message: String
-    let userId: String
-    let timestamp: Date
+// Protocol definition
+protocol FeedRepositoryProtocol {
+    func observeFeed()
+    func postEvent(_ event: FeedEvent)
+    var events: [FeedEvent] { get }
 }
 
-class FeedRepository: ObservableObject {
+// Old FeedEvent struct removed (now in Models/FeedModels.swift)
+
+class FeedRepository: ObservableObject, FeedRepositoryProtocol {
     static let shared = FeedRepository()
     
     @Published var events: [FeedEvent] = []
@@ -42,13 +43,21 @@ class FeedRepository: ObservableObject {
         guard let db = db as? Firestore else { return }
         
         db.collection("feed")
-            .order(by: "timestamp", descending: true)
+            .order(by: "date", descending: true)
             .limit(to: 20)
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let documents = snapshot?.documents else { return }
                 
                 self?.events = documents.compactMap { doc -> FeedEvent? in
-                    try? doc.data(as: FeedEvent.self)
+                    do {
+                        var event = try doc.data(as: FeedEvent.self)
+                        // Manually assign the document ID since we aren't using @DocumentID in the model
+                        event.id = doc.documentID
+                        return event
+                    } catch {
+                        print("DEBUG: Error decoding FeedEvent \(doc.documentID): \(error)")
+                        return nil
+                    }
                 }
             }
         #endif

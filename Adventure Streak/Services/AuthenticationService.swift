@@ -39,10 +39,11 @@ class AuthenticationService: NSObject, ObservableObject {
         authorizationController.performRequests()
     }
     
-    func signInAnonymously() {
+    func signInAnonymously(completion: @escaping (Bool, Error?) -> Void) {
         Auth.auth().signInAnonymously { authResult, error in
             if let error = error {
                 print("Error signing in anonymously: \(error.localizedDescription)")
+                completion(false, error)
                 return
             }
             
@@ -54,8 +55,20 @@ class AuthenticationService: NSObject, ObservableObject {
                 
                 // Sync Guest User to Firestore
                 UserRepository.shared.syncUser(user: user, name: "Guest Adventurer")
+                completion(true, nil)
+            } else {
+                completion(false, nil)
             }
         }
+    }
+    
+    func signInWithGoogle(completion: @escaping (Bool, Error?) -> Void) {
+        // Placeholder for Google Sign In
+        // Requires GoogleSignIn dependency
+        print("Google Sign In requested - Implementation pending dependency check")
+        // Simulate error for now or success if testing
+        let error = NSError(domain: "AdventureStreak", code: 404, userInfo: [NSLocalizedDescriptionKey: "Google Sign-In not fully configured yet."])
+        completion(false, error)
     }
     
     func signOut() {

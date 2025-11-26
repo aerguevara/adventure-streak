@@ -23,8 +23,8 @@ class MapViewModel: ObservableObject {
     // @Published var isLoading = true
     
     private let locationService: LocationService
-    private let territoryStore: TerritoryStore
-    private let activityStore: ActivityStore
+    let territoryStore: TerritoryStore
+    let activityStore: ActivityStore
     private let territoryService: TerritoryService
     // NEW: Repository for multiplayer
     private let territoryRepository = TerritoryRepository.shared
@@ -43,7 +43,10 @@ class MapViewModel: ObservableObject {
         // NEW: Start observing remote territories
         territoryRepository.observeTerritories()
         
-        // Ensure we have location permissions and start updating
+    }
+    
+    func checkLocationPermissions() {
+        print("DEBUG: Checking location permissions...")
         locationService.requestPermission()
         locationService.startMonitoring()
     }
@@ -64,15 +67,18 @@ class MapViewModel: ObservableObject {
         territoryStore.$conqueredCells
             .combineLatest($region.debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .userInteractive)))
             .map { (cellsDict, region) -> [TerritoryCell] in
+                // Filter for last 7 days
+                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+                
                 // 1. LOD Check: If zoomed out too far, don't render individual cells
-                // This prevents "Exceeded Metal Buffer" crashes when viewing large areas
-                // Relaxed to 0.2 to allow seeing territories from further away (approx 20km)
                 if region.span.latitudeDelta > 0.2 || region.span.longitudeDelta > 0.2 {
                     print("DEBUG: Zoomed out too far (Span: \(region.span.latitudeDelta)), hiding territories.")
                     return []
                 }
                 
                 let allCells = Array(cellsDict.values)
+                // Filter by date first
+                let recentCells = allCells.filter { $0.lastConqueredAt >= sevenDaysAgo }
                 
                 // Simple bounding box check
                 let minLat = region.center.latitude - region.span.latitudeDelta / 2
@@ -82,7 +88,7 @@ class MapViewModel: ObservableObject {
                 
                 // Filter cells whose center is within the visible region (plus a small buffer)
                 // AND validate geometry (must have at least 3 points)
-                let visible = allCells.filter { cell in
+                let visible = recentCells.filter { cell in
                     // Geometry check
                     guard cell.boundary.count >= 3 else { return false }
                     
@@ -91,18 +97,19 @@ class MapViewModel: ObservableObject {
                            cell.centerLongitude >= minLon && cell.centerLongitude <= maxLon
                 }
                 
-                print("DEBUG: Found \(visible.count) visible territories in region.")
+                print("DEBUG: Found \(visible.count) visible territories in region (Last 7 Days).")
                 
                 // 2. Hard Cap: Never return more than 500 polygons to keep UI smooth
-                // We prioritize the first 500 found (randomish due to dictionary order)
-                // In a real app, we might prioritize those closest to center.
                 return Array(visible.prefix(500))
             }
             .receive(on: RunLoop.main)
             .assign(to: &$visibleTerritories)
         
         territoryStore.$conqueredCells
-            .map { Array($0.values) }
+            .map { dict -> [TerritoryCell] in
+                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+                return Array(dict.values).filter { $0.lastConqueredAt >= sevenDaysAgo }
+            }
             .assign(to: &$conqueredTerritories)
             
         // NEW: Optimized pipeline - Process on background, update on main
@@ -150,6 +157,10 @@ class MapViewModel: ObservableObject {
             .assign(to: &$otherTerritories)
             
         activityStore.$activities
+            .map { activities -> [ActivitySession] in
+                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+                return activities.filter { $0.startDate >= sevenDaysAgo }
+            }
             .assign(to: &$activities)
         
         locationService.$routePoints
@@ -236,12 +247,21 @@ class MapViewModel: ObservableObject {
             
             // 4. Post to Feed
             if territoryStats.newCellsCount > 0 {
+                let userName = AuthenticationService.shared.userName ?? "Un aventurero"
+                
                 let event = FeedEvent(
                     id: nil,
-                    type: "conquest",
-                    message: "Conquered \(territoryStats.newCellsCount) new territories!",
+                    type: .territoryConquered,
+                    date: Date(),
+                    title: "Nueva conquista",
+                    subtitle: "Has reclamado \(territoryStats.newCellsCount) nuevos territorios!",
+                    xpEarned: territoryStats.newCellsCount * 10, // Example XP calc
                     userId: userId,
-                    timestamp: Date()
+                    relatedUserName: userName,
+                    miniMapRegion: nil, // Could calculate this from newCells if we wanted
+                    badgeName: nil,
+                    badgeRarity: nil,
+                    isPersonal: true
                 )
                 FeedRepository.shared.postEvent(event)
             }

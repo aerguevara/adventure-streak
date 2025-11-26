@@ -1,31 +1,76 @@
 import Foundation
+import Combine
+
+struct WorkoutItemViewData: Identifiable {
+    let id: UUID
+    let type: ActivityType
+    let title: String
+    let dateString: String
+    let duration: String
+    let pace: String?
+    let xp: Int?
+    let territoryXP: Int?
+    let isStreak: Bool
+    let isRecord: Bool
+    let hasBadge: Bool
+}
 
 @MainActor
-class HistoryViewModel: ObservableObject {
-    @Published var activities: [ActivitySession] = []
+class WorkoutsViewModel: ObservableObject {
+    @Published var workouts: [WorkoutItemViewData] = []
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String? = nil
     
     private let activityStore: ActivityStore
     private let territoryService: TerritoryService
     
     @Published var isImporting = false
-    @Published var showAlert = false
-    @Published var alertMessage = ""
     
-    init(activityStore: ActivityStore, territoryService: TerritoryService) {
-        self.activityStore = activityStore
-        self.territoryService = territoryService
-        loadActivities()
-        // Automatic import on launch
-        importFromHealthKit()
+    init(activityStore: ActivityStore? = nil, territoryService: TerritoryService? = nil) {
+        self.activityStore = activityStore ?? ActivityStore()
+        self.territoryService = territoryService ?? TerritoryService(territoryStore: TerritoryStore())
+        
+        loadWorkouts()
+        
+        // Fix missing XP for previously imported activities
+        Task {
+            await fixMissingXP()
+        }
     }
     
-    func loadActivities() {
-        self.activities = activityStore.fetchAllActivities()
+    func loadWorkouts() {
+        let activities = activityStore.fetchAllActivities()
+        // Filter for last 7 days
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        
+        self.workouts = activities
+            .filter { $0.startDate >= sevenDaysAgo }
+            .sorted(by: { $0.startDate > $1.startDate })
+            .map { activity in
+            WorkoutItemViewData(
+                id: activity.id,
+                type: activity.activityType,
+                title: "\(activity.activityType.rawValue.capitalized) · \(formatDistance(activity.distanceMeters))",
+                dateString: formatDate(activity.startDate),
+                duration: formatDuration(activity.durationSeconds),
+                pace: calculatePace(distance: activity.distanceMeters, duration: activity.durationSeconds, type: activity.activityType),
+                xp: activity.xpBreakdown?.total,
+                territoryXP: activity.xpBreakdown?.xpTerritory,
+                isStreak: (activity.xpBreakdown?.xpStreak ?? 0) > 0,
+                isRecord: (activity.xpBreakdown?.xpWeeklyRecord ?? 0) > 0,
+                hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0
+            )
+        }
+    }
+    
+    func refresh() async {
+        importFromHealthKit()
     }
     
     func importFromHealthKit() {
         guard !isImporting else { return }
         isImporting = true
+        isLoading = true
         print("Starting automatic HealthKit import...")
         
         // Request permissions first
@@ -34,7 +79,10 @@ class HistoryViewModel: ObservableObject {
             
             if !success {
                 print("HealthKit authorization failed or denied.")
-                DispatchQueue.main.async { self.isImporting = false }
+                DispatchQueue.main.async { 
+                    self.isImporting = false 
+                    self.isLoading = false
+                }
                 return
             }
             
@@ -43,13 +91,19 @@ class HistoryViewModel: ObservableObject {
                 
                 if let error = error {
                     print("Error fetching workouts: \(error.localizedDescription)")
-                    DispatchQueue.main.async { self.isImporting = false }
+                    DispatchQueue.main.async { 
+                        self.isImporting = false
+                        self.isLoading = false
+                    }
                     return
                 }
                 
                 guard let workouts = workouts, !workouts.isEmpty else {
                     print("No outdoor workouts found in HealthKit.")
-                    DispatchQueue.main.async { self.isImporting = false }
+                    DispatchQueue.main.async { 
+                        self.isImporting = false
+                        self.isLoading = false
+                    }
                     return
                 }
                 
@@ -60,14 +114,16 @@ class HistoryViewModel: ObservableObject {
                 
                 guard !newWorkouts.isEmpty else {
                     print("No new workouts to import.")
-                    DispatchQueue.main.async { self.isImporting = false }
+                    DispatchQueue.main.async { 
+                        self.isImporting = false
+                        self.isLoading = false
+                    }
                     return
                 }
                 
                 print("Found \(newWorkouts.count) new workouts. Processing in background...")
                 
                 // Process in background to avoid blocking Main Thread
-                // Use .utility QoS to avoid priority inversion warnings (waiting on slower I/O)
                 DispatchQueue.global(qos: .utility).async {
                     var newSessions: [ActivitySession] = []
                     let group = DispatchGroup()
@@ -101,7 +157,6 @@ class HistoryViewModel: ObservableObject {
                                     route: points
                                 )
                                 
-                                // Thread-safe append
                                 DispatchQueue.global(qos: .utility).sync {
                                     newSessions.append(session)
                                 }
@@ -123,44 +178,13 @@ class HistoryViewModel: ObservableObject {
                             Task {
                                 let userId = AuthenticationService.shared.userId ?? "unknown_user"
                                 
-                                // A. Batch Process Territories (Updates Store ONCE)
+                                // A. Batch Process Territories
                                 let totalStats = await self.territoryService.processActivities(newSessions)
                                 print("Batch Import: \(totalStats.newCellsCount) new cells.")
                                 
                                 // B. Calculate & Award XP
-                                // We award Base XP for each activity, and Territory XP based on the batch result
                                 do {
                                     let context = try await GamificationRepository.shared.buildXPContext(for: userId)
-                                    
-                                    // 1. Base XP for each activity
-                                    for session in newSessions {
-                                        // Pass empty stats here, we award territory XP separately
-                                        let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
-                                        let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
-                                        try await GamificationService.shared.applyXP(breakdown, to: userId, at: session.endDate)
-                                    }
-                                    
-                                    // 2. Territory XP (Aggregated)
-                                    // We create a dummy "Import Bonus" breakdown or just apply the XP directly
-                                    // For simplicity, we'll use the last session to attach the territory XP
-                                    // Logic simplified to use the loop below
-                                    
-                                    // SIMPLIFIED APPROACH:
-                                    // Just loop and process Base XP.
-                                    // Then manually award Territory XP if possible.
-                                    // Or, since we are in a rush to fix the crash, let's just award Base XP for imports and ignore Territory XP for now?
-                                    // No, user wants XP.
-                                    // Let's use the "Apply to last session" strategy but be careful not to double count Base XP.
-                                    
-                                    // Actually, let's just loop for Base XP.
-                                    // And then call a direct "addXP" if we can? No.
-                                    
-                                    // Let's stick to the loop for Base XP.
-                                    // And for the Territory XP, we'll just create a "Bonus" transaction?
-                                    // GamificationService.applyXP takes a breakdown.
-                                    
-                                    // Let's just award the Territory XP attached to the last session.
-                                    // We will skip the last session in the loop.
                                     
                                     for (index, session) in newSessions.enumerated() {
                                         if index == newSessions.count - 1 { continue } // Skip last
@@ -168,7 +192,6 @@ class HistoryViewModel: ObservableObject {
                                         let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
                                         let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
                                         
-                                        // Update session with XP
                                         var updatedSession = session
                                         updatedSession.xpBreakdown = breakdown
                                         self.activityStore.updateActivity(updatedSession)
@@ -177,10 +200,8 @@ class HistoryViewModel: ObservableObject {
                                     }
                                     
                                     if let lastSession = newSessions.last {
-                                        // Award Base XP for last session + ALL Territory XP
                                         let breakdown = try await GamificationService.shared.computeXP(for: lastSession, territoryStats: totalStats, context: context)
                                         
-                                        // Update session with XP
                                         var updatedSession = lastSession
                                         updatedSession.xpBreakdown = breakdown
                                         self.activityStore.updateActivity(updatedSession)
@@ -188,7 +209,7 @@ class HistoryViewModel: ObservableObject {
                                         try await GamificationService.shared.applyXP(breakdown, to: userId, at: lastSession.endDate)
                                     }
                                     
-                                    // 3. Post to Feed (NEW)
+                                    // 3. Post to Feed
                                     if totalStats.newCellsCount > 0 {
                                         let userName = AuthenticationService.shared.userName ?? "Un aventurero"
                                         
@@ -198,10 +219,10 @@ class HistoryViewModel: ObservableObject {
                                             date: Date(),
                                             title: "Importación completada",
                                             subtitle: "Has reclamado \(totalStats.newCellsCount) territorios de tus entrenamientos pasados.",
-                                            xpEarned: totalStats.newCellsCount * 10, // Approximate
+                                            xpEarned: totalStats.newCellsCount * 10,
                                             userId: userId,
                                             relatedUserName: userName,
-                                            miniMapRegion: nil, // Hard to calculate region for batch, skipping for now
+                                            miniMapRegion: nil,
                                             badgeName: nil,
                                             badgeRarity: nil,
                                             isPersonal: true
@@ -214,14 +235,82 @@ class HistoryViewModel: ObservableObject {
                                 }
                                 
                                 // Refresh UI
-                                self.loadActivities()
+                                self.loadWorkouts()
+                                self.isImporting = false
+                                self.isLoading = false
                                 print("Import complete.")
                             }
+                        } else {
+                            self.isImporting = false
+                            self.isLoading = false
                         }
-                        self.isImporting = false
                     }
                 }
             }
         }
+    }
+    
+    private func fixMissingXP() async {
+        let activities = activityStore.fetchAllActivities()
+        let missingXP = activities.filter { $0.xpBreakdown == nil }
+        
+        guard !missingXP.isEmpty else { return }
+        print("Fixing XP for \(missingXP.count) activities...")
+        
+        let userId = AuthenticationService.shared.userId ?? "unknown_user"
+        
+        do {
+            let context = try await GamificationRepository.shared.buildXPContext(for: userId)
+            
+            for session in missingXP {
+                // Compute XP (assuming 0 new territories for historical fix to avoid complexity)
+                let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+                let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
+                
+                // Update session in store ONLY (do not apply to user total again)
+                var updatedSession = session
+                updatedSession.xpBreakdown = breakdown
+                activityStore.updateActivity(updatedSession)
+            }
+            
+            // Reload UI
+            await MainActor.run {
+                self.loadWorkouts()
+            }
+            print("XP Fix complete.")
+            
+        } catch {
+            print("Error fixing XP: \(error)")
+        }
+    }
+    
+    // MARK: - Formatting Helpers
+    
+    private func formatDistance(_ meters: Double) -> String {
+        let km = meters / 1000.0
+        return String(format: "%.1f km", km)
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E, d MMM · HH:mm"
+        formatter.locale = Locale(identifier: "es_ES")
+        return formatter.string(from: date).capitalized
+    }
+    
+    private func formatDuration(_ seconds: Double) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute, .second]
+        formatter.unitsStyle = .positional
+        formatter.zeroFormattingBehavior = .pad
+        return formatter.string(from: seconds) ?? "00:00"
+    }
+    
+    private func calculatePace(distance: Double, duration: Double, type: ActivityType) -> String? {
+        guard distance > 0, (type == .run || type == .walk) else { return nil }
+        let paceSecondsPerKm = duration / (distance / 1000.0)
+        let minutes = Int(paceSecondsPerKm / 60)
+        let seconds = Int(paceSecondsPerKm.truncatingRemainder(dividingBy: 60))
+        return String(format: "%d:%02d/km", minutes, seconds)
     }
 }

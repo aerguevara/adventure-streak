@@ -2,8 +2,12 @@ import SwiftUI
 
 struct MainTabView: View {
     @StateObject var mapViewModel: MapViewModel
-    @StateObject var historyViewModel: HistoryViewModel
+    @StateObject var workoutsViewModel: WorkoutsViewModel
     @StateObject var profileViewModel: ProfileViewModel
+    
+    // Dependencies for Feed
+    let activityStore: ActivityStore
+    let territoryStore: TerritoryStore
     
     var body: some View {
         TabView {
@@ -13,14 +17,14 @@ struct MainTabView: View {
                     Label("Map", systemImage: "map")
                 }
             
-            HistoryView(viewModel: historyViewModel)
+            WorkoutsView(viewModel: workoutsViewModel)
                 .tabItem {
-                    Label("History", systemImage: "clock.fill")
+                    Label("Entrenos", systemImage: "clock.arrow.circlepath")
                 }
             
             // NEW: Added for multiplayer conquest feature
             NavigationView {
-                ActivityFeedView()
+                ActivityFeedView(viewModel: FeedViewModel(activityStore: activityStore, territoryStore: territoryStore))
             }
             .tabItem {
                 Label("Feed", systemImage: "person.3.fill")

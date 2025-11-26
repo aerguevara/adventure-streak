@@ -28,6 +28,11 @@ class TerritoryStore: ObservableObject {
         persist()
     }
     
+    func clear() {
+        conqueredCells = [:]
+        persist()
+    }
+    
     func fetchAllCells() -> [TerritoryCell] {
         return Array(conqueredCells.values)
     }

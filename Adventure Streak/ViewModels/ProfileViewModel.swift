@@ -21,8 +21,8 @@ class ProfileViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Dependencies
-    private let activityStore: ActivityStore
-    private let territoryStore: TerritoryStore
+    let activityStore: ActivityStore
+    let territoryStore: TerritoryStore
     private let userRepository: UserRepository
     private let authService: AuthenticationService
     private let gamificationService: GamificationService
@@ -107,6 +107,10 @@ class ProfileViewModel: ObservableObject {
     }
     
     func signOut() {
+        // Clear local data to allow fresh import for next user
+        activityStore.clear()
+        territoryStore.clear()
+        
         authService.signOut()
     }
     
@@ -118,11 +122,18 @@ class ProfileViewModel: ObservableObject {
     // MARK: - Helpers
     private func refreshLocalStats() {
         self.streakWeeks = activityStore.calculateCurrentStreak()
-        self.activitiesCount = activityStore.activities.count
-        self.territoriesCount = territoryStore.conqueredCells.count
-        // For total cells conquered historically, we might need a separate counter in ActivityStore or User model.
-        // For MVP, we'll use the current count as a proxy or sum from activities if available.
-        // Let's use current count for now as "Cells Owned"
+        
+        // Filter for last 7 days
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        
+        // Activities in last 7 days
+        self.activitiesCount = activityStore.activities.filter { $0.startDate >= sevenDaysAgo }.count
+        
+        // Territories conquered in last 7 days
+        // Note: 'conqueredCells' contains current ownership. We check 'lastConqueredAt'.
+        self.territoriesCount = territoryStore.conqueredCells.values.filter { $0.lastConqueredAt >= sevenDaysAgo }.count
+        
+        // Total Cells Owned (Historical/Current Total)
         self.totalCellsConquered = territoryStore.conqueredCells.count 
     }
     

@@ -16,6 +16,22 @@ class ActivityStore: ObservableObject {
         activities.append(contentsOf: newActivities)
         // Sort by date descending
         activities.sort { $0.startDate > $1.startDate }
+        persist()
+    }
+    
+    func clear() {
+        activities = []
+        persist()
+    }
+    
+    func updateActivity(_ updatedActivity: ActivitySession) {
+        if let index = activities.firstIndex(where: { $0.id == updatedActivity.id }) {
+            activities[index] = updatedActivity
+            persist()
+        }
+    }
+    
+    private func persist() {
         do {
             try store.save(activities)
         } catch {

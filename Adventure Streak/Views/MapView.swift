@@ -14,22 +14,23 @@ struct MapView: UIViewRepresentable {
         // Set initial region
         mapView.setRegion(viewModel.region, animated: false)
         
+        // Auto-follow user
+        mapView.userTrackingMode = .follow
+        
+        // Request permissions only when the map is actually shown
+        viewModel.checkLocationPermissions()
+        
         return mapView
     }
     
     func updateUIView(_ mapView: MKMapView, context: Context) {
         // 1. Update Region
-        // Since MapViewModel only updates region ONCE (initial location), it is safe to update here without fighting user.
-        let currentRegion = mapView.region
-        let targetRegion = viewModel.region
+        // Only update if we explicitly want to force a move (e.g. "Focus User" button)
+        // For now, we rely on the initial setRegion in makeUIView.
+        // If we wanted to support programmatic movement, we'd need a separate 'trigger' or 'shouldRecenter' flag.
+        // The previous logic caused a feedback loop.
         
-        // Only update if significantly different (to avoid minor floating point loops)
-        if abs(currentRegion.center.latitude - targetRegion.center.latitude) > 0.0001 ||
-           abs(currentRegion.center.longitude - targetRegion.center.longitude) > 0.0001 {
-            mapView.setRegion(viewModel.region, animated: true)
-        }
-        
-        // 1. Smart Diffing for Local Territories (Green)
+        // 2. Smart Diffing for Local Territories (Green)
         updateTerritories(mapView: mapView, context: context)
         
         // 2. Smart Diffing for Rival Territories (Orange)

@@ -152,7 +152,7 @@ struct ProfileView: View {
         VStack(spacing: 12) {
             menuButton(title: "Badges & Achievements", icon: "rosette", destination: AnyView(BadgesView()))
             menuButton(title: "Weekly Ranking", icon: "list.number", destination: AnyView(RankingView()))
-            menuButton(title: "Activity Feed", icon: "newspaper", destination: AnyView(ActivityFeedView()))
+            menuButton(title: "Activity Feed", icon: "newspaper", destination: AnyView(ActivityFeedView(viewModel: FeedViewModel(activityStore: viewModel.activityStore, territoryStore: viewModel.territoryStore))))
             menuButton(title: "Settings", icon: "gearshape", destination: AnyView(Text("Settings Coming Soon")))
         }
     }

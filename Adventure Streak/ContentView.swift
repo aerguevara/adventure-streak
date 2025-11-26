@@ -6,7 +6,7 @@ struct ContentView: View {
     // ViewModels
     @StateObject private var onboardingViewModel: OnboardingViewModel
     @StateObject private var mapViewModel: MapViewModel
-    @StateObject private var historyViewModel: HistoryViewModel
+    @StateObject private var workoutsViewModel: WorkoutsViewModel
     @StateObject private var profileViewModel: ProfileViewModel
     
     init() {
@@ -20,7 +20,7 @@ struct ContentView: View {
         _mapViewModel = StateObject(wrappedValue: MapViewModel(locationService: locService, territoryStore: terrStore, activityStore: actStore))
         
         let terrService = TerritoryService(territoryStore: terrStore)
-        _historyViewModel = StateObject(wrappedValue: HistoryViewModel(activityStore: actStore, territoryService: terrService))
+        _workoutsViewModel = StateObject(wrappedValue: WorkoutsViewModel(activityStore: actStore, territoryService: terrService))
         
         _profileViewModel = StateObject(wrappedValue: ProfileViewModel(activityStore: actStore, territoryStore: terrStore))
     }
@@ -34,8 +34,10 @@ struct ContentView: View {
             } else {
                 MainTabView(
                     mapViewModel: mapViewModel,
-                    historyViewModel: historyViewModel,
-                    profileViewModel: profileViewModel
+                    workoutsViewModel: workoutsViewModel,
+                    profileViewModel: profileViewModel,
+                    activityStore: mapViewModel.activityStore,
+                    territoryStore: mapViewModel.territoryStore
                 )
             }
         }
