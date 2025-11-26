@@ -111,28 +111,81 @@ struct WorkoutCard: View {
             
             // Territory / Secondary Info
             // Territory / Secondary Info
-            if let territoryCount = workout.territoryCount {
-                // New Data: Show if there are new territories OR if there was territory XP (Defense)
-                if territoryCount > 0 || (workout.territoryXP ?? 0) > 0 {
-                    Divider()
-                    HStack {
-                        Image(systemName: "globe.europe.africa.fill")
-                            .foregroundColor(.green)
-                        Text("Territorio")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                        Spacer()
-                        Text("\(territoryCount) Territorios")
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
+            if let newCount = workout.newTerritories,
+               let defendedCount = workout.defendedTerritories,
+               let recapturedCount = workout.recapturedTerritories {
+                
+                // Check if we have ANY territory activity (even if all are 0, we might want to show something if it was a valid outdoor workout)
+                // But usually we only show if > 0.
+                // User wants to see "0" if it was a defense.
+                // Let's show the row if any count exists (which they should if territoryStats was present)
+                
+                Divider()
+                HStack(spacing: 12) {
+                    // 1. New Territories (Green)
+                    if newCount > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flag.fill")
+                            Text("\(newCount) Nuevos")
+                                .fontWeight(.semibold)
+                        }
+                        .font(.caption)
+                        .foregroundColor(.green)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(8)
                     }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 8)
-                    .background(Color.green.opacity(0.1))
-                    .cornerRadius(8)
+                    
+                    // 2. Recaptured/Stolen (Orange)
+                    if recapturedCount > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("\(recapturedCount) Robados")
+                                .fontWeight(.semibold)
+                        }
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
+                    // 3. Defended/Renewed (Blue)
+                    if defendedCount > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "shield.fill")
+                            Text("\(defendedCount) Renovados")
+                                .fontWeight(.semibold)
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
+                    // Fallback: If all are 0 (e.g. ran in empty space or error), show "0 Territorios"
+                    if newCount == 0 && recapturedCount == 0 && defendedCount == 0 {
+                         HStack(spacing: 4) {
+                            Image(systemName: "globe.europe.africa.fill")
+                            Text("0 Territorios")
+                                .fontWeight(.semibold)
+                        }
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
+                    Spacer()
                 }
             } else if let territoryXP = workout.territoryXP, territoryXP > 0 {
-                // Fallback for old data if count is missing but XP exists
+                // Fallback for old data
                 Divider()
                 HStack {
                     Image(systemName: "globe.europe.africa.fill")

@@ -11,6 +11,11 @@ struct WorkoutItemViewData: Identifiable {
     let xp: Int?
     let territoryXP: Int?
     let territoryCount: Int?
+    // NEW: Detailed stats
+    let newTerritories: Int?
+    let defendedTerritories: Int?
+    let recapturedTerritories: Int?
+    
     let isStreak: Bool
     let isRecord: Bool
     let hasBadge: Bool
@@ -58,6 +63,9 @@ class WorkoutsViewModel: ObservableObject {
                 xp: activity.xpBreakdown?.total,
                 territoryXP: activity.xpBreakdown?.xpTerritory,
                 territoryCount: activity.territoryStats?.newCellsCount,
+                newTerritories: activity.territoryStats?.newCellsCount,
+                defendedTerritories: activity.territoryStats?.defendedCellsCount,
+                recapturedTerritories: activity.territoryStats?.recapturedCellsCount,
                 isStreak: (activity.xpBreakdown?.xpStreak ?? 0) > 0,
                 isRecord: (activity.xpBreakdown?.xpWeeklyRecord ?? 0) > 0,
                 hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0
