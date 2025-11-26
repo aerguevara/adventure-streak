@@ -111,23 +111,26 @@ struct WorkoutCard: View {
             
             // Territory / Secondary Info
             // Territory / Secondary Info
-            if let territoryCount = workout.territoryCount, territoryCount > 0 {
-                Divider()
-                HStack {
-                    Image(systemName: "globe.europe.africa.fill")
-                        .foregroundColor(.green)
-                    Text("Territorio")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                    Spacer()
-                    Text("\(territoryCount) Territorios")
-                        .font(.subheadline)
-                        .foregroundColor(.primary)
+            if let territoryCount = workout.territoryCount {
+                // New Data: Show if there are new territories OR if there was territory XP (Defense)
+                if territoryCount > 0 || (workout.territoryXP ?? 0) > 0 {
+                    Divider()
+                    HStack {
+                        Image(systemName: "globe.europe.africa.fill")
+                            .foregroundColor(.green)
+                        Text("Territorio")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                        Spacer()
+                        Text("\(territoryCount) Territorios")
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(8)
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 8)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
             } else if let territoryXP = workout.territoryXP, territoryXP > 0 {
                 // Fallback for old data if count is missing but XP exists
                 Divider()
