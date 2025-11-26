@@ -107,9 +107,15 @@ class WorkoutsViewModel: ObservableObject {
                     return
                 }
                 
-                // Filter out duplicates BEFORE processing
+                // Filter out duplicates AND restrict to last 7 days
+                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+                
                 let newWorkouts = workouts.filter { workout in
-                    !self.activityStore.activities.contains(where: { $0.startDate == workout.startDate })
+                    // 1. Date Check: Must be within last 7 days
+                    guard workout.startDate >= sevenDaysAgo else { return false }
+                    
+                    // 2. Duplicate Check: Must not already exist
+                    return !self.activityStore.activities.contains(where: { $0.startDate == workout.startDate })
                 }
                 
                 guard !newWorkouts.isEmpty else {
