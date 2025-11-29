@@ -4,16 +4,18 @@ enum ActivityType: String, Codable, CaseIterable, Identifiable {
     case run
     case walk
     case bike
+    case hike
     case otherOutdoor
     
     var id: String { self.rawValue }
     
     var displayName: String {
         switch self {
-        case .run: return "Carrera"
-        case .walk: return "Caminata"
-        case .bike: return "Bici"
-        case .otherOutdoor: return "Otro"
+        case .run: return "Run"
+        case .walk: return "Walk"
+        case .bike: return "Bike"
+        case .hike: return "Hiking"
+        case .otherOutdoor: return "Outdoor"
         }
     }
     
@@ -22,6 +24,7 @@ enum ActivityType: String, Codable, CaseIterable, Identifiable {
         case .run: return "figure.run"
         case .walk: return "figure.walk"
         case .bike: return "bicycle"
+        case .hike: return "figure.hiking"
         case .otherOutdoor: return "figure.hiking"
         }
     }

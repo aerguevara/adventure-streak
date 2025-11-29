@@ -244,6 +244,7 @@ struct WorkoutCard: View {
         case .run: return "figure.run"
         case .walk: return "figure.walk"
         case .bike: return "bicycle"
+        case .hike: return "figure.hiking"
         case .otherOutdoor: return "figure.outdoor.cycle"
         }
     }

@@ -89,6 +89,7 @@ class HistoryViewModel: ObservableObject {
                                 case .running: type = .run
                                 case .walking: type = .walk
                                 case .cycling: type = .bike
+                                case .hiking: type = .hike
                                 default: type = .otherOutdoor
                                 }
                                 

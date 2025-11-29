@@ -104,6 +104,7 @@ class GamificationService: ObservableObject, GamificationServiceProtocol {
         case .run: factor *= XPConfig.factorRun
         case .bike: factor *= XPConfig.factorBike
         case .walk: factor *= XPConfig.factorWalk
+        case .hike: factor *= XPConfig.factorWalk
         case .otherOutdoor: factor *= XPConfig.factorOther
         }
         
