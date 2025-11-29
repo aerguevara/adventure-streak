@@ -26,9 +26,13 @@ struct MapView: UIViewRepresentable {
     func updateUIView(_ mapView: MKMapView, context: Context) {
         // 1. Update Region
         // Only update if we explicitly want to force a move (e.g. "Focus User" button)
-        // For now, we rely on the initial setRegion in makeUIView.
-        // If we wanted to support programmatic movement, we'd need a separate 'trigger' or 'shouldRecenter' flag.
-        // The previous logic caused a feedback loop.
+        if viewModel.shouldRecenter {
+            mapView.setRegion(viewModel.region, animated: true)
+            // Reset flag async
+            DispatchQueue.main.async {
+                viewModel.shouldRecenter = false
+            }
+        }
         
         // 2. Smart Diffing for Local Territories (Green)
         updateTerritories(mapView: mapView, context: context)

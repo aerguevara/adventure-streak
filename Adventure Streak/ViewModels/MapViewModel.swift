@@ -22,6 +22,9 @@ class MapViewModel: ObservableObject {
     // NEW: Loading state removed to allow map to load first
     // @Published var isLoading = true
     
+    // NEW: Trigger for programmatic recentering
+    @Published var shouldRecenter = false
+    
     private let locationService: LocationService
     let territoryStore: TerritoryStore
     let activityStore: ActivityStore
@@ -176,6 +179,19 @@ class MapViewModel: ObservableObject {
         DispatchQueue.main.async {
             self.region = region
         }
+    }
+    
+    func centerOnUserLocation() {
+        guard let location = locationService.currentLocation else { return }
+        
+        // Update region to center on user
+        let newRegion = MKCoordinateRegion(
+            center: location.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01) // Zoom in a bit
+        )
+        
+        self.region = newRegion
+        self.shouldRecenter = true
     }
     
     func startActivity(type: ActivityType) {

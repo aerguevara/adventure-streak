@@ -11,11 +11,28 @@ struct MainTabView: View {
     
     var body: some View {
         TabView {
-            MapView(viewModel: mapViewModel)
-                .ignoresSafeArea(edges: .top)
-                .tabItem {
-                    Label("Map", systemImage: "map")
+            ZStack(alignment: .bottomTrailing) {
+                MapView(viewModel: mapViewModel)
+                    .ignoresSafeArea(edges: .top)
+                
+                // Location Button
+                Button(action: {
+                    mapViewModel.centerOnUserLocation()
+                }) {
+                    Image(systemName: "location.fill")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                        .padding(12)
+                        .background(Color.white)
+                        .clipShape(Circle())
+                        .shadow(radius: 4)
                 }
+                .padding(.trailing, 16)
+                .padding(.bottom, 24)
+            }
+            .tabItem {
+                Label("Map", systemImage: "map")
+            }
             
             WorkoutsView(viewModel: workoutsViewModel)
                 .tabItem {
