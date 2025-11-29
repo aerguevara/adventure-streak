@@ -56,7 +56,7 @@ class WorkoutsViewModel: ObservableObject {
             WorkoutItemViewData(
                 id: activity.id,
                 type: activity.activityType,
-                title: "\(activity.activityType.rawValue.capitalized) · \(formatDistance(activity.distanceMeters))",
+                title: "\(activity.activityType.displayName) · \(formatDistance(activity.distanceMeters))",
                 dateString: formatDate(activity.startDate),
                 duration: formatDuration(activity.durationSeconds),
                 pace: calculatePace(distance: activity.distanceMeters, duration: activity.durationSeconds, type: activity.activityType),

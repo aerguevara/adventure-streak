@@ -10,10 +10,10 @@ enum ActivityType: String, Codable, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .run: return "Run"
-        case .walk: return "Walk"
-        case .bike: return "Bike"
-        case .otherOutdoor: return "Outdoor"
+        case .run: return "Carrera"
+        case .walk: return "Caminata"
+        case .bike: return "Bici"
+        case .otherOutdoor: return "Otro"
         }
     }
     
