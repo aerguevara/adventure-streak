@@ -11,17 +11,20 @@ struct WorkoutsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(UIColor.systemGroupedBackground)
+                // Background
+                Color(hex: "0F0F0F")
                     .ignoresSafeArea()
                 
                 if viewModel.isLoading && viewModel.workouts.isEmpty {
                     ProgressView("Cargando entrenos...")
+                        .foregroundColor(.white)
                 } else if let error = viewModel.errorMessage {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.largeTitle)
                             .foregroundColor(.red)
                         Text(error)
+                            .foregroundColor(.white)
                         Button("Reintentar") {
                             Task { await viewModel.refresh() }
                         }
@@ -33,10 +36,10 @@ struct WorkoutsView: View {
                                 .font(.system(size: 50))
                                 .foregroundColor(.gray)
                             Text("Aún no tienes entrenos registrados.")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.gray)
                             Text("Desliza hacia abajo para importar")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.gray.opacity(0.7))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(.top, 100)
@@ -46,27 +49,37 @@ struct WorkoutsView: View {
                     }
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(viewModel.workouts) { workout in
-                                WorkoutCard(workout: workout)
-                                    .padding(.horizontal)
+                        VStack(alignment: .leading, spacing: 24) {
+                            // Title
+                            Text("Entrenos")
+                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .padding(.top, 20)
+                                .padding(.horizontal)
+                            
+                            LazyVStack(spacing: 20) {
+                                ForEach(viewModel.workouts) { workout in
+                                    GamifiedWorkoutCard(workout: workout)
+                                        .padding(.horizontal)
+                                }
                             }
+                            .padding(.bottom, 40)
                         }
-                        .padding(.top)
-                        .padding(.bottom)
                     }
                     .refreshable {
                         await viewModel.refresh()
                     }
                 }
             }
-            .navigationTitle("Entrenos")
+            // Hide default navigation title to use custom one
+            .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 Task {
                     await viewModel.refresh()
                 }
             }
         }
+        .preferredColorScheme(.dark)
     }
 }
 

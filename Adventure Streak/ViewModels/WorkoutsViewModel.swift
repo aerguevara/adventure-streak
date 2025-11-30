@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 struct WorkoutItemViewData: Identifiable {
     let id: UUID
@@ -19,6 +20,22 @@ struct WorkoutItemViewData: Identifiable {
     let isStreak: Bool
     let isRecord: Bool
     let hasBadge: Bool
+    
+    // NEW: Rarity Logic
+    var rarity: String {
+        let totalXP = xp ?? 0
+        if totalXP >= 200 { return "Épica" }
+        if totalXP >= 80 { return "Rara" }
+        return "Común"
+    }
+    
+    var rarityColor: Color {
+        switch rarity {
+        case "Épica": return Color(hex: "C084FC") // Purple
+        case "Rara": return Color(hex: "4DA8FF") // Blue
+        default: return Color.gray
+        }
+    }
 }
 
 @MainActor
