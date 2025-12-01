@@ -1,11 +1,20 @@
 import Foundation
 
 class ActivityStore: ObservableObject {
+    static let shared = ActivityStore()
+    
     private let store = JSONStore<ActivitySession>(filename: "activities.json")
     @Published var activities: [ActivitySession] = []
     
-    init() {
+    private init() {
         self.activities = store.load()
+        print("🗄️ ActivityStore loaded \(activities.count) activities")
+        if let first = activities.first {
+            print("   First activity missions: \(first.missions?.count ?? 0)")
+            if let mission = first.missions?.first {
+                print("   Mission name: \(mission.name)")
+            }
+        }
     }
     
     func saveActivity(_ activity: ActivitySession) {
@@ -13,7 +22,14 @@ class ActivityStore: ObservableObject {
     }
     
     func saveActivities(_ newActivities: [ActivitySession]) {
-        activities.append(contentsOf: newActivities)
+        for newActivity in newActivities {
+            if let index = activities.firstIndex(where: { $0.id == newActivity.id }) {
+                activities[index] = newActivity
+            } else {
+                activities.append(newActivity)
+            }
+        }
+        
         // Sort by date descending
         activities.sort { $0.startDate > $1.startDate }
         persist()

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct GamifiedWorkoutCard: View {
     let workout: WorkoutItemViewData
-    @State private var isVisible = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -20,9 +19,16 @@ struct GamifiedWorkoutCard: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(workout.title.components(separatedBy: " · ").first ?? workout.title)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                    // Mission name (if available) or activity title
+                    if let missionName = workout.missionName {
+                        Text(missionName)
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    } else {
+                        Text(workout.title.components(separatedBy: " · ").first ?? workout.title)
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
                     
                     Text(workout.rarity)
                         .font(.caption)
@@ -136,13 +142,7 @@ struct GamifiedWorkoutCard: View {
         .background(Color(hex: "1A1A1D"))
         .cornerRadius(18)
         .shadow(color: workout.rarityColor.opacity(0.15), radius: 10, x: 0, y: 4)
-        .scaleEffect(isVisible ? 1.0 : 0.96)
-        .opacity(isVisible ? 1.0 : 0.0)
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                isVisible = true
-            }
-        }
+        .shadow(color: workout.rarityColor.opacity(0.15), radius: 10, x: 0, y: 4)
     }
     
     var iconName: String {

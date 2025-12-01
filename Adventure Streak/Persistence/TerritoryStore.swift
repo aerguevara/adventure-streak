@@ -2,10 +2,12 @@ import Foundation
 
 @MainActor
 class TerritoryStore: ObservableObject {
+    static let shared = TerritoryStore()
+    
     private let store = JSONStore<TerritoryCell>(filename: "territories.json")
     @Published var conqueredCells: [String: TerritoryCell] = [:]
     
-    init() {
+    private init() {
         // Load asynchronously to prevent blocking the main thread (UI)
         DispatchQueue.global(qos: .userInitiated).async {
             // Create local instance to avoid accessing MainActor 'self.store'

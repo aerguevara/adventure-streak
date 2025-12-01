@@ -21,6 +21,10 @@ struct WorkoutItemViewData: Identifiable {
     let isRecord: Bool
     let hasBadge: Bool
     
+    // NEW: Mission info
+    let missionName: String?
+    let missionDescription: String?
+    
     // NEW: Rarity Logic
     var rarity: String {
         let totalXP = xp ?? 0
@@ -50,8 +54,8 @@ class WorkoutsViewModel: ObservableObject {
     @Published var isImporting = false
     
     init(activityStore: ActivityStore? = nil, territoryService: TerritoryService? = nil) {
-        self.activityStore = activityStore ?? ActivityStore()
-        self.territoryService = territoryService ?? TerritoryService(territoryStore: TerritoryStore())
+        self.activityStore = activityStore ?? ActivityStore.shared
+        self.territoryService = territoryService ?? TerritoryService(territoryStore: TerritoryStore.shared)
         
         loadWorkouts()
         
@@ -85,8 +89,17 @@ class WorkoutsViewModel: ObservableObject {
                 recapturedTerritories: activity.territoryStats?.recapturedCellsCount,
                 isStreak: (activity.xpBreakdown?.xpStreak ?? 0) > 0,
                 isRecord: (activity.xpBreakdown?.xpWeeklyRecord ?? 0) > 0,
-                hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0
+                hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0,
+                missionName: activity.missions?.first?.name,
+                missionDescription: activity.missions?.first?.description
             )
+        }
+        
+        // DEBUG: Log mission data
+        print("📊 Loaded \(self.workouts.count) workouts")
+        for workout in self.workouts.prefix(3) {
+            print("   Workout: \(workout.title)")
+            print("   Mission: \(workout.missionName ?? "NONE")")
         }
     }
     
@@ -208,38 +221,25 @@ class WorkoutsViewModel: ObservableObject {
                             
                             print("Saving \(sortedSessions.count) imported activities...")
                             
-                            // 1. Save Activities
-                            self.activityStore.saveActivities(sortedSessions)
+                            // 1. Save Activities - REMOVED: GameEngine handles saving individually
+                            // self.activityStore.saveActivities(sortedSessions)
                             
-                            // 2. Process Territories & XP (Individually for accuracy)
+                            // 2. Process through GameEngine (Individually for accuracy)
                             Task {
                                 let userId = AuthenticationService.shared.userId ?? "unknown_user"
                                 var totalNewCells = 0
                                 
                                 do {
-                                    let context = try await GamificationRepository.shared.buildXPContext(for: userId)
-                                    
                                     for session in sortedSessions {
-                                        // A. Process Territories for THIS session
-                                        // This updates the store immediately, so subsequent sessions see the updated state.
-                                        // This ensures that if Session 1 conquers a cell, Session 2 (later) sees it as "Defended", not "New".
-                                        let stats = self.territoryService.processActivity(session)
+                                        // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
+                                        // Use GameEngine to process each imported activity
+                                        let stats = try await GameEngine.shared.completeActivity(session, for: userId)
+                                        
+                                        // Track total for summary
                                         totalNewCells += stats.newCellsCount
-                                        
-                                        // B. Calculate XP
-                                        let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: stats, context: context)
-                                        
-                                        // C. Update Session with Stats & XP
-                                        var updatedSession = session
-                                        updatedSession.xpBreakdown = breakdown
-                                        updatedSession.territoryStats = stats
-                                        self.activityStore.updateActivity(updatedSession)
-                                        
-                                        // D. Apply XP to User
-                                        try await GamificationService.shared.applyXP(breakdown, to: userId, at: session.endDate)
                                     }
                                     
-                                    // 3. Post to Feed (Summary)
+                                    // 3. Post summary to Feed if significant
                                     if totalNewCells > 0 {
                                         let userName = AuthenticationService.shared.userName ?? "Un aventurero"
                                         
@@ -255,6 +255,7 @@ class WorkoutsViewModel: ObservableObject {
                                             miniMapRegion: nil,
                                             badgeName: nil,
                                             badgeRarity: nil,
+                                            rarity: nil,
                                             isPersonal: true
                                         )
                                         FeedRepository.shared.postEvent(event)

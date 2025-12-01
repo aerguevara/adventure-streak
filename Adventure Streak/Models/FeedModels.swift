@@ -58,8 +58,12 @@ struct FeedEvent: Identifiable, Codable {
     let miniMapRegion: MiniMapRegion?
     
     // Badges
+    // Badges
     let badgeName: String?
     let badgeRarity: BadgeRarity?
+    
+    // Game Logic
+    var rarity: MissionRarity? // Optional because not all events are missions
     
     // Flags
     let isPersonal: Bool

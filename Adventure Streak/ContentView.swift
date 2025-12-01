@@ -12,8 +12,8 @@ struct ContentView: View {
     init() {
         // Initialize services
         let locService = LocationService()
-        let actStore = ActivityStore()
-        let terrStore = TerritoryStore()
+        let actStore = ActivityStore.shared
+        let terrStore = TerritoryStore.shared
         
         // Correct way to initialize StateObject with dependencies
         _onboardingViewModel = StateObject(wrappedValue: OnboardingViewModel(locationService: locService))

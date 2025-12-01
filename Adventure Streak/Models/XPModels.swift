@@ -25,6 +25,9 @@ enum XPConfig {
     static let weeklyRecordBaseXP: Int = 30
     static let weeklyRecordPerKmDiffXP: Int = 5
     static let minWeeklyRecordKm: Double = 5.0
+    
+    // Mission thresholds
+    static let legendaryThresholdCells: Int = 20
 }
 
 // 2. Breakdown of earned XP
@@ -51,10 +54,19 @@ struct XPContext {
 }
 
 // 4. Territory Stats for calculation
+// 4. Territory Stats for calculation
+// Alias for clarity in Game Engine context, but mapping to TerritoryStats for now
+typealias TerritorialDelta = TerritoryStats
+
 struct TerritoryStats: Codable {
     let newCellsCount: Int
     let defendedCellsCount: Int
     let recapturedCellsCount: Int
+    
+    // Helper to check if empty
+    var isEmpty: Bool {
+        newCellsCount == 0 && defendedCellsCount == 0 && recapturedCellsCount == 0
+    }
 }
 
 // 5. User Gamification State

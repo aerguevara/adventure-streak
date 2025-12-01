@@ -12,8 +12,10 @@ struct ActivitySession: Identifiable, Codable {
     var xpBreakdown: XPBreakdown?
     // NEW: Territory stats for this activity
     var territoryStats: TerritoryStats?
+    // NEW: Missions completed in this activity
+    var missions: [Mission]?
     
-    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil, territoryStats: TerritoryStats? = nil) {
+    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil, territoryStats: TerritoryStats? = nil, missions: [Mission]? = nil) {
         self.id = id
         self.startDate = startDate
         self.endDate = endDate
@@ -23,5 +25,6 @@ struct ActivitySession: Identifiable, Codable {
         self.route = route
         self.xpBreakdown = xpBreakdown
         self.territoryStats = territoryStats
+        self.missions = missions
     }
 }

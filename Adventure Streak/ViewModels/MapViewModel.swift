@@ -221,9 +221,8 @@ class MapViewModel: ObservableObject {
         Task {
             let userId = AuthenticationService.shared.userId ?? "unknown_user"
             
-            // 1. Process Territories
-            // Create temporary session for territory processing (without XP yet)
-            let tempSession = ActivitySession(
+            // Create activity session
+            let session = ActivitySession(
                 startDate: start,
                 endDate: end,
                 activityType: type,
@@ -232,55 +231,13 @@ class MapViewModel: ObservableObject {
                 route: locationService.routePoints
             )
             
-            let territoryStats = territoryService.processActivity(tempSession)
-            
-            // 2. Calculate XP
-            var breakdown: XPBreakdown?
+            // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
+            // Use GameEngine to process the complete activity through the game system
             do {
-                let context = try await GamificationRepository.shared.buildXPContext(for: userId)
-                breakdown = try await GamificationService.shared.computeXP(for: tempSession, territoryStats: territoryStats, context: context)
-                
-                if let breakdown = breakdown {
-                    try await GamificationService.shared.applyXP(breakdown, to: userId, at: end)
-                    print("XP Earned: \(breakdown.total)")
-                }
+                try await GameEngine.shared.completeActivity(session, for: userId)
+                print("✅ Activity processed successfully through GameEngine")
             } catch {
-                print("Error calculating XP: \(error)")
-            }
-            
-            // 3. Save Activity with XP
-            let finalSession = ActivitySession(
-                startDate: start,
-                endDate: end,
-                activityType: type,
-                distanceMeters: currentActivityDistance,
-                durationSeconds: currentActivityDuration,
-                route: locationService.routePoints,
-                xpBreakdown: breakdown,
-                territoryStats: territoryStats
-            )
-            
-            activityStore.saveActivity(finalSession)
-            
-            // 4. Post to Feed
-            if territoryStats.newCellsCount > 0 {
-                let userName = AuthenticationService.shared.userName ?? "Un aventurero"
-                
-                let event = FeedEvent(
-                    id: nil,
-                    type: .territoryConquered,
-                    date: Date(),
-                    title: "Nueva conquista",
-                    subtitle: "Has reclamado \(territoryStats.newCellsCount) nuevos territorios!",
-                    xpEarned: territoryStats.newCellsCount * 10, // Example XP calc
-                    userId: userId,
-                    relatedUserName: userName,
-                    miniMapRegion: nil, // Could calculate this from newCells if we wanted
-                    badgeName: nil,
-                    badgeRarity: nil,
-                    isPersonal: true
-                )
-                FeedRepository.shared.postEvent(event)
+                print("❌ Error processing activity: \(error)")
             }
         }
     }
