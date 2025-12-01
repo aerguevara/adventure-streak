@@ -18,6 +18,19 @@ class ProfileViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     
+    // MARK: - Computed Properties
+    var userTitle: String {
+        switch level {
+        case 1...5: return "Rookie Scout"
+        case 6...10: return "Pathfinder"
+        case 11...20: return "Trailblazer"
+        case 21...30: return "Explorer"
+        case 31...50: return "Conqueror"
+        case 51...99: return "Legend"
+        default: return "Novice"
+        }
+    }
+    
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Dependencies

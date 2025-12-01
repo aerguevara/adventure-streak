@@ -1,293 +1,412 @@
 import SwiftUI
 
 struct WorkoutsView: View {
-    @StateObject var viewModel: WorkoutsViewModel
+    @ObservedObject var viewModel: WorkoutsViewModel
+    @ObservedObject var profileViewModel: ProfileViewModel
+    @ObservedObject var badgesViewModel: BadgesViewModel
     
     // Init with dependency injection
-    init(viewModel: WorkoutsViewModel) {
-        _viewModel = StateObject(wrappedValue: viewModel)
+    init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel) {
+        self.viewModel = viewModel
+        self.profileViewModel = profileViewModel
+        self.badgesViewModel = badgesViewModel
     }
     
     var body: some View {
         NavigationStack {
             ZStack {
                 // Background
-                Color(hex: "0F0F0F")
+                Color(hex: "000000") // Pure black as requested
                     .ignoresSafeArea()
                 
-                if viewModel.isLoading && viewModel.workouts.isEmpty {
-                    ProgressView("Cargando entrenos...")
-                        .foregroundColor(.white)
-                } else if let error = viewModel.errorMessage {
-                    VStack(spacing: 16) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.largeTitle)
-                            .foregroundColor(.red)
-                        Text(error)
-                            .foregroundColor(.white)
-                        Button("Reintentar") {
-                            Task { await viewModel.refresh() }
-                        }
+                ScrollView {
+                    VStack(spacing: 32) {
+                        // A) Header
+                        headerSection
+                        
+                        // B) Main Progress Card
+                        progressCard
+                        
+                        // C) Territory Summary
+                        territorySummary
+                        
+                        // D) Achievements
+                        achievementsSection
+                        
+                        // E) Feed
+                        feedSection
+                        
+                        // Secondary Buttons
+                        secondaryButtons
                     }
-                } else if viewModel.workouts.isEmpty {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            Image(systemName: "figure.walk")
-                                .font(.system(size: 50))
-                                .foregroundColor(.gray)
-                            Text("Aún no tienes entrenos registrados.")
-                                .foregroundColor(.gray)
-                            Text("Desliza hacia abajo para importar")
-                                .font(.caption)
-                                .foregroundColor(.gray.opacity(0.7))
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.top, 100)
-                    }
-                    .refreshable {
-                        await viewModel.refresh()
-                    }
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 24) {
-                            // Title
-                            Text("Entrenos")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                                .padding(.top, 20)
-                                .padding(.horizontal)
-                            
-                            LazyVStack(spacing: 20) {
-                                ForEach(viewModel.workouts) { workout in
-                                    GamifiedWorkoutCard(workout: workout)
-                                        .padding(.horizontal)
-                                }
-                            }
-                            .padding(.bottom, 40)
-                        }
-                    }
-                    .refreshable {
-                        await viewModel.refresh()
-                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
+                }
+                .refreshable {
+                    await viewModel.refresh()
+                    profileViewModel.fetchProfileData()
+                    badgesViewModel.fetchBadges()
                 }
             }
-            // Hide default navigation title to use custom one
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 Task {
                     await viewModel.refresh()
+                    profileViewModel.fetchProfileData()
+                    badgesViewModel.fetchBadges()
                 }
             }
         }
         .preferredColorScheme(.dark)
     }
-}
-
-struct WorkoutCard: View {
-    let workout: WorkoutItemViewData
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header
-            HStack(alignment: .top) {
-                HStack(spacing: 12) {
-                    iconView
+    // MARK: - A) Header
+    var headerSection: some View {
+        HStack(spacing: 16) {
+            // Avatar
+            ZStack {
+                Circle()
+                    .stroke(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2)
+                    .frame(width: 56, height: 56)
+                
+                if let url = profileViewModel.avatarURL {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.gray)
+                    }
+                    .frame(width: 50, height: 50)
+                    .clipShape(Circle())
+                } else {
+                    Image(systemName: "person.fill")
+                        .resizable()
+                        .padding(12)
+                        .foregroundColor(.white.opacity(0.8))
+                        .frame(width: 50, height: 50)
+                        .background(Color(hex: "1C1C1E"))
+                        .clipShape(Circle())
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(profileViewModel.userDisplayName)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                
+                Text(profileViewModel.userTitle) // Dynamic Title
+                    .font(.system(size: 14, weight: .medium, design: .default))
+                    .foregroundColor(Color(hex: "A259FF")) // Purple accent
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: "A259FF").opacity(0.15))
+                    .cornerRadius(6)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+    }
+    
+    // MARK: - B) Main Progress Card
+    var progressCard: some View {
+        VStack(spacing: 20) {
+            // Level & Streak Header
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("LEVEL \(profileViewModel.level)")
+                        .font(.system(size: 14, weight: .heavy, design: .monospaced))
+                        .foregroundColor(.gray)
+                        .tracking(1)
                     
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(workout.title)
-                            .font(.headline)
-                            .foregroundColor(.primary)
+                    Text("\(profileViewModel.totalXP) XP")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                // Streak Badge
+                HStack(spacing: 6) {
+                    Text("🔥")
+                        .font(.title3)
+                    Text("\(profileViewModel.streakWeeks) weeks")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(hex: "FF453A").opacity(0.15))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(hex: "FF453A").opacity(0.3), lineWidth: 1)
+                )
+            }
+            
+            // Progress Bar
+            VStack(spacing: 8) {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        // Track
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.white.opacity(0.1))
+                            .frame(height: 12)
                         
-                        Text(workout.dateString)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        // Fill
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: max(0, min(geometry.size.width * CGFloat(profileViewModel.xpProgress), geometry.size.width)), height: 12)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.7), value: profileViewModel.xpProgress)
                     }
                 }
+                .frame(height: 12)
                 
-                Spacer()
-            }
-            
-            Divider()
-            
-            // Metrics Grid
-            HStack(spacing: 0) {
-                metricItem(value: workout.duration, label: "Duración")
-                Spacer()
-                if let pace = workout.pace {
-                    metricItem(value: pace, label: "Ritmo")
-                    Spacer()
-                }
-                if let xp = workout.xp {
-                    metricItem(value: "+\(xp) XP", label: "Total", valueColor: .purple)
-                }
-            }
-            
-            // Territory / Secondary Info
-            // Territory / Secondary Info
-            if let newCount = workout.newTerritories,
-               let defendedCount = workout.defendedTerritories,
-               let recapturedCount = workout.recapturedTerritories {
-                
-                // Check if we have ANY territory activity (even if all are 0, we might want to show something if it was a valid outdoor workout)
-                // But usually we only show if > 0.
-                // User wants to see "0" if it was a defense.
-                // Let's show the row if any count exists (which they should if territoryStats was present)
-                
-                Divider()
-                HStack(spacing: 12) {
-                    // 1. New Territories (Green)
-                    if newCount > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "flag.fill")
-                            Text("\(newCount) Nuevos")
-                                .fontWeight(.semibold)
-                        }
-                        .font(.caption)
-                        .foregroundColor(.green)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    
-                    // 2. Recaptured/Stolen (Orange)
-                    if recapturedCount > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                            Text("\(recapturedCount) Robados")
-                                .fontWeight(.semibold)
-                        }
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    
-                    // 3. Defended/Renewed (Blue)
-                    if defendedCount > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "shield.fill")
-                            Text("\(defendedCount) Renovados")
-                                .fontWeight(.semibold)
-                        }
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    
-                    // Fallback: If all are 0 (e.g. ran in empty space or error), show "0 Territorios"
-                    if newCount == 0 && recapturedCount == 0 && defendedCount == 0 {
-                         HStack(spacing: 4) {
-                            Image(systemName: "globe.europe.africa.fill")
-                            Text("0 Territorios")
-                                .fontWeight(.semibold)
-                        }
+                HStack {
+                    Text("Current Progress")
                         .font(.caption)
                         .foregroundColor(.gray)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    
                     Spacer()
-                }
-            } else if let territoryXP = workout.territoryXP, territoryXP > 0 {
-                // Fallback for old data
-                Divider()
-                HStack {
-                    Image(systemName: "globe.europe.africa.fill")
-                        .foregroundColor(.green)
-                    Text("Territorio")
+                    Text("\(Int(profileViewModel.xpProgress * 100))%")
                         .font(.caption)
                         .fontWeight(.bold)
-                    Spacer()
-                    Text("+\(territoryXP) XP")
-                        .font(.subheadline)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 8)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
-            }
-            
-            // Tags
-            if workout.isStreak || workout.isRecord || workout.hasBadge {
-                HStack(spacing: 8) {
-                    if workout.isStreak {
-                        TagView(text: "Streak ✅", color: .orange)
-                    }
-                    if workout.isRecord {
-                        TagView(text: "Nuevo récord", color: .pink)
-                    }
-                    if workout.hasBadge {
-                        TagView(text: "Badge 🏅", color: .yellow)
-                    }
-                    Spacer()
-                }
-                .padding(.top, 4)
             }
         }
-        .padding()
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .padding(24)
+        .background(Color(hex: "18181C"))
+        .cornerRadius(24)
+        .padding(.horizontal)
+        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+    }
+    
+    // MARK: - C) Territory Summary
+    var territorySummary: some View {
+        HStack(spacing: 16) {
+            // Icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(hex: "32D74B").opacity(0.15))
+                    .frame(width: 60, height: 60)
+                
+                Image(systemName: "map.fill")
+                    .font(.title2)
+                    .foregroundColor(Color(hex: "32D74B"))
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Territory Control")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                    Text("\(profileViewModel.totalCellsConquered)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    
+                    Text("zones")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .padding(.bottom, 4)
+                }
+            }
+            
+            Spacer()
+            
+            // Stats
+            HStack(spacing: 16) {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("+\(profileViewModel.territoriesCount)")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    Text("This Week")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                
+                Divider()
+                    .frame(height: 30)
+                    .background(Color.white.opacity(0.1))
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("12%") // Placeholder for % control if not available
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    Text("Map")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+            }
+        }
+        .padding(20)
+        .background(Color(hex: "18181C"))
+        .cornerRadius(24)
+        .padding(.horizontal)
+    }
+    
+    // MARK: - D) Achievements
+    var achievementsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Recent Achievements")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Button("View all") {
+                    // Action
+                }
+                .font(.subheadline)
+                .foregroundColor(Color(hex: "A259FF"))
+            }
+            .padding(.horizontal)
+            
+            if badgesViewModel.badges.isEmpty {
+                Text("No achievements yet. Keep exploring!")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(badgesViewModel.badges.prefix(3)) { badge in
+                            AchievementCard(badge: badge)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
+    }
+    
+    // MARK: - E) Feed
+    var feedSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Activity Feed")
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding(.horizontal)
+            
+            if viewModel.isLoading && viewModel.workouts.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding()
+            } else if viewModel.workouts.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "figure.run")
+                        .font(.largeTitle)
+                        .foregroundColor(.gray)
+                    Text("No activities yet")
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                LazyVStack(spacing: 20) {
+                    ForEach(viewModel.workouts) { workout in
+                        GamifiedWorkoutCard(workout: workout)
+                            .padding(.horizontal)
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Secondary Buttons
+    var secondaryButtons: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                SecondaryButton(icon: "map", title: "View Map")
+                SecondaryButton(icon: "trophy", title: "Ranking")
+            }
+            
+            HStack(spacing: 12) {
+                SecondaryButton(icon: "clock.arrow.circlepath", title: "History")
+                SecondaryButton(icon: "gearshape", title: "Settings")
+            }
+        }
+        .padding(.horizontal)
+    }
+}
+
+struct AchievementCard: View {
+    let badge: Badge
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: badge.iconSystemName)
+                .font(.title)
+                .foregroundColor(badge.isUnlocked ? Color(hex: "FFD60A") : .gray)
+                .frame(width: 50, height: 50)
+                .background(Color.white.opacity(0.05))
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(badge.isUnlocked ? Color(hex: "FFD60A").opacity(0.5) : Color.clear, lineWidth: 1)
+                )
+            
+            VStack(spacing: 4) {
+                Text(badge.name)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                
+                Text(badge.category.rawValue.capitalized)
+                    .font(.caption2)
+                    .foregroundColor(categoryColor)
+            }
+        }
+        .padding(12)
+        .frame(width: 110)
+        .background(Color(hex: "18181C"))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+        )
     }
     
-    var iconView: some View {
-        ZStack {
-            Circle()
-                .fill(Color.blue.opacity(0.1))
-                .frame(width: 48, height: 48)
-            
-            Image(systemName: iconName)
-                .font(.title3)
-                .foregroundColor(.blue)
-        }
-    }
-    
-    var iconName: String {
-        switch workout.type {
-        case .run: return "figure.run"
-        case .walk: return "figure.walk"
-        case .bike: return "bicycle"
-        case .hike: return "figure.hiking"
-        case .otherOutdoor: return "figure.outdoor.cycle"
-        }
-    }
-    
-    func metricItem(value: String, label: String, valueColor: Color = .primary) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.bold)
-                .foregroundColor(valueColor)
-            Text(label)
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .textCase(.uppercase)
+    var categoryColor: Color {
+        switch badge.category {
+        case .territory: return .green
+        case .streak: return .orange
+        case .distance: return .blue
+        case .activity: return .purple
+        case .misc: return .gray
         }
     }
 }
 
-struct TagView: View {
-    let text: String
-    let color: Color
+struct SecondaryButton: View {
+    let icon: String
+    let title: String
     
     var body: some View {
-        Text(text)
-            .font(.caption)
-            .fontWeight(.semibold)
-            .foregroundColor(color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.1))
-            .cornerRadius(8)
+        Button(action: {}) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color(hex: "18181C"))
+            .cornerRadius(16)
+        }
     }
 }
+
+

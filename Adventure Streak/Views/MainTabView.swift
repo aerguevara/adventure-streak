@@ -4,6 +4,7 @@ struct MainTabView: View {
     @StateObject var mapViewModel: MapViewModel
     @StateObject var workoutsViewModel: WorkoutsViewModel
     @StateObject var profileViewModel: ProfileViewModel
+    @StateObject var badgesViewModel = BadgesViewModel()
     
     // Dependencies for Feed
     let activityStore: ActivityStore
@@ -34,7 +35,7 @@ struct MainTabView: View {
                 Label("Map", systemImage: "map")
             }
             
-            WorkoutsView(viewModel: workoutsViewModel)
+            WorkoutsView(viewModel: workoutsViewModel, profileViewModel: profileViewModel, badgesViewModel: badgesViewModel)
                 .tabItem {
                     Label("Entrenos", systemImage: "clock.arrow.circlepath")
                 }
