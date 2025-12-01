@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RankingView: View {
     @StateObject var viewModel = RankingViewModel()
+    @State private var showSearch = false
     
     var body: some View {
         ZStack {
@@ -46,7 +47,12 @@ struct RankingView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        .sheet(isPresented: $showSearch) {
+            UserSearchView()
+        }
+        .onAppear {
+            viewModel.fetchRanking()
+        }
     }
     
     private var headerView: some View {
@@ -58,7 +64,14 @@ struct RankingView: View {
                 .overlay(
                     HStack {
                         Spacer()
-                        // Optional: Share button or info
+                        Button(action: {
+                            showSearch = true
+                        }) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 18))
+                                .foregroundColor(.white)
+                                .padding(8)
+                        }
                     }
                 )
             

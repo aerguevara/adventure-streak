@@ -161,4 +161,48 @@ class GamificationRepository: ObservableObject {
         return XPContext(userId: userId, currentWeekDistanceKm: 0, bestWeeklyDistanceKm: nil, currentStreakWeeks: 0, todayBaseXPEarned: 0, gamificationState: GamificationState(totalXP: 0, level: 1, currentStreakWeeks: 0))
         #endif
     }
+    
+    // NEW: Search users by display name
+    func searchUsers(query: String, completion: @escaping ([RankingEntry]) -> Void) {
+        guard !query.isEmpty else {
+            completion([])
+            return
+        }
+        
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else {
+            completion([])
+            return
+        }
+        
+        // Firestore prefix search using range query
+        let endQuery = query + "\u{f8ff}"
+        
+        db.collection("users")
+            .whereField("displayName", isGreaterThanOrEqualTo: query)
+            .whereField("displayName", isLessThanOrEqualTo: endQuery)
+            .limit(to: 20)
+            .getDocuments { (snapshot, error) in
+                if let documents = snapshot?.documents {
+                    let entries = documents.map { doc -> RankingEntry in
+                        let data = doc.data()
+                        return RankingEntry(
+                            userId: doc.documentID,
+                            displayName: data["displayName"] as? String ?? "Unknown",
+                            level: data["level"] as? Int ?? 1,
+                            weeklyXP: data["xp"] as? Int ?? 0,
+                            position: 0, // Not applicable for search
+                            isCurrentUser: false
+                        )
+                    }
+                    completion(entries)
+                } else {
+                    print("Error searching users: \(String(describing: error))")
+                    completion([])
+                }
+            }
+        #else
+        completion([])
+        #endif
+    }
 }
