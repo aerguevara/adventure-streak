@@ -4,73 +4,76 @@ struct RankingView: View {
     @StateObject var viewModel = RankingViewModel()
     
     var body: some View {
-        VStack(spacing: 0) {
-            // 1. Header / Summary
-            headerView
+        ZStack {
+            // Background
+            Color.black.ignoresSafeArea()
             
-            // 2. Scope Selector (Optional for MVP)
-            scopeSelector
-            
-            // 3. Content
-            ZStack {
-                if viewModel.isLoading {
-                    ProgressView()
-                } else if let error = viewModel.errorMessage {
-                    errorView(message: error)
-                } else if !viewModel.hasEntries {
-                    emptyStateView
-                } else {
-                    rankingList
+            VStack(spacing: 0) {
+                // 1. Header
+                headerView
+                
+                // 2. Content
+                ScrollView {
+                    VStack(spacing: 24) {
+                        if viewModel.isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .padding(.top, 40)
+                        } else if let error = viewModel.errorMessage {
+                            errorView(message: error)
+                        } else if !viewModel.hasEntries {
+                            emptyStateView
+                        } else {
+                            // Podium
+                            PodiumView(entries: Array(viewModel.entries.prefix(3)))
+                                .padding(.top, 10)
+                            
+                            // List
+                            LazyVStack(spacing: 12) {
+                                ForEach(viewModel.entries.dropFirst(3)) { entry in
+                                    RankingCard(entry: entry)
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom, 20)
+                        }
+                    }
+                }
+                .refreshable {
+                    viewModel.fetchRanking()
                 }
             }
-            
-            // 4. Current User Footer (Sticky)
-            if let currentUser = viewModel.currentUserEntry {
-                Divider()
-                RankingRowView(entry: currentUser)
-                    .background(Color(UIColor.secondarySystemBackground))
-            }
         }
-        .navigationTitle("Weekly Ranking")
-        .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            viewModel.fetchRanking()
-        }
+        .navigationBarHidden(true)
     }
     
     private var headerView: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 16) {
             Text("Weekly Leaderboard")
-                .font(.headline)
-            Text("Period: Last 7 days")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(Color(UIColor.systemBackground))
-    }
-    
-    private var scopeSelector: some View {
-        Picker("Scope", selection: $viewModel.selectedScope) {
-            Text("This Week").tag(RankingScope.weekly)
-            Text("Global").tag(RankingScope.global)
-        }
-        .pickerStyle(SegmentedPickerStyle())
-        .padding(.horizontal)
-        .padding(.bottom, 8)
-        .disabled(true) // Disabled for MVP as requested
-    }
-    
-    private var rankingList: some View {
-        List {
-            ForEach(viewModel.entries) { entry in
-                RankingRowView(entry: entry)
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .overlay(
+                    HStack {
+                        Spacer()
+                        // Optional: Share button or info
+                    }
+                )
+            
+            Picker("Scope", selection: $viewModel.selectedScope) {
+                Text("This Week").tag(RankingScope.weekly)
+                Text("Global").tag(RankingScope.global)
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .padding(.horizontal)
+            .onAppear {
+                UISegmentedControl.appearance().selectedSegmentTintColor = UIColor(red: 0.3, green: 0.4, blue: 1.0, alpha: 1.0)
+                UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
+                UISegmentedControl.appearance().setTitleTextAttributes([.foregroundColor: UIColor.lightGray], for: .normal)
             }
         }
-        .listStyle(.plain)
+        .padding(.bottom, 16)
+        .background(Color.black)
     }
     
     private var emptyStateView: some View {
@@ -80,12 +83,14 @@ struct RankingView: View {
                 .foregroundColor(.gray)
             Text("Not enough data yet")
                 .font(.headline)
+                .foregroundColor(.white)
             Text("Be the first to claim your spot on the leaderboard!")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
         }
+        .padding(.top, 40)
     }
     
     private func errorView(message: String) -> some View {
@@ -95,74 +100,217 @@ struct RankingView: View {
                 .foregroundColor(.orange)
             Text("Something went wrong")
                 .font(.headline)
+                .foregroundColor(.white)
             Button("Retry") {
                 viewModel.fetchRanking()
             }
             .buttonStyle(.bordered)
         }
+        .padding(.top, 40)
     }
 }
 
-struct RankingRowView: View {
+struct PodiumView: View {
+    let entries: [RankingEntry]
+    
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 16) {
+            // 2nd Place
+            if entries.indices.contains(1) {
+                PodiumItem(entry: entries[1], scale: 0.9)
+            }
+            
+            // 1st Place
+            if entries.indices.contains(0) {
+                PodiumItem(entry: entries[0], scale: 1.1, isFirst: true)
+                    .zIndex(1)
+            }
+            
+            // 3rd Place
+            if entries.indices.contains(2) {
+                PodiumItem(entry: entries[2], scale: 0.85)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 20)
+    }
+}
+
+struct PodiumItem: View {
+    let entry: RankingEntry
+    let scale: CGFloat
+    var isFirst: Bool = false
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            // Avatar & Badge
+            ZStack(alignment: .top) {
+                Circle()
+                    .fill(Color(hex: "1C1C1E"))
+                    .frame(width: 70, height: 70)
+                    .overlay(
+                        Text(entry.displayName.prefix(1).uppercased())
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(.gray)
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(isFirst ? Color(hex: "FFD60A") : Color.clear, lineWidth: 3)
+                    )
+                    .shadow(color: isFirst ? Color(hex: "FFD60A").opacity(0.5) : Color.clear, radius: 10)
+                
+                // Crown for 1st
+                if isFirst {
+                    Image(systemName: "crown.fill")
+                        .foregroundColor(Color(hex: "FFD60A"))
+                        .font(.title2)
+                        .offset(y: -24)
+                }
+                
+                // Rank Badge
+                Circle()
+                    .fill(rankColor)
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        Text("\(entry.position)")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.black)
+                    )
+                    .offset(y: 35)
+            }
+            
+            VStack(spacing: 2) {
+                Text(entry.displayName)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                
+                Text("\(entry.weeklyXP) XP")
+                    .font(.caption2)
+                    .foregroundColor(Color(hex: "A259FF"))
+            }
+        }
+        .scaleEffect(scale)
+    }
+    
+    var rankColor: Color {
+        switch entry.position {
+        case 1: return Color(hex: "FFD60A") // Gold
+        case 2: return Color(hex: "C0C0C0") // Silver
+        case 3: return Color(hex: "CD7F32") // Bronze
+        default: return .gray
+        }
+    }
+}
+
+struct RankingCard: View {
     let entry: RankingEntry
     
     var body: some View {
         HStack(spacing: 16) {
-            // Position
-            ZStack {
-                if entry.position <= 3 {
-                    Circle()
-                        .fill(medalColor(for: entry.position))
-                        .frame(width: 32, height: 32)
-                    
-                    Text("\(entry.position)")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                } else {
-                    Text("\(entry.position)")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                        .frame(width: 32)
-                }
-            }
+            // Rank
+            Text("\(entry.position)")
+                .font(.headline)
+                .foregroundColor(.gray)
+                .frame(width: 24)
             
-            // User Info
-            VStack(alignment: .leading, spacing: 2) {
+            // Avatar
+            Circle()
+                .fill(Color(hex: "2C2C2E"))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Text(entry.displayName.prefix(1).uppercased())
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                )
+            
+            // Info
+            VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(entry.displayName)
-                        .font(.body)
-                        .fontWeight(entry.isCurrentUser ? .bold : .regular)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
                     
                     if entry.isCurrentUser {
                         Text("(You)")
-                            .font(.caption)
-                            .foregroundColor(.blue)
+                            .font(.caption2)
+                            .foregroundColor(Color(hex: "4C6FFF"))
                     }
                 }
                 
-                Text("Level \(entry.level)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                // XP Progress Bar
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.1))
+                            .frame(height: 4)
+                        
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: geometry.size.width * entry.xpProgress, height: 4)
+                    }
+                }
+                .frame(height: 4)
             }
             
             Spacer()
             
-            // XP
-            Text("\(entry.weeklyXP) XP")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(.primary)
+            // Stats & Trend
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("\(entry.weeklyXP)")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                HStack(spacing: 2) {
+                    Image(systemName: trendIcon)
+                    Text(trendText)
+                }
+                .font(.caption2)
+                .foregroundColor(trendColor)
+            }
         }
-        .padding()
-        .background(entry.isCurrentUser ? Color.blue.opacity(0.05) : Color.clear)
+        .padding(16)
+        .background(Color(hex: "18181C"))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(entry.isCurrentUser ? Color(hex: "4C6FFF").opacity(0.5) : Color.white.opacity(0.05), lineWidth: 1)
+        )
     }
     
-    private func medalColor(for position: Int) -> Color {
-        switch position {
-        case 1: return .yellow
-        case 2: return .gray
-        case 3: return .brown
-        default: return .clear
+    var trendIcon: String {
+        switch entry.trend {
+        case .up: return "arrow.up"
+        case .down: return "arrow.down"
+        case .neutral: return "minus"
+        }
+    }
+    
+    var trendText: String {
+        switch entry.trend {
+        case .up: return "Rising"
+        case .down: return "Falling"
+        case .neutral: return "Stable"
+        }
+    }
+    
+    var trendColor: Color {
+        switch entry.trend {
+        case .up: return .green
+        case .down: return .red
+        case .neutral: return .gray
         }
     }
 }

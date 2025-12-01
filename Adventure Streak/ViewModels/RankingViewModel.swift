@@ -37,22 +37,31 @@ class RankingViewModel: ObservableObject {
         repository.fetchWeeklyRanking(limit: 50) { [weak self] fetchedEntries in
             guard let self = self else { return }
             
-            // Mark current user
-            var processedEntries = fetchedEntries
-            if let currentUserId = self.authService.userId {
-                for i in 0..<processedEntries.count {
-                    if processedEntries[i].userId == currentUserId {
-                        processedEntries[i].isCurrentUser = true
+            Task { @MainActor in
+                // Mark current user
+                var processedEntries = fetchedEntries
+                if let currentUserId = self.authService.userId {
+                    for i in 0..<processedEntries.count {
+                        if processedEntries[i].userId == currentUserId {
+                            processedEntries[i].isCurrentUser = true
+                        }
+                        
+                        // Mock data for redesign
+                        processedEntries[i].xpProgress = Double.random(in: 0.3...0.9)
+                        processedEntries[i].trend = RankingTrend.allCases.randomElement() ?? .neutral
                     }
                 }
-            }
-            
-            self.entries = processedEntries
-            self.isLoading = false
-            
-            if self.entries.isEmpty {
-                // Optional: Set specific message if empty but no error
-                // self.errorMessage = "No ranking data available yet." 
+                
+                // Sort by position to ensure Podium works correctly
+                processedEntries.sort { $0.position < $1.position }
+                
+                self.entries = processedEntries
+                self.isLoading = false
+                
+                if self.entries.isEmpty {
+                    // Optional: Set specific message if empty but no error
+                    // self.errorMessage = "No ranking data available yet."
+                }
             }
         }
     }
