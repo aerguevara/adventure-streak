@@ -5,6 +5,8 @@ struct WorkoutsView: View {
     @ObservedObject var profileViewModel: ProfileViewModel
     @ObservedObject var badgesViewModel: BadgesViewModel
     
+    @State private var showSignOutConfirmation = false
+    
     // Init with dependency injection
     init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel) {
         self.viewModel = viewModel
@@ -56,6 +58,14 @@ struct WorkoutsView: View {
                     badgesViewModel.fetchBadges()
                 }
             }
+            .confirmationDialog("Cerrar Sesión", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
+                Button("Cerrar Sesión", role: .destructive) {
+                    profileViewModel.signOut()
+                }
+                Button("Cancelar", role: .cancel) {}
+            } message: {
+                Text("¿Estás seguro de que quieres cerrar sesión?")
+            }
         }
         .preferredColorScheme(.dark)
     }
@@ -87,6 +97,9 @@ struct WorkoutsView: View {
                         .background(Color(hex: "1C1C1E"))
                         .clipShape(Circle())
                 }
+            }
+            .onTapGesture {
+                showSignOutConfirmation = true
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -263,11 +276,11 @@ struct WorkoutsView: View {
                 
                 Spacer()
                 
-                Button("View all") {
-                    // Action
+                NavigationLink(destination: BadgesView()) {
+                    Text("View all")
+                        .font(.subheadline)
+                        .foregroundColor(Color(hex: "A259FF"))
                 }
-                .font(.subheadline)
-                .foregroundColor(Color(hex: "A259FF"))
             }
             .padding(.horizontal)
             

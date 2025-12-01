@@ -12,6 +12,11 @@ struct MainTabView: View {
     
     var body: some View {
         TabView {
+            WorkoutsView(viewModel: workoutsViewModel, profileViewModel: profileViewModel, badgesViewModel: badgesViewModel)
+                .tabItem {
+                    Label("Progreso", systemImage: "chart.bar.fill")
+                }
+            
             ZStack(alignment: .bottomTrailing) {
                 MapView(viewModel: mapViewModel)
                     .ignoresSafeArea(edges: .top)
@@ -21,12 +26,12 @@ struct MainTabView: View {
                     mapViewModel.centerOnUserLocation()
                 }) {
                     Image(systemName: "location.fill")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                        .padding(12)
-                        .background(Color.white)
-                        .clipShape(Circle())
-                        .shadow(radius: 4)
+                    .font(.title2)
+                    .foregroundColor(.blue)
+                    .padding(12)
+                    .background(Color.white)
+                    .clipShape(Circle())
+                    .shadow(radius: 4)
                 }
                 .padding(.trailing, 16)
                 .padding(.bottom, 24)
@@ -35,23 +40,15 @@ struct MainTabView: View {
                 Label("Map", systemImage: "map")
             }
             
-            WorkoutsView(viewModel: workoutsViewModel, profileViewModel: profileViewModel, badgesViewModel: badgesViewModel)
-                .tabItem {
-                    Label("Entrenos", systemImage: "clock.arrow.circlepath")
-                }
-            
             // NEW: Added for multiplayer conquest feature
             NavigationView {
-                ActivityFeedView(viewModel: FeedViewModel(activityStore: activityStore, territoryStore: territoryStore))
+                RankingView()
             }
             .tabItem {
-                Label("Feed", systemImage: "person.3.fill")
+                Label("Ranking", systemImage: "trophy.fill")
             }
             
-            ProfileView(viewModel: profileViewModel)
-                .tabItem {
-                    Label("Profile", systemImage: "person.fill")
-                }
+
         }
     }
 }
