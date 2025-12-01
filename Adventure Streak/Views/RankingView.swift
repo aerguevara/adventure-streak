@@ -31,7 +31,9 @@ struct RankingView: View {
                             // List
                             LazyVStack(spacing: 12) {
                                 ForEach(viewModel.entries.dropFirst(3)) { entry in
-                                    RankingCard(entry: entry)
+                                    RankingCard(entry: entry) {
+                                        viewModel.toggleFollow(for: entry)
+                                    }
                                 }
                             }
                             .padding(.horizontal)
@@ -208,6 +210,7 @@ struct PodiumItem: View {
 
 struct RankingCard: View {
     let entry: RankingEntry
+    var onFollowTapped: (() -> Void)?
     
     var body: some View {
         HStack(spacing: 16) {
@@ -266,19 +269,36 @@ struct RankingCard: View {
             
             Spacer()
             
-            // Stats & Trend
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("\(entry.weeklyXP)")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                
-                HStack(spacing: 2) {
-                    Image(systemName: trendIcon)
-                    Text(trendText)
+            // Stats & Actions
+            HStack(spacing: 12) {
+                // Stats & Trend
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(entry.weeklyXP)")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    HStack(spacing: 2) {
+                        Image(systemName: trendIcon)
+                        Text(trendText)
+                    }
+                    .font(.caption2)
+                    .foregroundColor(trendColor)
                 }
-                .font(.caption2)
-                .foregroundColor(trendColor)
+                
+                // Follow Button (Only for other users)
+                if !entry.isCurrentUser {
+                    Button(action: {
+                        onFollowTapped?()
+                    }) {
+                        Image(systemName: entry.isFollowing ? "person.badge.minus" : "person.badge.plus")
+                            .font(.system(size: 14))
+                            .foregroundColor(entry.isFollowing ? .gray : .white)
+                            .padding(8)
+                            .background(entry.isFollowing ? Color.white.opacity(0.1) : Color(hex: "4C6FFF"))
+                            .clipShape(Circle())
+                    }
+                }
             }
         }
         .padding(16)

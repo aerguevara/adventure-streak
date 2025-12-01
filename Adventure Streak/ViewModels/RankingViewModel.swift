@@ -49,6 +49,7 @@ class RankingViewModel: ObservableObject {
                         // Mock data for redesign
                         processedEntries[i].xpProgress = Double.random(in: 0.3...0.9)
                         processedEntries[i].trend = RankingTrend.allCases.randomElement() ?? .neutral
+                        processedEntries[i].isFollowing = SocialService.shared.isFollowing(userId: processedEntries[i].userId)
                     }
                 }
                 
@@ -69,5 +70,18 @@ class RankingViewModel: ObservableObject {
     func onScopeChanged(_ scope: RankingScope) {
         self.selectedScope = scope
         fetchRanking()
+    }
+    
+    func toggleFollow(for entry: RankingEntry) {
+        if entry.isFollowing {
+            SocialService.shared.unfollowUser(userId: entry.userId)
+        } else {
+            SocialService.shared.followUser(userId: entry.userId)
+        }
+        
+        // Update local state
+        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+            entries[index].isFollowing.toggle()
+        }
     }
 }

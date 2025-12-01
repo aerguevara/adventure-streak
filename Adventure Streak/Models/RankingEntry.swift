@@ -13,6 +13,7 @@ struct RankingEntry: Identifiable, Codable {
     var trend: RankingTrend = .neutral
     var xpProgress: Double = 0.0 // 0.0 to 1.0
     var avatarURL: URL? = nil
+    var isFollowing: Bool = false
     
     enum CodingKeys: String, CodingKey {
         case userId
@@ -24,6 +25,7 @@ struct RankingEntry: Identifiable, Codable {
         case trend
         case xpProgress
         case avatarURL
+        case isFollowing
     }
 }
 

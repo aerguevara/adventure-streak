@@ -92,6 +92,16 @@ class GameEngine {
         userId: String
     ) async throws {
         let userName = AuthenticationService.shared.userName ?? "Aventurero"
+        let userLevel = GamificationService.shared.currentLevel
+        
+        // Create activity data for the feed
+        let activityData = SocialActivityData(
+            activityType: activity.activityType,
+            distanceMeters: activity.distanceMeters,
+            durationSeconds: activity.durationSeconds,
+            xpEarned: xpBreakdown.total,
+            newZonesCount: territoryStats.newCellsCount
+        )
         
         // Create event for each mission
         for mission in missions {
@@ -104,9 +114,12 @@ class GameEngine {
                 xpEarned: xpBreakdown.total,
                 userId: userId,
                 relatedUserName: userName,
+                userLevel: userLevel,
+                userAvatarURL: nil, // TODO: Fetch from profile if needed
                 miniMapRegion: nil,
                 badgeName: nil,
                 badgeRarity: nil,
+                activityData: activityData,
                 rarity: mission.rarity,
                 isPersonal: true
             )
@@ -125,9 +138,12 @@ class GameEngine {
                 xpEarned: xpBreakdown.xpTerritory,
                 userId: userId,
                 relatedUserName: userName,
+                userLevel: userLevel,
+                userAvatarURL: nil,
                 miniMapRegion: nil,
                 badgeName: nil,
                 badgeRarity: nil,
+                activityData: activityData,
                 rarity: nil,
                 isPersonal: true
             )

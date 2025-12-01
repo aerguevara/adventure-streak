@@ -202,9 +202,13 @@ class HistoryViewModel: ObservableObject {
                                             xpEarned: totalStats.newCellsCount * 10, // Approximate
                                             userId: userId,
                                             relatedUserName: userName,
+                                            userLevel: GamificationService.shared.currentLevel,
+                                            userAvatarURL: nil,
                                             miniMapRegion: nil, // Hard to calculate region for batch, skipping for now
                                             badgeName: nil,
                                             badgeRarity: nil,
+                                            activityData: nil, // No specific activity data for summary
+                                            rarity: nil,
                                             isPersonal: true
                                         )
                                         FeedRepository.shared.postEvent(event)

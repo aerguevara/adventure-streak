@@ -41,6 +41,11 @@ struct MainTabView: View {
             }
             
             // NEW: Added for multiplayer conquest feature
+            SocialFeedView()
+            .tabItem {
+                Label("Feed", systemImage: "person.2.fill")
+            }
+            
             NavigationView {
                 RankingView()
             }

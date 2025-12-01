@@ -53,6 +53,8 @@ struct FeedEvent: Identifiable, Codable {
     // Social
     let userId: String?
     let relatedUserName: String?
+    let userLevel: Int?
+    let userAvatarURL: URL?
     
     // Territory
     let miniMapRegion: MiniMapRegion?
@@ -61,6 +63,9 @@ struct FeedEvent: Identifiable, Codable {
     // Badges
     let badgeName: String?
     let badgeRarity: BadgeRarity?
+    
+    // Activity Data (New for Social Feed)
+    let activityData: SocialActivityData?
     
     // Game Logic
     var rarity: MissionRarity? // Optional because not all events are missions

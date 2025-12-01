@@ -252,9 +252,12 @@ class WorkoutsViewModel: ObservableObject {
                                             xpEarned: totalNewCells * 10,
                                             userId: userId,
                                             relatedUserName: userName,
+                                            userLevel: GamificationService.shared.currentLevel,
+                                            userAvatarURL: nil,
                                             miniMapRegion: nil,
                                             badgeName: nil,
                                             badgeRarity: nil,
+                                            activityData: nil, // No specific activity data for summary
                                             rarity: nil,
                                             isPersonal: true
                                         )
