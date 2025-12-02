@@ -125,10 +125,26 @@ class MapViewModel: ObservableObject {
                 let currentUserId = AuthenticationService.shared.userId ?? ""
                 let local = Array(localDict.values)
                 let localIds = Set(local.map { $0.id })
+
+                // Identify territories that are now owned by someone else
+                let lostIds = Set(remote.compactMap { territory -> String? in
+                    guard territory.userId != currentUserId else { return nil }
+                    guard let territoryId = territory.id, localIds.contains(territoryId) else { return nil }
+                    return territoryId
+                })
+
+                // Remove lost territories locally so they re-render as rivals
+                if !lostIds.isEmpty {
+                    DispatchQueue.main.async {
+                        self.territoryStore.removeCells(withIds: lostIds)
+                    }
+                }
+
+                let effectiveLocalIds = localIds.subtracting(lostIds)
                 
                 // 1. Identify my territories that are missing locally (Restore)
-                let myMissingTerritories = remote.filter { 
-                    $0.userId == currentUserId && !localIds.contains($0.id ?? "")
+                let myMissingTerritories = remote.filter {
+                    $0.userId == currentUserId && !effectiveLocalIds.contains($0.id ?? "")
                 }
                 
                 // Only restore if we have a significant number or it's a new batch
@@ -151,8 +167,8 @@ class MapViewModel: ObservableObject {
                 }
                 
                 // 2. Return only TRUE rivals
-                return remote.filter { 
-                    $0.userId != currentUserId && !localIds.contains($0.id ?? "")
+                return remote.filter {
+                    $0.userId != currentUserId && !effectiveLocalIds.contains($0.id ?? "")
                 }
             }
             .removeDuplicates() // Prevent UI updates if the list of rivals hasn't changed

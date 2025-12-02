@@ -34,6 +34,15 @@ class TerritoryStore: ObservableObject {
         conqueredCells = [:]
         persist()
     }
+
+    func removeCells(withIds ids: Set<String>) {
+        let originalCount = conqueredCells.count
+        ids.forEach { conqueredCells.removeValue(forKey: $0) }
+
+        if conqueredCells.count != originalCount {
+            persist()
+        }
+    }
     
     func fetchAllCells() -> [TerritoryCell] {
         return Array(conqueredCells.values)
