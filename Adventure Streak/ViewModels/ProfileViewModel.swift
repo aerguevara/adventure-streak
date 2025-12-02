@@ -123,6 +123,8 @@ class ProfileViewModel: ObservableObject {
         // Clear local data to allow fresh import for next user
         activityStore.clear()
         territoryStore.clear()
+        FeedRepository.shared.clear()
+        SocialService.shared.clear()
         
         authService.signOut()
     }

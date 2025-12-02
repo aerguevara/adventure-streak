@@ -16,10 +16,11 @@ class SocialViewModel: ObservableObject {
             .assign(to: \.posts, on: self)
             .store(in: &cancellables)
             
-        // Initial load check (optional, as service starts observing on init)
+        // Ensure service is observing
+        socialService.startObserving()
     }
     
     func refresh() async {
-        // No-op for now as it's real-time, or could trigger a re-fetch in repository
+        socialService.startObserving()
     }
 }

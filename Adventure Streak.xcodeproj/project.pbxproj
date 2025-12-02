@@ -429,6 +429,7 @@
 				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Necesitamos acceder a tus entrenamientos para importar tus rutas y conquistar territorios";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adventure Streak usa tus datos de Salud para registrar y actualizar tus entrenos, rachas de actividad y progreso deportivo dentro de la app.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Necesitamos tu ubicación para mostrar el mapa";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Necesitamos tu ubicación para registrar tu ruta";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -464,6 +465,7 @@
 				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Necesitamos acceder a tus entrenamientos para importar tus rutas y conquistar territorios";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adventure Streak usa tus datos de Salud para registrar y actualizar tus entrenos, rachas de actividad y progreso deportivo dentro de la app.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Necesitamos tu ubicación para mostrar el mapa";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Necesitamos tu ubicación para registrar tu ruta";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

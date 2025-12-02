@@ -1,5 +1,11 @@
 import Foundation
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 class SocialService: ObservableObject {
     static let shared = SocialService()
@@ -10,9 +16,21 @@ class SocialService: ObservableObject {
     private let feedRepository = FeedRepository.shared
     private var cancellables = Set<AnyCancellable>()
     
+    // MARK: - Dependencies
+    private var db: Any?
+    #if canImport(FirebaseFirestore)
+    private var listenerRegistration: ListenerRegistration?
+    #else
+    private var listenerRegistration: Any?
+    #endif
+    
     private init() {
+        #if canImport(FirebaseFirestore)
+        db = Firestore.firestore()
+        #endif
+        
         // Load persisted following state
-        loadFollowingState()
+        startObservingFollowing() // Changed to startObservingFollowing()
         
         // Start observing feed
         feedRepository.observeFeed()
@@ -72,30 +90,91 @@ class SocialService: ObservableObject {
     // MARK: - Follow System
     
     func followUser(userId: String) {
+        guard let currentUserId = AuthenticationService.shared.userId else { return }
+        
+        // Optimistic update
         followingIds.insert(userId)
-        saveFollowingState()
-        // In a real app, this would trigger a backend call
+        
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        
+        let data: [String: Any] = [
+            "followedAt": FieldValue.serverTimestamp()
+        ]
+        
+        db.collection("users").document(currentUserId)
+            .collection("following").document(userId)
+            .setData(data) { error in
+                if let error = error {
+                    print("Error following user: \(error)")
+                    // Rollback on error
+                    DispatchQueue.main.async {
+                        self.followingIds.remove(userId)
+                    }
+                }
+            }
+        #endif
     }
     
     func unfollowUser(userId: String) {
+        guard let currentUserId = AuthenticationService.shared.userId else { return }
+        
+        // Optimistic update
         followingIds.remove(userId)
-        saveFollowingState()
-        // In a real app, this would trigger a backend call
+        
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        
+        db.collection("users").document(currentUserId)
+            .collection("following").document(userId)
+            .delete { error in
+                if let error = error {
+                    print("Error unfollowing user: \(error)")
+                    // Rollback on error
+                    DispatchQueue.main.async {
+                        self.followingIds.insert(userId)
+                    }
+                }
+            }
+        #endif
     }
     
     func isFollowing(userId: String) -> Bool {
         return followingIds.contains(userId)
     }
     
-    private func saveFollowingState() {
-        // Simple persistence using UserDefaults for MVP
-        UserDefaults.standard.set(Array(followingIds), forKey: "Social_FollowingIds")
+    func clear() {
+        posts = []
+        followingIds = []
+        listenerRegistration?.remove() // Removed old UserDefaults clear, added listener removal
+        listenerRegistration = nil
     }
     
-    private func loadFollowingState() {
-        if let savedIds = UserDefaults.standard.array(forKey: "Social_FollowingIds") as? [String] {
-            followingIds = Set(savedIds)
-        }
+    func startObserving() {
+        feedRepository.observeFeed()
+        startObservingFollowing() // Added call to start observing following
+    }
+    
+    private func startObservingFollowing() {
+        guard let currentUserId = AuthenticationService.shared.userId else { return }
+        
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        
+        listenerRegistration?.remove() // Remove any existing listener
+        
+        listenerRegistration = db.collection("users").document(currentUserId)
+            .collection("following")
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let documents = snapshot?.documents else {
+                    print("Error fetching following list: \(error?.localizedDescription ?? "Unknown error")")
+                    return
+                }
+                
+                let ids = documents.map { $0.documentID }
+                self?.followingIds = Set(ids)
+            }
+        #endif
     }
     
     // MARK: - Feed System

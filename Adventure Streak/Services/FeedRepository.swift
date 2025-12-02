@@ -19,6 +19,7 @@ struct DocumentID<T: Codable>: Codable {
 protocol FeedRepositoryProtocol {
     func observeFeed()
     func postEvent(_ event: FeedEvent)
+    func clear()
     var events: [FeedEvent] { get }
 }
 
@@ -31,6 +32,8 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
     
     private var db: Any?
     
+    private var listenerRegistration: ListenerRegistration?
+    
     init() {
         #if canImport(FirebaseFirestore)
         db = Firestore.firestore()
@@ -42,7 +45,10 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         
-        db.collection("feed")
+        // Remove existing listener if any
+        listenerRegistration?.remove()
+        
+        listenerRegistration = db.collection("feed")
             .order(by: "date", descending: true)
             .limit(to: 20)
             .addSnapshotListener { [weak self] snapshot, error in
@@ -74,5 +80,11 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
             print("Error posting feed event: \(error)")
         }
         #endif
+    }
+    
+    func clear() {
+        listenerRegistration?.remove()
+        listenerRegistration = nil
+        events = []
     }
 }
