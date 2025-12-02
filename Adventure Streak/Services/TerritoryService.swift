@@ -16,10 +16,13 @@ class TerritoryService {
         
         if !newCells.isEmpty {
             territoryStore.upsertCells(newCells)
-            
-            // Multiplayer Sync
-            let userId = AuthenticationService.shared.userId ?? "unknown_user"
-            TerritoryRepository.shared.saveCells(newCells, userId: userId)
+
+            // Multiplayer Sync - only if we have a valid user
+            if let userId = AuthenticationService.shared.userId, !userId.isEmpty {
+                TerritoryRepository.shared.saveCells(newCells, userId: userId)
+            } else {
+                print("[Territories] Skipping cloud save because userId is missing")
+            }
         }
         
         return stats
@@ -46,10 +49,13 @@ class TerritoryService {
         // 3. Update store ONCE (Main Actor access)
         if !result.newCells.isEmpty {
             territoryStore.upsertCells(result.newCells)
-            
-            // Multiplayer Sync
-            let userId = AuthenticationService.shared.userId ?? "unknown_user"
-            TerritoryRepository.shared.saveCells(result.newCells, userId: userId)
+
+            // Multiplayer Sync - only if we have a valid user
+            if let userId = AuthenticationService.shared.userId, !userId.isEmpty {
+                TerritoryRepository.shared.saveCells(result.newCells, userId: userId)
+            } else {
+                print("[Territories] Skipping cloud save because userId is missing")
+            }
         }
         
         return result.stats
@@ -59,7 +65,7 @@ class TerritoryService {
     nonisolated private static func calculateTerritories(activities: [ActivitySession], existingCells: [String: TerritoryCell]) -> (newCells: [TerritoryCell], stats: TerritoryStats) {
         var newConqueredCount = 0
         var defendedCount = 0
-        let recapturedCount = 0
+        var recapturedCount = 0
         
         // Temporary local cache of new cells to avoid duplicates within the batch
         var batchNewCells: [TerritoryCell] = []
@@ -70,7 +76,7 @@ class TerritoryService {
             // Add start point cell
             if let first = activity.route.first {
                 let cell = existingCells[TerritoryGrid.cellId(x: TerritoryGrid.cellIndex(for: first.coordinate).x, y: TerritoryGrid.cellIndex(for: first.coordinate).y)] ?? TerritoryGrid.getCell(for: first.coordinate)
-                processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, activity: activity)
+                processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity)
             }
             
             // Process segments
@@ -87,7 +93,7 @@ class TerritoryService {
                     }
                     
                     let cell = existingCells[cellTemplate.id] ?? cellTemplate
-                    processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, activity: activity)
+                    processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity)
                 }
             }
         }
@@ -102,12 +108,17 @@ class TerritoryService {
     }
     
     // Helper must be static or non-isolated to be called from detached task without capturing self
-    nonisolated private static func processCell(_ cell: TerritoryCell, existingCells: [String: TerritoryCell], newCells: inout [TerritoryCell], newConqueredCount: inout Int, defendedCount: inout Int, activity: ActivitySession) {
+    nonisolated private static func processCell(_ cell: TerritoryCell, existingCells: [String: TerritoryCell], newCells: inout [TerritoryCell], newConqueredCount: inout Int, defendedCount: inout Int, recapturedCount: inout Int, activity: ActivitySession) {
         var mutableCell = cell
         let wasExpiredOrNew = mutableCell.isExpired || existingCells[mutableCell.id] == nil
-        
+        let wasPreviouslyOwned = existingCells[mutableCell.id] != nil
+
         if wasExpiredOrNew {
-            newConqueredCount += 1
+            if wasPreviouslyOwned {
+                recapturedCount += 1
+            } else {
+                newConqueredCount += 1
+            }
         } else {
             defendedCount += 1
         }

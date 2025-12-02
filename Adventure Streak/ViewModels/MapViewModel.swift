@@ -135,7 +135,8 @@ class MapViewModel: ObservableObject {
                 for territory in remote {
                     guard territory.userId != currentUserId, let territoryId = territory.id, let localCell = localById[territoryId] else { continue }
 
-                    let remoteIsNewer = territory.timestamp >= localCell.lastConqueredAt || territory.expiresAt >= localCell.expiresAt
+                    let remoteIsNewer = territory.timestamp > localCell.lastConqueredAt ||
+                        (territory.timestamp == localCell.lastConqueredAt && territory.expiresAt > localCell.expiresAt)
                     if remoteIsNewer {
                         lostIds.insert(territoryId)
                         print("[Territories] Marking cell as rival due to newer remote timestamp: \(territoryId)")
