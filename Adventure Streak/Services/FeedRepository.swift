@@ -54,7 +54,7 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let documents = snapshot?.documents else { return }
                 
-                self?.events = documents.compactMap { doc -> FeedEvent? in
+                let decodedEvents = documents.compactMap { doc -> FeedEvent? in
                     do {
                         var event = try doc.data(as: FeedEvent.self)
                         // Manually assign the document ID since we aren't using @DocumentID in the model
@@ -65,6 +65,9 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
                         return nil
                     }
                 }
+
+                // Ensure events are always sorted by the activity date, independent of Firestore ordering
+                self?.events = decodedEvents.sorted { $0.date > $1.date }
             }
         #endif
     }
