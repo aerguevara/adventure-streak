@@ -122,16 +122,25 @@ class MapViewModel: ObservableObject {
             .receive(on: DispatchQueue.global(qos: .userInitiated)) // Process in background
             .map { [weak self] (remote, localDict) -> [RemoteTerritory] in
                 guard let self = self else { return [] }
-                let currentUserId = AuthenticationService.shared.userId ?? ""
+                guard let currentUserId = AuthenticationService.shared.userId, !currentUserId.isEmpty else {
+                    print("[Territories] Ignoring remote updates until userId is available")
+                    return []
+                }
                 let local = Array(localDict.values)
+                let localById = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0) })
                 let localIds = Set(local.map { $0.id })
 
-                // Identify territories that are now owned by someone else
-                let lostIds = Set(remote.compactMap { territory -> String? in
-                    guard territory.userId != currentUserId else { return nil }
-                    guard let territoryId = territory.id, localIds.contains(territoryId) else { return nil }
-                    return territoryId
-                })
+                // Identify territories that are now owned by someone else using timestamp/expiresAt for conflict resolution
+                var lostIds = Set<String>()
+                for territory in remote {
+                    guard territory.userId != currentUserId, let territoryId = territory.id, let localCell = localById[territoryId] else { continue }
+
+                    let remoteIsNewer = territory.timestamp >= localCell.lastConqueredAt || territory.expiresAt >= localCell.expiresAt
+                    if remoteIsNewer {
+                        lostIds.insert(territoryId)
+                        print("[Territories] Marking cell as rival due to newer remote timestamp: \(territoryId)")
+                    }
+                }
 
                 // Remove lost territories locally so they re-render as rivals
                 if !lostIds.isEmpty {
@@ -167,9 +176,15 @@ class MapViewModel: ObservableObject {
                 }
                 
                 // 2. Return only TRUE rivals
-                return remote.filter {
+                let rivals = remote.filter {
                     $0.userId != currentUserId && !effectiveLocalIds.contains($0.id ?? "")
                 }
+
+                // Cap rivals to avoid flooding UI in dense maps
+                if rivals.count > 500 {
+                    print("[Territories] Capping rivals to 500 of \(rivals.count) fetched")
+                }
+                return Array(rivals.prefix(500))
             }
             .removeDuplicates() // Prevent UI updates if the list of rivals hasn't changed
             .receive(on: RunLoop.main) // Update UI on main
