@@ -102,14 +102,27 @@ class GamificationRepository: ObservableObject {
                     var entries: [RankingEntry] = []
                     for (index, doc) in documents.enumerated() {
                         let data = doc.data()
-                        let entry = RankingEntry(
+                        let currentRank = index + 1
+                        let previousRank = data["previousRank"] as? Int ?? 0
+                        var trend: RankingTrend = .neutral
+                        
+                        if previousRank > 0 {
+                            if currentRank < previousRank {
+                                trend = .up
+                            } else if currentRank > previousRank {
+                                trend = .down
+                            }
+                        }
+                        
+                        var entry = RankingEntry(
                             userId: doc.documentID,
                             displayName: data["displayName"] as? String ?? "Unknown",
                             level: data["level"] as? Int ?? 1,
                             weeklyXP: data["xp"] as? Int ?? 0, // Using total XP as proxy for MVP
-                            position: index + 1,
+                            position: currentRank,
                             isCurrentUser: false // Will be set by ViewModel
                         )
+                        entry.trend = trend
                         entries.append(entry)
                     }
                     completion(entries)
@@ -203,6 +216,48 @@ class GamificationRepository: ObservableObject {
             }
         #else
         completion([])
+        #endif
+    }
+    
+    // NEW: Snapshot current rankings to history (Simulating Backend Job)
+    func snapshotRankings(completion: @escaping (Bool) -> Void) {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else {
+            completion(false)
+            return
+        }
+        
+        // Fetch all users ordered by XP to determine current rank
+        db.collection("users")
+            .order(by: "xp", descending: true)
+            .getDocuments { (snapshot, error) in
+                guard let documents = snapshot?.documents else {
+                    print("Error fetching users for snapshot: \(String(describing: error))")
+                    completion(false)
+                    return
+                }
+                
+                let batch = db.batch()
+                
+                for (index, doc) in documents.enumerated() {
+                    let currentRank = index + 1
+                    let ref = db.collection("users").document(doc.documentID)
+                    // Update previousRank with the current rank
+                    batch.updateData(["previousRank": currentRank], forDocument: ref)
+                }
+                
+                batch.commit { error in
+                    if let error = error {
+                        print("Error committing ranking snapshot: \(error)")
+                        completion(false)
+                    } else {
+                        print("Successfully snapshotted rankings for \(documents.count) users.")
+                        completion(true)
+                    }
+                }
+            }
+        #else
+        completion(false)
         #endif
     }
 }

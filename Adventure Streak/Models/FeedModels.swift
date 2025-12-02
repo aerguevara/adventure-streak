@@ -46,6 +46,9 @@ struct FeedEvent: Identifiable, Codable {
     let type: FeedEventType
     let date: Date
     
+    // Link to activity when applicable to deduplicar eventos reimportados
+    let activityId: UUID?
+    
     let title: String
     let subtitle: String?
     let xpEarned: Int?

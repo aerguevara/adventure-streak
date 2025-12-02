@@ -1,199 +1,74 @@
-# Adventure Streak - Game System Implementation
+# Adventure Streak — Sistema de juego y funcionalidades
 
-## 🎮 Overview
+Documentación de alto nivel del estado actual de la app (código en `Adventure Streak/`) con foco en el sistema de gamificación y los flujos principales.
 
-This document describes the complete game logic system implemented for Adventure Streak, a fitness + territorial conquest app.
+## Panorama general
+- App iOS/SwiftUI con pestañas de Progreso, Mapa, Feed social y Ranking (`ContentView.swift`, `Views/MainTabView.swift`).
+- Autenticación: Sign in con Apple, invitado anónimo y placeholder para Google (`Services/AuthenticationService.swift`, `ViewModels/LoginViewModel.swift`).
+- Onboarding pide permisos de localización, notificaciones y HealthKit (`ViewModels/OnboardingViewModel.swift`).
+- Integraciones: HealthKit para importar workouts y rutas, WatchConnectivity para recibir actividades desde Apple Watch, Firebase (condicional) para usuarios, feed, ranking, territorios y badges.
 
-## 📋 System Architecture
+## Flujo de actividad y procesamiento
+1. **Captura de ruta**: `LocationService` obtiene posiciones (filtro 10 m) y construye `RoutePoint` mientras una sesión está activa (`ViewModels/MapViewModel.swift`).
+2. **Fin de sesión**: `MapViewModel.stopActivity` arma un `ActivitySession` y lo envía al `GameEngine`.
+3. **Importación de workouts**: `ViewModels/WorkoutsViewModel` y `ViewModels/HistoryViewModel` consultan HealthKit, filtran duplicados (últimos 7 días), descargan rutas y generan sesiones. `WorkoutsViewModel` reprocese cada sesión con `GameEngine` para tener XP/misiones/territorios consistentes.
+4. **Recepción desde watch**: `Services/WatchSyncService` decodifica `ActivitySession` recibido vía `WCSession` y lo deja listo para que la app lo procese.
 
-### Core Components
+## Motor de juego (`Services/GameEngine.swift`)
+Pipeline central (bloquea en MainActor):
+1. Guarda la actividad en `ActivityStore`.
+2. Construye el contexto XP del usuario (`GamificationRepository.buildXPContext`).
+3. Procesa el territorio (`TerritoryService.processActivity`) y obtiene `TerritoryStats` (nuevas, defendidas, recapturadas).
+4. Clasifica misiones cumplidas (`MissionEngine.classifyMissions`).
+5. Calcula XP (`GamificationService.computeXP`) combinando base + territorio + bonificaciones.
+6. Actualiza la actividad con XP/territorio/misiones y la persiste.
+7. Aplica el XP al perfil (`GamificationService.applyXP`) recalculando nivel.
+8. Genera eventos de feed por cada misión y, si corresponde, por expansión territorial destacada (`FeedRepository.postEvent`).
 
-#### 1. **MissionEngine** (`Services/MissionEngine.swift`)
-Analyzes completed activities and classifies them into missions based on achievements.
+## Sistema de territorios
+- **Grid**: celdas de 0.002° (~222 m) con expiración a 7 días (`Models/TerritoryGrid.swift`, `Models/TerritoryCell.swift`).
+- **Cálculo**: `TerritoryService.calculateTerritories` interpola puntos cada 20 m para no dejar huecos y clasifica cada celda como nueva, defendida o recapturada. Estadísticas devueltas en `TerritoryStats`.
+- **Persistencia local**: `TerritoryStore` guarda celdas en JSON, limpia expiradas al cargar y con temporizador, y permite borrados por pérdida de control.
+- **Multijugador**: `TerritoryRepository` sincroniza celdas en Firestore (`remote_territories`), restaura conquistas propias faltantes y marca rivales para renderizarlos.
+- **Render de mapa**: `MapView` pinta polígonos verdes (propios) y naranjas (rivales) con diffs para minimizar parpadeos; filtra a 500 celdas visibles recientes.
 
-**Mission Types:**
-- **Territorial**: Based on new cells conquered (Common → Legendary)
-- **Recapture**: Epic missions for recovering lost territory
-- **Streak**: Progression missions for maintaining weekly streaks
-- **Weekly Record**: Epic/Legendary for breaking distance records
-- **Physical Effort**: High-intensity workout recognition
+## Sistema de XP y niveles (`Models/XPModels.swift`, `Services/GamificationService.swift`)
+- **Config**:
+  - Distancia mínima 0.5 km, duración mínima 5 min para generar XP base.
+  - XP base por km = `baseFactorPerKm` (10) ajustado por tipo: run 1.2, walk/hike 0.9, bike 0.7, other 1.0. Tope diario de XP base: 300.
+  - Territorio: nueva celda 8 XP (máx. 50 nuevas por actividad), defendida 3 XP, recapturada 12 XP.
+  - Streak: 10 XP por semana de racha activa.
+  - Récord semanal: si supera el mejor de la semana, 30 XP + 5 XP por km de mejora (solo si el mejor previo ≥5 km).
+- **Nivel**: `level = 1 + totalXP/1000`; helpers para barra de progreso (`progressToNextLevel`).
+- **Contexto** (`XPContext`): distancia semanal actual, mejor distancia semanal histórica, semanas de racha, XP base ganado hoy y estado persistente (XP total, nivel, racha).
 
-**Rarity Levels:**
-- Common: 1-4 new cells
-- Rare: 5-14 new cells
-- Epic: 15-19 new cells or recaptures
-- Legendary: 20+ new cells or major records
+## Misiones (`Services/MissionEngine.swift`, `Models/Mission.swift`)
+- **Territorial**: según celdas nuevas; rareza escala Common (<5), Rare (5-14), Epic (15-19), Legendary (20+). Nombres: Exploración Inicial, Expedición, Conquista Épica, Dominio Legendario.
+- **Recaptura**: si hay recapturedCells, misión épica “Reconquista”.
+- **Racha**: si hay streak activa, misión de progresión “Racha Activa” (Rare/Epic según semanas).
+- **Récord semanal**: si la distancia semanal supera el mejor histórico, misión “Nuevo Récord Semanal” (Epic/Legendary si mejora >10 km).
+- **Esfuerzo físico**: detecta alta intensidad por pace (<6 min/km running, <3 biking, <12 walk/hike); genera misión común o rara (“Esfuerzo Destacado” / “Sprint Intenso”).
+- Las misiones adjuntan rareza y se guardan en la actividad para mostrar en UI y feed.
 
-#### 2. **GameEngine** (`Services/GameEngine.swift`)
-Main orchestrator that processes completed activities through the entire game system.
+## Logros y badges (`Models/Badge.swift`, `Services/GamificationRepository.swift`)
+- Definiciones estáticas combinadas con Firestore para saber cuáles están desbloqueados:
+  - `first_steps`, `week_streak`, `explorer_novice` (10 celdas), `marathoner` (42 km acumulados), `defensor` (recapturar territorio).
+- `GamificationRepository.fetchBadges` marca `isUnlocked` en base a la colección `users/{id}/badges`. `awardBadge` permite registrar nuevos logros en remoto.
+- Vista dedicada en `Views/BadgesView.swift` y atajos en el dashboard de Progreso.
 
-**Processing Flow:**
-1. Save activity to store
-2. Get XP context (current stats, streaks, records)
-3. Calculate territorial delta (new/defended/recaptured cells)
-4. Classify missions
-5. Calculate XP breakdown
-6. Update user gamification state
-7. Create feed events
-8. Notify UI observers
+## Social, feed y ranking
+- **Feed**: `FeedRepository.observeFeed` escucha la colección `feed` (últimos 20). `GameEngine` publica eventos por misiones y expansión territorial; `SocialService.createPost` crea eventos manuales. `FeedViewModel` calcula resúmenes semanales locales.
+- **Social feed**: `SocialService` fusiona eventos + estado de follow para producir `SocialPost`; `SocialFeedView` muestra tarjetas con distancia, XP y nuevas zonas.
+- **Follow**: alta/baja en subcolección `following` del usuario actual.
+- **Ranking**: `GamificationRepository.fetchWeeklyRanking` ordena usuarios por XP (proxy semanal), `RankingViewModel` marca al usuario actual y permite seguir a otros; `UserSearchViewModel` hace búsqueda por nombre.
 
-#### 3. **GamificationService** (`Services/GamificationService.swift`)
-Calculates and applies XP based on activity performance.
+## Perfil y visualización de progreso
+- **Dashboard Progreso** (`Views/WorkoutsView.swift`): muestra nivel/XP, racha semanas, barra de progreso a siguiente nivel, resumen territorial semanal y cards gamificadas por actividad (`Views/GamifiedWorkoutCard.swift` con XP, rareza, misiones, territorios).
+- **Perfil** (`ViewModels/ProfileViewModel.swift`): observa `GamificationService` para XP/nivel en vivo, calcula streak y territorios/actividades de la última semana; permite sign-out que limpia stores locales y feed.
+- **Historico/Import**: `HistoryViewModel` mantiene lista de actividades y auto-importa de HealthKit al iniciar.
 
-**XP Sources:**
-- **Base XP**: Distance × activity type factor (Run: 1.2x, Walk: 0.9x, Bike: 0.7x)
-- **Territory XP**: New cells (8 XP), Defended (3 XP), Recaptured (12 XP)
-- **Streak Bonus**: 10 XP × streak weeks
-- **Weekly Record**: 30 XP base + 5 XP per km improvement
-- **Badges**: Variable (future implementation)
-
-**Level System:**
-- Level = 1 + (Total XP / 1000)
-- Each level requires 1000 XP
-
-#### 4. **TerritoryService** (`Services/TerritoryService.swift`)
-Manages territorial conquest mechanics.
-
-**Territory Rules:**
-- Cells expire after 7 days
-- Revisiting expired cells = new conquest
-- Revisiting active cells = defense (renews expiration)
-
-#### 5. **FeedRepository** (`Services/FeedRepository.swift`)
-Creates and manages activity feed events.
-
-**Event Types:**
-- Mission completed
-- Territory conquered
-- Level up
-- Streak maintained
-- Badge unlocked
-
-## 🔧 Integration Points
-
-### ViewModels
-
-#### MapViewModel
-- **Integration**: `stopActivity()` calls `GameEngine.completeActivity()`
-- **Purpose**: Process real-time activities through game system
-
-#### ProfileViewModel
-- **Integration**: Observes `GamificationService` for XP/Level updates
-- **Purpose**: Display current game state (Level, XP, Streak)
-
-#### WorkoutsViewModel
-- **Integration**: Displays activities with XP breakdowns
-- **Purpose**: Show historical workout data with gamification
-
-#### FeedViewModel
-- **Integration**: Fetches events from `FeedRepository`
-- **Purpose**: Display activity feed with missions and achievements
-
-#### RankingViewModel
-- **Integration**: Fetches weekly ranking from `GamificationRepository`
-- **Purpose**: Display competitive leaderboard
-
-## 📊 Data Models
-
-### Mission
-```swift
-struct Mission {
-    let id: String
-    let userId: String
-    let category: MissionCategory // territorial, physicalEffort, progression
-    let name: String
-    let description: String
-    let rarity: MissionRarity // common, rare, epic, legendary
-    var territorialDelta: TerritorialDelta?
-    var xpBreakdown: XPBreakdown?
-}
-```
-
-### XPBreakdown
-```swift
-struct XPBreakdown {
-    let xpBase: Int
-    let xpTerritory: Int
-    let xpStreak: Int
-    let xpWeeklyRecord: Int
-    let xpBadges: Int
-    var total: Int { ... }
-}
-```
-
-### TerritorialDelta (alias for TerritoryStats)
-```swift
-struct TerritoryStats {
-    let newCellsCount: Int
-    let defendedCellsCount: Int
-    let recapturedCellsCount: Int
-}
-```
-
-## 🧪 Testing
-
-### Manual Verification Steps
-
-1. **Complete an Activity**
-   - Start tracking in MapView
-   - Move around to conquer territory
-   - Stop activity
-   - Verify: Activity appears in Workouts with XP
-   - Verify: Feed shows mission event
-   - Verify: Profile shows updated XP/Level
-
-2. **Check Territory Mechanics**
-   - Complete activity in new area → Should show "new cells"
-   - Complete activity in same area within 7 days → Should show "defended"
-   - Wait 7 days, revisit → Should show "new cells" again
-
-3. **Verify Streak System**
-   - Complete activities on consecutive weeks
-   - Check Profile for streak count
-   - Verify streak bonus in XP breakdown
-
-4. **Test Ranking**
-   - Navigate to Ranking tab
-   - Verify current user is highlighted
-   - Verify ranking updates after earning XP
-
-## 🎯 Game Balance Configuration
-
-Located in `XPModels.swift`:
-
-```swift
-enum XPConfig {
-    static let minDistanceKm: Double = 0.5
-    static let minDurationSeconds: Double = 5 * 60
-    
-    static let baseFactorPerKm: Double = 10.0
-    static let factorRun: Double = 1.2
-    static let factorBike: Double = 0.7
-    static let factorWalk: Double = 0.9
-    
-    static let xpPerNewCell: Int = 8
-    static let xpPerDefendedCell: Int = 3
-    static let xpPerRecapturedCell: Int = 12
-    
-    static let baseStreakXPPerWeek: Int = 10
-    static let weeklyRecordBaseXP: Int = 30
-    static let legendaryThresholdCells: Int = 20
-}
-```
-
-## 🚀 Future Enhancements
-
-- [ ] Badge system implementation
-- [ ] Buff system (temporary XP multipliers)
-- [ ] Social features (friend challenges)
-- [ ] Territory ownership conflicts (PvP)
-- [ ] Weekly XP reset for ranking
-- [ ] Achievement system
-- [ ] Seasonal events
-
-## 📝 Notes
-
-- All game logic is marked with `// IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM`
-- The system is designed to be extensible for future features
-- Firebase integration is optional (works with local storage)
-- UI never directly accesses domain models (uses ViewData structs)
+## Persistencia y utilidades
+- `ActivityStore` y `TerritoryStore` guardan JSON en Documents con helpers para calcular rachas y limpiar expirados (`Persistence/JSONStore.swift`).
+- `NotificationService` dispara locales para territorio en riesgo o perdido.
+- `LocationService` mantiene permisos y estado de tracking (con opción de solo monitoreo sin grabar ruta).
+- Extensión de color y assets para la UI; mapas en `Views/MapView.swift` con diffing de overlays.

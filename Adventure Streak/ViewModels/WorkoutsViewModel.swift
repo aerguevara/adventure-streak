@@ -196,6 +196,7 @@ class WorkoutsViewModel: ObservableObject {
                                 }
                                 
                                 let session = ActivitySession(
+                                    id: workout.uuid, // use stable HKWorkout id to avoid duplicates
                                     startDate: workout.startDate,
                                     endDate: workout.endDate,
                                     activityType: type,
@@ -237,31 +238,6 @@ class WorkoutsViewModel: ObservableObject {
                                         
                                         // Track total for summary
                                         totalNewCells += stats.newCellsCount
-                                    }
-                                    
-                                    // 3. Post summary to Feed if significant
-                                    if totalNewCells > 0 {
-                                        let userName = AuthenticationService.shared.userName ?? "Un aventurero"
-                                        
-                                        let event = FeedEvent(
-                                            id: nil,
-                                            type: .territoryConquered,
-                                            date: Date(),
-                                            title: "Importación completada",
-                                            subtitle: "Has reclamado \(totalNewCells) territorios de tus entrenamientos pasados.",
-                                            xpEarned: totalNewCells * 10,
-                                            userId: userId,
-                                            relatedUserName: userName,
-                                            userLevel: GamificationService.shared.currentLevel,
-                                            userAvatarURL: nil,
-                                            miniMapRegion: nil,
-                                            badgeName: nil,
-                                            badgeRarity: nil,
-                                            activityData: nil, // No specific activity data for summary
-                                            rarity: nil,
-                                            isPersonal: true
-                                        )
-                                        FeedRepository.shared.postEvent(event)
                                     }
                                     
                                 } catch {

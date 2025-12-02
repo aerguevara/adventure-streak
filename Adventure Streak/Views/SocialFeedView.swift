@@ -78,9 +78,14 @@ struct SocialPostCard: View {
                 
                 Spacer()
                 
-                Text(timeAgo(from: post.date))
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(timeAgo(from: post.date))
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text(formatAbsoluteDate(post.date))
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
             }
             
             // Auto-generated text
@@ -156,5 +161,13 @@ struct SocialPostCard: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+    
+    private func formatAbsoluteDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_ES")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }

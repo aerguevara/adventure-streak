@@ -21,7 +21,8 @@ class AuthenticationService: NSObject, ObservableObject {
             self.isAuthenticated = true
             self.userId = user.uid
             self.userEmail = user.email
-            self.userName = user.displayName
+            self.userName = AuthenticationService.resolveDisplayName(for: user)
+            loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
         }
     }
     
@@ -76,6 +77,8 @@ class AuthenticationService: NSObject, ObservableObject {
             try Auth.auth().signOut()
             self.isAuthenticated = false
             self.userId = nil
+            self.userName = nil
+            self.userEmail = nil
         } catch {
             print("Error signing out: \(error)")
         }
@@ -121,6 +124,46 @@ class AuthenticationService: NSObject, ObservableObject {
         
         return hashString
     }
+    
+    // MARK: - Display Name Helpers
+    private static func resolveDisplayName(for user: FirebaseAuth.User) -> String? {
+        if let displayName = user.displayName, !displayName.isEmpty {
+            return displayName
+        }
+        if let email = user.email,
+           let prefix = email.split(separator: "@").first,
+           !prefix.isEmpty {
+            return String(prefix)
+        }
+        return nil
+    }
+    
+    private func loadDisplayNameFromRemoteIfNeeded(userId: String) {
+        // Skip if already have a non-empty name
+        if let existing = userName, !existing.isEmpty { return }
+        
+        UserRepository.shared.fetchUser(userId: userId) { [weak self] user in
+            guard let self = self else { return }
+            if let remoteName = user?.displayName, !remoteName.isEmpty {
+                DispatchQueue.main.async {
+                    self.userName = remoteName
+                }
+            }
+        }
+    }
+    
+    /// Nombre a usar en el feed/UI con fallback a email o genérico.
+    func resolvedUserName(default defaultName: String = "Aventurero") -> String {
+        if let name = userName, !name.isEmpty {
+            return name
+        }
+        if let email = userEmail,
+           let prefix = email.split(separator: "@").first,
+           !prefix.isEmpty {
+            return String(prefix)
+        }
+        return defaultName
+    }
 }
 
 extension AuthenticationService: ASAuthorizationControllerDelegate {
@@ -157,15 +200,21 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                     self.userEmail = user.email
                     
                     // Handle name (only available on first sign in)
-                    var name = user.displayName
+                    var name = AuthenticationService.resolveDisplayName(for: user)
                     if let fullName = appleIDCredential.fullName {
                         let formatter = PersonNameComponentsFormatter()
-                        name = formatter.string(from: fullName)
+                        let formatted = formatter.string(from: fullName)
+                        if !formatted.isEmpty {
+                            name = formatted
+                        }
                     }
                     self.userName = name
                     
                     // Sync User to Firestore
                     UserRepository.shared.syncUser(user: user, name: name)
+                    
+                    // Fallback: fetch from remote profile if still nil/empty
+                    self.loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
                 }
             }
         }

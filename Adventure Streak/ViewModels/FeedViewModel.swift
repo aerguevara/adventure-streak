@@ -13,10 +13,10 @@ class FeedViewModel: ObservableObject {
     private let territoryStore: TerritoryStore
     private var cancellables = Set<AnyCancellable>()
     
-    init(repository: FeedRepositoryProtocol = FeedRepository.shared,
+    init(repository: FeedRepositoryProtocol? = nil,
          activityStore: ActivityStore,
          territoryStore: TerritoryStore) {
-        self.repository = repository
+        self.repository = repository ?? FeedRepository.shared
         self.activityStore = activityStore
         self.territoryStore = territoryStore
         setupBindings()
@@ -34,15 +34,13 @@ class FeedViewModel: ObservableObject {
     func loadFeed() async {
         isLoading = true
         errorMessage = nil
-        
-        // Simulate network delay or wait for repository
-        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-        
-        repository.observeFeed()
-        
-        // Calculate Real Weekly Summary
+        if let repo = repository as? FeedRepository {
+            await repo.fetchLatest()
+            repo.observeFeed() // keep live updates from Firebase only
+        } else {
+            repository.observeFeed()
+        }
         calculateWeeklySummary()
-        
         isLoading = false
     }
     

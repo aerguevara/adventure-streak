@@ -7,6 +7,7 @@ import FirebaseFirestore
 import FirebaseAuth
 #endif
 
+@MainActor
 class SocialService: ObservableObject {
     static let shared = SocialService()
     
@@ -184,8 +185,8 @@ class SocialService: ObservableObject {
     // Posts are now exposed via @Published var posts
     
     func createPost(from activity: ActivitySession) {
-        guard let userId = AuthenticationService.shared.userId,
-              let userName = AuthenticationService.shared.userName else { return }
+        guard let userId = AuthenticationService.shared.userId else { return }
+        let userName = AuthenticationService.shared.resolvedUserName()
         
         let activityData = SocialActivityData(
             activityType: activity.activityType,
@@ -197,9 +198,10 @@ class SocialService: ObservableObject {
         
         // Create FeedEvent
         let event = FeedEvent(
-            id: nil, // Firestore will assign ID
+            id: "activity-\(activity.id.uuidString)-social",
             type: .weeklySummary, // Using generic type for now, or add .activity
             date: activity.endDate,
+            activityId: activity.id,
             title: "Activity Completed",
             subtitle: nil,
             xpEarned: activity.xpBreakdown?.total,

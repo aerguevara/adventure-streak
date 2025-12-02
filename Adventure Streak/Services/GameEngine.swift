@@ -91,7 +91,7 @@ class GameEngine {
         xpBreakdown: XPBreakdown,
         userId: String
     ) async throws {
-        let userName = AuthenticationService.shared.userName ?? "Aventurero"
+        let userName = AuthenticationService.shared.resolvedUserName()
         let userLevel = GamificationService.shared.currentLevel
         
         // Create activity data for the feed
@@ -103,52 +103,51 @@ class GameEngine {
             newZonesCount: territoryStats.newCellsCount
         )
         
-        // Create event for each mission
-        for mission in missions {
-            let event = FeedEvent(
-                id: nil,
-                type: .territoryConquered, // Map mission category to event type
-                date: activity.endDate,
-                title: mission.name,
-                subtitle: mission.description,
-                xpEarned: xpBreakdown.total,
-                userId: userId,
-                relatedUserName: userName,
-                userLevel: userLevel,
-                userAvatarURL: nil, // TODO: Fetch from profile if needed
-                miniMapRegion: nil,
-                badgeName: nil,
-                badgeRarity: nil,
-                activityData: activityData,
-                rarity: mission.rarity,
-                isPersonal: true
-            )
-            
-            feedRepository.postEvent(event)
+        // Single event per activity
+        let primaryMission: Mission? = missions.first
+        let missionNames: String = {
+            let names = missions.map { $0.name }
+            return names.isEmpty ? "" : names.joined(separator: " · ")
+        }()
+        
+        let title: String = primaryMission?.name ?? "Actividad completada"
+        let subtitle: String? = {
+            if !missionNames.isEmpty {
+                return "Misiones: \(missionNames)"
+            }
+            if territoryStats.newCellsCount > 0 {
+                return "\(territoryStats.newCellsCount) nuevos territorios conquistados"
+            }
+            return nil
+        }()
+        
+        let eventType: FeedEventType
+        if territoryStats.newCellsCount > 0 {
+            eventType = .territoryConquered
+        } else {
+            eventType = .distanceRecord
         }
         
-        // Create summary event if significant territory gain
-        if territoryStats.newCellsCount >= 5 {
-            let event = FeedEvent(
-                id: nil,
-                type: .territoryConquered,
-                date: activity.endDate,
-                title: "Expansión Territorial",
-                subtitle: "\(territoryStats.newCellsCount) nuevos territorios conquistados",
-                xpEarned: xpBreakdown.xpTerritory,
-                userId: userId,
-                relatedUserName: userName,
-                userLevel: userLevel,
-                userAvatarURL: nil,
-                miniMapRegion: nil,
-                badgeName: nil,
-                badgeRarity: nil,
-                activityData: activityData,
-                rarity: nil,
-                isPersonal: true
-            )
-            
-            feedRepository.postEvent(event)
-        }
+        let event: FeedEvent = FeedEvent(
+            id: "activity-\(activity.id.uuidString)-summary",
+            type: eventType,
+            date: activity.endDate,
+            activityId: activity.id,
+            title: title,
+            subtitle: subtitle,
+            xpEarned: xpBreakdown.total,
+            userId: userId,
+            relatedUserName: userName,
+            userLevel: userLevel,
+            userAvatarURL: nil, // TODO: Fetch from profile if needed
+            miniMapRegion: nil,
+            badgeName: nil,
+            badgeRarity: nil,
+            activityData: activityData,
+            rarity: primaryMission?.rarity,
+            isPersonal: true
+        )
+        
+        feedRepository.postEvent(event)
     }
 }

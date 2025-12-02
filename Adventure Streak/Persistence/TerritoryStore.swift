@@ -63,8 +63,9 @@ class TerritoryStore: ObservableObject {
     private func scheduleCleanupTimer() {
         cleanupTimer?.invalidate()
         cleanupTimer = Timer.scheduledTimer(withTimeInterval: 60 * 5, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.removeExpiredCells(now: Date())
+            Task { @MainActor in
+                self?.removeExpiredCells(now: Date())
+            }
         }
     }
 

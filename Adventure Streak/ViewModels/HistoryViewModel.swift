@@ -94,6 +94,7 @@ class HistoryViewModel: ObservableObject {
                                 }
                                 
                                 let session = ActivitySession(
+                                    id: workout.uuid, // stable id from HKWorkout to prevent duplicates
                                     startDate: workout.startDate,
                                     endDate: workout.endDate,
                                     activityType: type,
@@ -187,31 +188,6 @@ class HistoryViewModel: ObservableObject {
                                         self.activityStore.updateActivity(updatedSession)
                                         
                                         try await GamificationService.shared.applyXP(breakdown, to: userId, at: lastSession.endDate)
-                                    }
-                                    
-                                    // 3. Post to Feed (NEW)
-                                    if totalStats.newCellsCount > 0 {
-                                        let userName = AuthenticationService.shared.userName ?? "Un aventurero"
-                                        
-                                        let event = FeedEvent(
-                                            id: nil,
-                                            type: .territoryConquered,
-                                            date: Date(),
-                                            title: "Importación completada",
-                                            subtitle: "Has reclamado \(totalStats.newCellsCount) territorios de tus entrenamientos pasados.",
-                                            xpEarned: totalStats.newCellsCount * 10, // Approximate
-                                            userId: userId,
-                                            relatedUserName: userName,
-                                            userLevel: GamificationService.shared.currentLevel,
-                                            userAvatarURL: nil,
-                                            miniMapRegion: nil, // Hard to calculate region for batch, skipping for now
-                                            badgeName: nil,
-                                            badgeRarity: nil,
-                                            activityData: nil, // No specific activity data for summary
-                                            rarity: nil,
-                                            isPersonal: true
-                                        )
-                                        FeedRepository.shared.postEvent(event)
                                     }
                                     
                                 } catch {

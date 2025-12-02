@@ -48,7 +48,7 @@ class RankingViewModel: ObservableObject {
                         
                         // Mock data for redesign
                         processedEntries[i].xpProgress = Double.random(in: 0.3...0.9)
-                        processedEntries[i].trend = RankingTrend.allCases.randomElement() ?? .neutral
+                        // processedEntries[i].trend = RankingTrend.allCases.randomElement() ?? .neutral
                         processedEntries[i].isFollowing = SocialService.shared.isFollowing(userId: processedEntries[i].userId)
                     }
                 }
