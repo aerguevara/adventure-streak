@@ -159,41 +159,43 @@ struct PodiumItem: View {
     var body: some View {
         VStack(spacing: 8) {
             // Avatar & Badge
-            ZStack(alignment: .top) {
-                Circle()
-                    .fill(Color(hex: "1C1C1E"))
-                    .frame(width: 70, height: 70)
-                    .overlay(
-                        Text(entry.displayName.prefix(1).uppercased())
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(.gray)
-                    )
-                    .overlay(
-                        Circle()
-                            .stroke(isFirst ? Color(hex: "FFD60A") : Color.clear, lineWidth: 3)
-                    )
-                    .shadow(color: isFirst ? Color(hex: "FFD60A").opacity(0.5) : Color.clear, radius: 10)
-                
+            VStack(spacing: -8) {
                 // Crown for 1st
                 if isFirst {
                     Image(systemName: "crown.fill")
                         .foregroundColor(Color(hex: "FFD60A"))
                         .font(.title2)
-                        .offset(y: -24)
+                        .zIndex(1)
                 }
                 
-                // Rank Badge
-                Circle()
-                    .fill(rankColor)
-                    .frame(width: 24, height: 24)
-                    .overlay(
-                        Text("\(entry.position)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.black)
-                    )
-                    .offset(y: 35)
+                ZStack(alignment: .top) {
+                    Circle()
+                        .fill(Color(hex: "1C1C1E"))
+                        .frame(width: 70, height: 70)
+                        .overlay(
+                            Text(entry.displayName.prefix(1).uppercased())
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(.gray)
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(isFirst ? Color(hex: "FFD60A") : Color.clear, lineWidth: 3)
+                        )
+                        .shadow(color: isFirst ? Color(hex: "FFD60A").opacity(0.5) : Color.clear, radius: 10)
+                    
+                    // Rank Badge
+                    Circle()
+                        .fill(rankColor)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Text("\(entry.position)")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.black)
+                        )
+                        .offset(y: 35)
+                }
             }
             
             VStack(spacing: 2) {
