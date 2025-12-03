@@ -74,7 +74,8 @@ class MapViewModel: ObservableObject {
                 let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
                 
                 // 1. LOD Check: If zoomed out too far, don't render individual cells
-                if region.span.latitudeDelta > 0.2 || region.span.longitudeDelta > 0.2 {
+                // MODIFIED: Increased threshold from 0.2 to 10.0 to keep boxes visible at large scales
+                if region.span.latitudeDelta > 10.0 || region.span.longitudeDelta > 10.0 {
                     print("DEBUG: Zoomed out too far (Span: \(region.span.latitudeDelta)), hiding territories.")
                     return []
                 }
