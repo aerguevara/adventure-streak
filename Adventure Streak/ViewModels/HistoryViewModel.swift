@@ -6,17 +6,30 @@ class HistoryViewModel: ObservableObject {
     
     private let activityStore: ActivityStore
     private let territoryService: TerritoryService
+    private let configService: GameConfigService
     
     @Published var isImporting = false
     @Published var showAlert = false
     @Published var alertMessage = ""
     
-    init(activityStore: ActivityStore, territoryService: TerritoryService) {
+    init(
+        activityStore: ActivityStore,
+        territoryService: TerritoryService,
+        configService: GameConfigService = .shared
+    ) {
         self.activityStore = activityStore
         self.territoryService = territoryService
+        self.configService = configService
         loadActivities()
-        // Automatic import on launch
-        importFromHealthKit()
+        Task {
+            await configService.loadConfigIfNeeded()
+            await MainActor.run {
+                self.loadActivities()
+            }
+            await MainActor.run {
+                self.importFromHealthKit()
+            }
+        }
     }
     
     func loadActivities() {
@@ -24,6 +37,11 @@ class HistoryViewModel: ObservableObject {
     }
     
     func importFromHealthKit() {
+        guard configService.config.loadHistoricalWorkouts else {
+            print("Historical import disabled by config")
+            return
+        }
+        
         guard !isImporting else { return }
         isImporting = true
         print("Starting automatic HealthKit import...")
@@ -53,9 +71,11 @@ class HistoryViewModel: ObservableObject {
                     return
                 }
                 
-                // Filter out duplicates BEFORE processing
+                // Filter out duplicates BEFORE processing and respect configured lookback
+                let cutoffDate = self.configService.cutoffDate()
                 let newWorkouts = workouts.filter { workout in
-                    !self.activityStore.activities.contains(where: { $0.startDate == workout.startDate })
+                    guard workout.startDate >= cutoffDate else { return false }
+                    return !self.activityStore.activities.contains(where: { $0.startDate == workout.startDate })
                 }
                 
                 guard !newWorkouts.isEmpty else {

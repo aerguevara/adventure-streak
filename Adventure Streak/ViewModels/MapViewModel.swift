@@ -31,20 +31,31 @@ class MapViewModel: ObservableObject {
     private let territoryService: TerritoryService
     // NEW: Repository for multiplayer
     private let territoryRepository = TerritoryRepository.shared
+    private let configService: GameConfigService
     
     private var timer: Timer?
     private var startTime: Date?
     private var cancellables = Set<AnyCancellable>()
     
-    init(locationService: LocationService, territoryStore: TerritoryStore, activityStore: ActivityStore) {
+    init(
+        locationService: LocationService,
+        territoryStore: TerritoryStore,
+        activityStore: ActivityStore,
+        configService: GameConfigService = .shared
+    ) {
         self.locationService = locationService
         self.territoryStore = territoryStore
         self.activityStore = activityStore
         self.territoryService = TerritoryService(territoryStore: territoryStore)
+        self.configService = configService
         
         setupBindings()
         // NEW: Start observing remote territories
         territoryRepository.observeTerritories()
+        
+        Task {
+            await configService.loadConfigIfNeeded()
+        }
         
     }
     
@@ -69,10 +80,13 @@ class MapViewModel: ObservableObject {
         // Combine latest territories with latest visible region
         territoryStore.$conqueredCells
             .combineLatest($region.debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .userInteractive)))
-            .map { (cellsDict, region) -> [TerritoryCell] in
-                // Filter for last 7 days
-                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+            .combineLatest(configService.$config)
+            .map { [weak self] combined, config -> [TerritoryCell] in
+                guard let self = self else { return [] }
                 
+                let (cellsDict, region) = combined
+                let cutoffDate = self.cutoffDate(for: config)
+
                 // 1. LOD Check: If zoomed out too far, don't render individual cells
                 // MODIFIED: Increased threshold from 0.2 to 10.0 to keep boxes visible at large scales
                 if region.span.latitudeDelta > 10.0 || region.span.longitudeDelta > 10.0 {
@@ -82,7 +96,7 @@ class MapViewModel: ObservableObject {
                 
                 let allCells = Array(cellsDict.values)
                 // Filter by date first
-                let recentCells = allCells.filter { $0.lastConqueredAt >= sevenDaysAgo }
+                let recentCells = allCells.filter { $0.lastConqueredAt >= cutoffDate }
                 
                 // Simple bounding box check
                 let minLat = region.center.latitude - region.span.latitudeDelta / 2
@@ -101,7 +115,7 @@ class MapViewModel: ObservableObject {
                            cell.centerLongitude >= minLon && cell.centerLongitude <= maxLon
                 }
                 
-                print("DEBUG: Found \(visible.count) visible territories in region (Last 7 Days).")
+                print("DEBUG: Found \(visible.count) visible territories in region (Filtered by config window).")
                 
                 // 2. Hard Cap: Never return more than 500 polygons to keep UI smooth
                 return Array(visible.prefix(500))
@@ -110,9 +124,11 @@ class MapViewModel: ObservableObject {
             .assign(to: &$visibleTerritories)
         
         territoryStore.$conqueredCells
-            .map { dict -> [TerritoryCell] in
-                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-                return Array(dict.values).filter { $0.lastConqueredAt >= sevenDaysAgo }
+            .combineLatest(configService.$config)
+            .map { [weak self] dict, config -> [TerritoryCell] in
+                guard let self = self else { return [] }
+                let cutoffDate = self.cutoffDate(for: config)
+                return Array(dict.values).filter { $0.lastConqueredAt >= cutoffDate }
             }
             .assign(to: &$conqueredTerritories)
             
@@ -193,9 +209,11 @@ class MapViewModel: ObservableObject {
             .assign(to: &$otherTerritories)
             
         activityStore.$activities
-            .map { activities -> [ActivitySession] in
-                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-                return activities.filter { $0.startDate >= sevenDaysAgo }
+            .combineLatest(configService.$config)
+            .map { [weak self] activities, config -> [ActivitySession] in
+                guard let self = self else { return [] }
+                let cutoffDate = self.cutoffDate(for: config)
+                return activities.filter { $0.startDate >= cutoffDate }
             }
             .assign(to: &$activities)
         
@@ -204,6 +222,10 @@ class MapViewModel: ObservableObject {
                 self?.calculateDistance(points: points)
             }
             .store(in: &cancellables)
+    }
+    
+    private func cutoffDate(for config: GameConfig) -> Date {
+        Calendar.current.date(byAdding: .day, value: -config.clampedLookbackDays, to: Date()) ?? Date()
     }
     
     func updateVisibleRegion(_ region: MKCoordinateRegion) {

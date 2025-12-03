@@ -39,24 +39,39 @@ class ProfileViewModel: ObservableObject {
     private let userRepository: UserRepository
     private let authService: AuthenticationService
     private let gamificationService: GamificationService
+    private let configService: GameConfigService
     
     // MARK: - Init
     init(activityStore: ActivityStore, 
          territoryStore: TerritoryStore, 
          userRepository: UserRepository = .shared,
          authService: AuthenticationService = .shared,
-         gamificationService: GamificationService = .shared) {
+         gamificationService: GamificationService = .shared,
+         configService: GameConfigService = .shared) {
         self.activityStore = activityStore
         self.territoryStore = territoryStore
         self.userRepository = userRepository
         self.authService = authService
         self.gamificationService = gamificationService
+        self.configService = configService
         
         // Initial load
-        fetchProfileData()
+        Task {
+            await configService.loadConfigIfNeeded()
+            await MainActor.run {
+                self.fetchProfileData()
+            }
+        }
         
         // Observe GamificationService for real-time updates
         setupObservers()
+        
+        configService.$config
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshLocalStats()
+            }
+            .store(in: &cancellables)
     }
     
     private func setupObservers() {
@@ -138,15 +153,14 @@ class ProfileViewModel: ObservableObject {
     private func refreshLocalStats() {
         self.streakWeeks = activityStore.calculateCurrentStreak()
         
-        // Filter for last 7 days
-        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let cutoffDate = configService.cutoffDate()
         
-        // Activities in last 7 days
-        self.activitiesCount = activityStore.activities.filter { $0.startDate >= sevenDaysAgo }.count
+        // Activities in configurable window
+        self.activitiesCount = activityStore.activities.filter { $0.startDate >= cutoffDate }.count
         
-        // Territories conquered in last 7 days
+        // Territories conquered in configurable window
         // Note: 'conqueredCells' contains current ownership. We check 'lastConqueredAt'.
-        self.territoriesCount = territoryStore.conqueredCells.values.filter { $0.lastConqueredAt >= sevenDaysAgo }.count
+        self.territoriesCount = territoryStore.conqueredCells.values.filter { $0.lastConqueredAt >= cutoffDate }.count
         
         // Total Cells Owned (Historical/Current Total)
         self.totalCellsConquered = territoryStore.conqueredCells.count 

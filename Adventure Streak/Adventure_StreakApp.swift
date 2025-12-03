@@ -24,10 +24,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct Adventure_StreakApp: App {
     // register app delegate for Firebase setup
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var configService = GameConfigService.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(configService)
+                .task {
+                    await configService.loadConfigIfNeeded()
+                }
         }
     }
 }

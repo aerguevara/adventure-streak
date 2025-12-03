@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject private var configService: GameConfigService
     @StateObject private var authService = AuthenticationService.shared
     
     // ViewModels
@@ -20,14 +21,21 @@ struct ContentView: View {
         _mapViewModel = StateObject(wrappedValue: MapViewModel(locationService: locService, territoryStore: terrStore, activityStore: actStore))
         
         let terrService = TerritoryService(territoryStore: terrStore)
-        _workoutsViewModel = StateObject(wrappedValue: WorkoutsViewModel(activityStore: actStore, territoryService: terrService))
+        _workoutsViewModel = StateObject(wrappedValue: WorkoutsViewModel(activityStore: actStore, territoryService: terrService, configService: GameConfigService.shared))
         
         _profileViewModel = StateObject(wrappedValue: ProfileViewModel(activityStore: actStore, territoryStore: terrStore))
     }
     
     var body: some View {
         Group {
-            if !authService.isAuthenticated {
+            if !configService.isLoaded {
+                VStack(spacing: 12) {
+                    ProgressView("Cargando configuración...")
+                        .progressViewStyle(.circular)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemBackground))
+            } else if !authService.isAuthenticated {
                 LoginView()
             } else if !onboardingViewModel.hasCompletedOnboarding {
                 OnboardingView(viewModel: onboardingViewModel)
@@ -40,6 +48,9 @@ struct ContentView: View {
                     territoryStore: mapViewModel.territoryStore
                 )
             }
+        }
+        .task {
+            await configService.loadConfigIfNeeded()
         }
     }
 }

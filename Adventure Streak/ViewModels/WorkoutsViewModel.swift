@@ -50,28 +50,42 @@ class WorkoutsViewModel: ObservableObject {
     
     private let activityStore: ActivityStore
     private let territoryService: TerritoryService
+    private let configService: GameConfigService
+    private var cancellables = Set<AnyCancellable>()
     
     @Published var isImporting = false
     
-    init(activityStore: ActivityStore? = nil, territoryService: TerritoryService? = nil) {
+    init(
+        activityStore: ActivityStore? = nil,
+        territoryService: TerritoryService? = nil,
+        configService: GameConfigService
+    ) {
         self.activityStore = activityStore ?? ActivityStore.shared
         self.territoryService = territoryService ?? TerritoryService(territoryStore: TerritoryStore.shared)
+        self.configService = configService
         
-        loadWorkouts()
-        
-        // Fix missing XP for previously imported activities
         Task {
+            await configService.loadConfigIfNeeded()
+            await MainActor.run {
+                self.loadWorkouts()
+            }
             await fixMissingXP()
         }
+        
+        configService.$config
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.loadWorkouts()
+            }
+            .store(in: &cancellables)
     }
     
     func loadWorkouts() {
         let activities = activityStore.fetchAllActivities()
-        // Filter for last 7 days
-        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let cutoffDate = configService.cutoffDate()
         
         self.workouts = activities
-            .filter { $0.startDate >= sevenDaysAgo }
+            .filter { $0.startDate >= cutoffDate }
             .sorted(by: { $0.startDate > $1.startDate })
             .map { activity in
             WorkoutItemViewData(
@@ -109,6 +123,12 @@ class WorkoutsViewModel: ObservableObject {
     
     func importFromHealthKit() {
         guard !isImporting else { return }
+        
+        guard configService.config.loadHistoricalWorkouts else {
+            errorMessage = "La importación de entrenos históricos está desactivada en la configuración."
+            return
+        }
+        
         isImporting = true
         isLoading = true
         print("Starting automatic HealthKit import...")
@@ -147,12 +167,12 @@ class WorkoutsViewModel: ObservableObject {
                     return
                 }
                 
-                // Filter out duplicates AND restrict to last 7 days
-                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+                // Filter out duplicates AND restrict to configured window
+                let cutoffDate = self.configService.cutoffDate()
                 
                 let newWorkouts = workouts.filter { workout in
-                    // 1. Date Check: Must be within last 7 days
-                    guard workout.startDate >= sevenDaysAgo else { return false }
+                    // 1. Date Check: Must be within configured window
+                    guard workout.startDate >= cutoffDate else { return false }
                     
                     // 2. Duplicate Check: Must not already exist
                     return !self.activityStore.activities.contains(where: { $0.startDate == workout.startDate })
