@@ -222,6 +222,11 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                         
                         // Sync without clobbering: use chosenName (remote preferred) so displayName stays consistent, and update lastLogin.
                         UserRepository.shared.syncUser(user: user, name: chosenName)
+                        
+                        // Backfill local activities to Firestore so remote list matches feed/events
+                        Task {
+                            await ActivityRepository.shared.syncLocalActivities(userId: user.uid)
+                        }
                     }
                 }
             }

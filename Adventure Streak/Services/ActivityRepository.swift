@@ -47,6 +47,7 @@ final class ActivityRepository {
     #if canImport(FirebaseFirestore)
     private let db: Firestore
     #endif
+    private var hasSyncedLocal = false
     
     private init() {
         #if canImport(FirebaseFirestore)
@@ -78,5 +79,14 @@ final class ActivityRepository {
         for activity in activities {
             await saveActivity(activity, userId: userId)
         }
+    }
+    
+    /// Backfill: push all locally stored activities to Firestore (idempotent via stable UUIDs).
+    func syncLocalActivities(activityStore: ActivityStore = .shared, userId: String) async {
+        guard !hasSyncedLocal else { return }
+        hasSyncedLocal = true
+        let local = activityStore.fetchAllActivities()
+        print("[Activities] Backfilling \(local.count) local activities for user \(userId)")
+        await saveActivities(local, userId: userId)
     }
 }
