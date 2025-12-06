@@ -10,6 +10,7 @@ class GameEngine {
     private let missionEngine = MissionEngine.shared
     private let gamificationService = GamificationService.shared
     private let feedRepository = FeedRepository.shared
+    private let activityRepository = ActivityRepository.shared
     
     private init() {
         self.territoryService = TerritoryService(territoryStore: TerritoryStore.shared)
@@ -62,6 +63,11 @@ class GameEngine {
             print("   First mission: \(firstMission.name)")
         }
         activityStore.updateActivity(updatedActivity)
+        
+        // 7b. Persist remotely in dedicated collection (non-blocking)
+        Task {
+            await self.activityRepository.saveActivity(updatedActivity, userId: userId)
+        }
         
         // 7. Apply XP to user
         try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)

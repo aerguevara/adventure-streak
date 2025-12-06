@@ -138,8 +138,15 @@ class HistoryViewModel: ObservableObject {
                         if !newSessions.isEmpty {
                             print("Saving \(newSessions.count) imported activities...")
                             
-                            // 1. Save Activities
+                            // 1. Save Activities locally
                             self.activityStore.saveActivities(newSessions)
+                            
+                            // 1b. Persist remotely in independent collection
+                            if let userId = AuthenticationService.shared.userId {
+                                Task {
+                                    await ActivityRepository.shared.saveActivities(newSessions, userId: userId)
+                                }
+                            }
                             
                             // 2. Process Territories (BATCHED)
                             Task {
