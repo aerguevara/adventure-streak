@@ -26,13 +26,20 @@ class UserRepository: ObservableObject {
         
         userRef.getDocument { (document, error) in
             if let document = document, document.exists {
-                // User exists, update last login AND name if provided
+                // User exists: only update displayName if missing/empty, always bump lastLogin
                 var data: [String: Any] = [
                     "lastLogin": FieldValue.serverTimestamp()
                 ]
-                if let name = name, !name.isEmpty {
+                
+                let existingName = (document.get("displayName") as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if let name = name,
+                   !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   (existingName == nil || existingName?.isEmpty == true) {
                     data["displayName"] = name
                 }
+                
                 userRef.updateData(data)
             } else {
                 // Create new user
