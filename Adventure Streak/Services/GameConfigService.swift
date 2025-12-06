@@ -37,14 +37,19 @@ final class GameConfigService: ObservableObject {
     private init() {}
     
     func loadConfigIfNeeded() async {
-        if isLoaded { return }
+        if isLoaded {
+            print("[Config] Already loaded. Historical: \(config.loadHistoricalWorkouts), Lookback days: \(config.clampedLookbackDays)")
+            return
+        }
         
         if let loadTask = loadTask {
+            print("[Config] Awaiting in-flight load task")
             let config = await loadTask.value
             apply(config)
             return
         }
         
+        print("[Config] Loading config (first pass)...")
         let task = Task { await self.fetchRemoteConfig() ?? GameConfig.default }
         loadTask = task
         let config = await task.value
@@ -53,6 +58,7 @@ final class GameConfigService: ObservableObject {
     }
     
     func refresh() async {
+        print("[Config] Refreshing config...")
         let task = Task { await self.fetchRemoteConfig() ?? GameConfig.default }
         loadTask = task
         let config = await task.value
@@ -61,8 +67,10 @@ final class GameConfigService: ObservableObject {
     }
     
     private func apply(_ config: GameConfig) {
-        self.config = config.sanitized()
+        let sanitized = config.sanitized()
+        self.config = sanitized
         self.isLoaded = true
+        print("[Config] Applied config. Historical: \(sanitized.loadHistoricalWorkouts), Lookback days: \(sanitized.clampedLookbackDays)")
     }
     
     func cutoffDate(from reference: Date = Date()) -> Date {
@@ -84,6 +92,7 @@ final class GameConfigService: ObservableObject {
                 .getDocument()
             
             if let data = snapshot.data() {
+                print("[Config] Remote data received: \(data)")
                 let loadHistorical = data["loadHistoricalWorkouts"] as? Bool
                     ?? data["importHistoricalWorkouts"] as? Bool
                     ?? loaded.loadHistoricalWorkouts
