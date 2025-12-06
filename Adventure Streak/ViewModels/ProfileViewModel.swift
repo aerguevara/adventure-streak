@@ -47,7 +47,7 @@ class ProfileViewModel: ObservableObject {
          userRepository: UserRepository = .shared,
          authService: AuthenticationService = .shared,
          gamificationService: GamificationService = .shared,
-         configService: GameConfigService = .shared) {
+         configService: GameConfigService) {
         self.activityStore = activityStore
         self.territoryStore = territoryStore
         self.userRepository = userRepository

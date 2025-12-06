@@ -15,7 +15,7 @@ class HistoryViewModel: ObservableObject {
     init(
         activityStore: ActivityStore,
         territoryService: TerritoryService,
-        configService: GameConfigService = .shared
+        configService: GameConfigService
     ) {
         self.activityStore = activityStore
         self.territoryService = territoryService

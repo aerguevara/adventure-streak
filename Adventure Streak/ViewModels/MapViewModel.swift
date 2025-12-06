@@ -41,7 +41,7 @@ class MapViewModel: ObservableObject {
         locationService: LocationService,
         territoryStore: TerritoryStore,
         activityStore: ActivityStore,
-        configService: GameConfigService = .shared
+        configService: GameConfigService
     ) {
         self.locationService = locationService
         self.territoryStore = territoryStore

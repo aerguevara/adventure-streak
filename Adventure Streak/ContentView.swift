@@ -18,12 +18,12 @@ struct ContentView: View {
         
         // Correct way to initialize StateObject with dependencies
         _onboardingViewModel = StateObject(wrappedValue: OnboardingViewModel(locationService: locService))
-        _mapViewModel = StateObject(wrappedValue: MapViewModel(locationService: locService, territoryStore: terrStore, activityStore: actStore))
+        _mapViewModel = StateObject(wrappedValue: MapViewModel(locationService: locService, territoryStore: terrStore, activityStore: actStore, configService: GameConfigService.shared))
         
         let terrService = TerritoryService(territoryStore: terrStore)
         _workoutsViewModel = StateObject(wrappedValue: WorkoutsViewModel(activityStore: actStore, territoryService: terrService, configService: GameConfigService.shared))
         
-        _profileViewModel = StateObject(wrappedValue: ProfileViewModel(activityStore: actStore, territoryStore: terrStore))
+        _profileViewModel = StateObject(wrappedValue: ProfileViewModel(activityStore: actStore, territoryStore: terrStore, configService: GameConfigService.shared))
     }
     
     var body: some View {
