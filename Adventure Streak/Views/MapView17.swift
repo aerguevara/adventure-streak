@@ -25,6 +25,7 @@ struct MapView17: View {
                 }
                 .onMapCameraChange { context in
                     viewModel.updateVisibleRegion(context.region)
+                    selectedOwnerName = nil
                 }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 0)

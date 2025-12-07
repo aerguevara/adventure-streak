@@ -257,7 +257,7 @@ class MapViewModel: ObservableObject {
         self.shouldRecenter = true
     }
     
-    func selectTerritory(id: String, ownerName: String?) {
+    func selectTerritory(id: String?, ownerName: String?) {
         selectedTerritoryId = id
         selectedTerritoryOwner = ownerName
     }

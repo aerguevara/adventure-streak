@@ -148,6 +148,11 @@ struct MapView: UIViewRepresentable {
                     break
                 }
             }
+            
+            // If no overlay matched, clear selection
+            if parent.viewModel.selectedTerritoryId == nil {
+                parent.viewModel.selectTerritory(id: nil, ownerName: nil)
+            }
         }
         
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -169,6 +174,7 @@ struct MapView: UIViewRepresentable {
         
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             parent.viewModel.updateVisibleRegion(mapView.region)
+            parent.viewModel.selectTerritory(id: nil, ownerName: nil)
         }
     }
 }
