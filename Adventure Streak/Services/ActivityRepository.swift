@@ -19,13 +19,17 @@ private struct FirestoreActivity: Codable {
     let activityType: ActivityType
     let distanceMeters: Double
     let durationSeconds: Double
-    let route: [RoutePoint]
+    // Route is now stored in subcollection "routes" to avoid 1MB limit.
+    // Keep optional for backward compatibility if older docs had the full route.
+    let route: [RoutePoint]?
     let xpBreakdown: XPBreakdown?
     let territoryStats: TerritoryStats?
     let missions: [Mission]?
+    let routePointsCount: Int
+    let routeChunkCount: Int
     let lastUpdatedAt: Date
     
-    init(activity: ActivitySession, userId: String) {
+    init(activity: ActivitySession, userId: String, routeChunkCount: Int) {
         self.id = activity.id.uuidString
         self.userId = userId
         self.startDate = activity.startDate
@@ -33,11 +37,25 @@ private struct FirestoreActivity: Codable {
         self.activityType = activity.activityType
         self.distanceMeters = activity.distanceMeters
         self.durationSeconds = activity.durationSeconds
-        self.route = activity.route
+        self.route = nil // store route in subcollection
         self.xpBreakdown = activity.xpBreakdown
         self.territoryStats = activity.territoryStats
         self.missions = activity.missions
+        self.routePointsCount = activity.route.count
+        self.routeChunkCount = routeChunkCount
         self.lastUpdatedAt = Date()
+    }
+}
+
+private struct FirestoreRouteChunk: Codable {
+    let order: Int
+    let points: [RoutePoint]
+    let pointCount: Int
+    
+    init(order: Int, points: [RoutePoint]) {
+        self.order = order
+        self.points = points
+        self.pointCount = points.count
     }
 }
 
@@ -58,109 +76,96 @@ final class ActivityRepository {
     func saveActivity(_ activity: ActivitySession, userId: String) async {
         #if canImport(FirebaseFirestore)
         let docId = activity.id.uuidString
-        let maxBytes = 950_000 // safety margin under 1MB Firestore limit
         
-        // Build candidate variants from most to least detailed
-        var candidates: [(ActivitySession, String)] = []
-        candidates.append((activity, "full"))
+        let chunkSize = 500
+        let chunks = chunkRoute(activity.route, size: chunkSize)
         
-        // Downsample progressively
-        let thresholds = [500, 200, 50]
-        for maxPoints in thresholds {
-            if activity.route.count > maxPoints {
-                let trimmed = downsampleRoute(activity.route, maxPoints: maxPoints)
-                let trimmedActivity = ActivitySession(
-                    id: activity.id,
-                    startDate: activity.startDate,
-                    endDate: activity.endDate,
-                    activityType: activity.activityType,
-                    distanceMeters: activity.distanceMeters,
-                    durationSeconds: activity.durationSeconds,
-                    route: trimmed,
-                    xpBreakdown: activity.xpBreakdown,
-                    territoryStats: activity.territoryStats,
-                    missions: activity.missions
-                )
-                candidates.append((trimmedActivity, "trimmed-\(maxPoints)"))
-            }
+        // 1) Save metadata doc (without route)
+        let meta = FirestoreActivity(activity: activity, userId: userId, routeChunkCount: chunks.count)
+        do {
+            try db.collection("activities")
+                .document(docId)
+                .setData(from: meta, merge: true)
+            print("[Activities] Saved metadata for \(docId) with \(chunks.count) chunks (\(activity.route.count) pts)")
+        } catch {
+            print("[Activities] Failed to save metadata for \(docId): \(error.localizedDescription)")
+            return
         }
         
-        // Last resort: metadata only (no route)
-        let metaOnlyActivity = ActivitySession(
-            id: activity.id,
-            startDate: activity.startDate,
-            endDate: activity.endDate,
-            activityType: activity.activityType,
-            distanceMeters: activity.distanceMeters,
-            durationSeconds: activity.durationSeconds,
-            route: [],
-            xpBreakdown: activity.xpBreakdown,
-            territoryStats: activity.territoryStats,
-            missions: activity.missions
-        )
-        candidates.append((metaOnlyActivity, "metadata-only"))
-        
-        for (candidate, label) in candidates {
-            let size = estimatedPayloadSize(activity: candidate, userId: userId)
-            if size > maxBytes {
-                print("[Activities] Skipping variant \(label) for \(docId) — estimated \(size) bytes (> \(maxBytes))")
-                continue
-            }
-            if await attemptSave(activity: candidate, userId: userId, docId: docId, label: label) {
-                return
+        // 2) Save route chunks in subcollection
+        for (index, points) in chunks.enumerated() {
+            let chunkPayload = FirestoreRouteChunk(order: index, points: points)
+            do {
+                try db.collection("activities")
+                    .document(docId)
+                    .collection("routes")
+                    .document("chunk_\(index)")
+                    .setData(from: chunkPayload, merge: true)
+                print("[Activities] Saved route chunk \(index + 1)/\(chunks.count) for \(docId) with \(points.count) pts")
+            } catch {
+                print("[Activities] Failed to save route chunk \(index) for \(docId): \(error.localizedDescription)")
             }
         }
-        
-        print("[Activities] Failed to save activity \(docId) after all variants")
         #else
         print("[Activities] Firestore SDK not available; skipping remote save.")
         #endif
     }
     
-    /// Internal helper to attempt a save with logging; returns true on success.
-    private func attemptSave(activity: ActivitySession, userId: String, docId: String, label: String = "full") async -> Bool {
+    private func chunkRoute(_ route: [RoutePoint], size: Int) -> [[RoutePoint]] {
+        guard size > 0, !route.isEmpty else { return [] }
+        var chunks: [[RoutePoint]] = []
+        var index = 0
+        while index < route.count {
+            let end = min(index + size, route.count)
+            let slice = Array(route[index..<end])
+            chunks.append(slice)
+            index = end
+        }
+        return chunks
+    }
+    
+    private func fetchRouteChunks(activityId: String, expectedCount: Int, fallbackRoute: [RoutePoint]?) async -> [RoutePoint] {
         #if canImport(FirebaseFirestore)
-        let payload = FirestoreActivity(activity: activity, userId: userId)
-        do {
-            try db.collection("activities")
-                .document(docId)
-                .setData(from: payload, merge: true)
-            print("[Activities] Saved activity \(docId) for user \(userId) (\(label)) with \(activity.route.count) points")
-            return true
-        } catch {
-            print("[Activities] Failed to save activity \(docId) (\(label)): \(error.localizedDescription)")
-            return false
+        if expectedCount == 0, let fallbackRoute = fallbackRoute {
+            return fallbackRoute
         }
+        
+        let routesRef = db.collection("activities").document(activityId).collection("routes")
+        var points: [RoutePoint] = []
+        
+        if expectedCount > 0 {
+            for order in 0..<expectedCount {
+                do {
+                    let doc = try await routesRef.document("chunk_\(order)").getDocument()
+                    if doc.exists {
+                        let chunk = try doc.data(as: FirestoreRouteChunk.self)
+                        points.append(contentsOf: chunk.points)
+                    }
+                } catch {
+                    print("[Activities] Failed to fetch chunk \(order) for \(activityId): \(error)")
+                }
+            }
+        } else {
+            do {
+                let snapshot = try await routesRef.getDocuments()
+                let sorted = snapshot.documents.sorted { $0.documentID < $1.documentID }
+                for doc in sorted {
+                    do {
+                        let chunk = try doc.data(as: FirestoreRouteChunk.self)
+                        points.append(contentsOf: chunk.points)
+                    } catch {
+                        print("[Activities] Failed to decode chunk \(doc.documentID) for \(activityId): \(error)")
+                    }
+                }
+            } catch {
+                print("[Activities] Failed to fetch chunks for \(activityId): \(error)")
+            }
+        }
+        
+        return points
         #else
-        return false
+        return fallbackRoute ?? []
         #endif
-    }
-    
-    private func estimatedPayloadSize(activity: ActivitySession, userId: String) -> Int {
-        let payload = FirestoreActivity(activity: activity, userId: userId)
-        do {
-            let data = try JSONEncoder().encode(payload)
-            return data.count
-        } catch {
-            print("[Activities] Failed to estimate payload size: \(error)")
-            return Int.max
-        }
-    }
-    
-    private func downsampleRoute(_ route: [RoutePoint], maxPoints: Int) -> [RoutePoint] {
-        guard route.count > maxPoints, maxPoints > 0 else { return route }
-        let step = max(1, route.count / maxPoints)
-        var sampled: [RoutePoint] = []
-        sampled.reserveCapacity(maxPoints)
-        for (index, point) in route.enumerated() where index % step == 0 {
-            sampled.append(point)
-            if sampled.count >= maxPoints { break }
-        }
-        // Ensure last point is included
-        if let last = route.last, sampled.last?.id != last.id {
-            sampled.append(last)
-        }
-        return sampled
     }
     
     /// Batch-save convenience; iterates sequentially to avoid Firestore rate limits on small batches.
@@ -236,24 +241,27 @@ final class ActivityRepository {
             
             let snapshot = try await query.getDocuments()
             
-            let activities: [ActivitySession] = snapshot.documents.compactMap { doc in
+            var activities: [ActivitySession] = []
+            for doc in snapshot.documents {
                 do {
                     let remote = try doc.data(as: FirestoreActivity.self)
-                    return ActivitySession(
+                    let route = await fetchRouteChunks(activityId: doc.documentID, expectedCount: remote.routeChunkCount, fallbackRoute: remote.route)
+                    
+                    let session = ActivitySession(
                         id: UUID(uuidString: remote.id ?? doc.documentID) ?? UUID(),
                         startDate: remote.startDate,
                         endDate: remote.endDate,
                         activityType: remote.activityType,
                         distanceMeters: remote.distanceMeters,
                         durationSeconds: remote.durationSeconds,
-                        route: remote.route,
+                        route: route,
                         xpBreakdown: remote.xpBreakdown,
                         territoryStats: remote.territoryStats,
                         missions: remote.missions
                     )
+                    activities.append(session)
                 } catch {
                     print("[Activities] Failed to decode activity \(doc.documentID): \(error)")
-                    return nil
                 }
             }
             
@@ -281,25 +289,25 @@ final class ActivityRepository {
         var results: [ActivitySession] = []
         for id in ids {
             let doc = try await db.collection("activities").document(id).getDocument()
-            if let data = doc.data() {
-                do {
-                    let remote = try doc.data(as: FirestoreActivity.self)
-                    let session = ActivitySession(
-                        id: UUID(uuidString: remote.id ?? doc.documentID) ?? UUID(),
-                        startDate: remote.startDate,
-                        endDate: remote.endDate,
-                        activityType: remote.activityType,
-                        distanceMeters: remote.distanceMeters,
-                        durationSeconds: remote.durationSeconds,
-                        route: remote.route,
-                        xpBreakdown: remote.xpBreakdown,
-                        territoryStats: remote.territoryStats,
-                        missions: remote.missions
-                    )
-                    results.append(session)
-                } catch {
-                    print("[Activities] Failed to decode activity \(doc.documentID): \(error)")
-                }
+            if doc.data() == nil { continue }
+            do {
+                let remote = try doc.data(as: FirestoreActivity.self)
+                let route = await fetchRouteChunks(activityId: doc.documentID, expectedCount: remote.routeChunkCount, fallbackRoute: remote.route)
+                let session = ActivitySession(
+                    id: UUID(uuidString: remote.id ?? doc.documentID) ?? UUID(),
+                    startDate: remote.startDate,
+                    endDate: remote.endDate,
+                    activityType: remote.activityType,
+                    distanceMeters: remote.distanceMeters,
+                    durationSeconds: remote.durationSeconds,
+                    route: route,
+                    xpBreakdown: remote.xpBreakdown,
+                    territoryStats: remote.territoryStats,
+                    missions: remote.missions
+                )
+                results.append(session)
+            } catch {
+                print("[Activities] Failed to decode activity \(doc.documentID): \(error)")
             }
         }
         return results
