@@ -217,20 +217,20 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                         let chosenName = (remoteName?.isEmpty == false) ? remoteName! : (appleName ?? resolvedFallback)
                         
                         DispatchQueue.main.async {
-                            self.userName = chosenName
-                        }
-                        
-                        // Sync without clobbering: use chosenName (remote preferred) so displayName stays consistent, and update lastLogin.
-                        UserRepository.shared.syncUser(user: user, name: chosenName)
-                        
-                        // Backfill + parity check so remote list matches local feed/events
-                        Task {
-                            await ActivityRepository.shared.ensureRemoteParity(userId: user.uid)
-                        }
+                        self.userName = chosenName
+                    }
+                    
+                    // Sync without clobbering: use chosenName (remote preferred) so displayName stays consistent, and update lastLogin.
+                    UserRepository.shared.syncUser(user: user, name: chosenName)
+                    
+                    // Backfill + parity check so remote list matches local feed/events
+                    Task {
+                        await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
                     }
                 }
             }
         }
+    }
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {

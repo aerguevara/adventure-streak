@@ -262,8 +262,48 @@ final class ActivityRepository {
         #endif
     }
     
+    private func fetchTerritoryChunks(activityId: String, expectedCount: Int?) async -> [TerritoryCell] {
+        #if canImport(FirebaseFirestore)
+        let territoriesRef = db.collection("activities").document(activityId).collection("territories")
+        var cells: [TerritoryCell] = []
+        
+        if let expected = expectedCount, expected > 0 {
+            for order in 0..<expected {
+                do {
+                    let doc = try await territoriesRef.document("chunk_\(order)").getDocument()
+                    if doc.exists {
+                        let chunk = try doc.data(as: FirestoreTerritoryChunk.self)
+                        cells.append(contentsOf: chunk.cells)
+                    }
+                } catch {
+                    print("[Activities] Failed to fetch territory chunk \(order) for \(activityId): \(error)")
+                }
+            }
+        } else {
+            do {
+                let snapshot = try await territoriesRef.getDocuments()
+                let sorted = snapshot.documents.sorted { $0.documentID < $1.documentID }
+                for doc in sorted {
+                    do {
+                        let chunk = try doc.data(as: FirestoreTerritoryChunk.self)
+                        cells.append(contentsOf: chunk.cells)
+                    } catch {
+                        print("[Activities] Failed to decode territory chunk \(doc.documentID) for \(activityId): \(error)")
+                    }
+                }
+            } catch {
+                print("[Activities] Failed to fetch territory chunks for \(activityId): \(error)")
+            }
+        }
+        
+        return cells
+        #else
+        return []
+        #endif
+    }
+    
     /// Ensure remote collection contains all local activities; uploads any missing and logs differences.
-    func ensureRemoteParity(userId: String, activityStore: ActivityStore = .shared) async {
+    func ensureRemoteParity(userId: String, activityStore: ActivityStore = .shared, territoryStore: TerritoryStore? = nil) async {
         let localActivities = activityStore.fetchAllActivities()
         let localIds = Set(localActivities.map { $0.id.uuidString })
         let remoteIds = await fetchRemoteActivityIds(userId: userId)
@@ -286,6 +326,17 @@ final class ActivityRepository {
                     activityStore.saveActivities(pulled)
                 }
                 print("[Activities] Pulled \(pulled.count) remote activities into local store")
+                
+                if let territoryStore = territoryStore {
+                    for activity in pulled {
+                        let cells = await fetchTerritoryChunks(activityId: activity.id.uuidString, expectedCount: nil)
+                        if !cells.isEmpty {
+                            await MainActor.run {
+                                territoryStore.upsertCells(cells)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
