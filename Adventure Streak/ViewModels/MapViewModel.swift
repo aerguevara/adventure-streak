@@ -398,6 +398,27 @@ class MapViewModel: ObservableObject {
             let displayName = (doc.get("displayName") as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             let xpValue = doc.get("xp") as? Int
             let avatarURLString = doc.get("avatarURL") as? String
+            var territoryCount: Int?
+            
+            // Obtener número de territorios del dueño
+            do {
+                // Agregado server-side si está disponible
+                if #available(iOS 15.0, *) {
+                    let countQuery = db.collection("remote_territories")
+                        .whereField("userId", isEqualTo: userId)
+                        .count
+                    let snapshot = try await countQuery.getAggregation(source: .server)
+                    territoryCount = Int(truncating: snapshot.count)
+                } else {
+                    // Fallback: fetch documents (menos eficiente, pero solo al seleccionar)
+                    let snapshot = try await db.collection("remote_territories")
+                        .whereField("userId", isEqualTo: userId)
+                        .getDocuments()
+                    territoryCount = snapshot.documents.count
+                }
+            } catch {
+                print("[Map] Error obteniendo conteo de territorios para \(userId): \(error)")
+            }
             
             if let urlString = avatarURLString,
                let url = URL(string: urlString),
@@ -415,6 +436,9 @@ class MapViewModel: ObservableObject {
                 }
                 if let xpValue {
                     selectedTerritoryOwnerXP = xpValue
+                }
+                if let territoryCount {
+                    selectedTerritoryOwnerTerritories = territoryCount
                 }
             }
         } catch {
