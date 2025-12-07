@@ -67,7 +67,7 @@ class SocialService: ObservableObject {
         
         var missingAvatarIds: Set<String> = []
         
-        self.posts = events.compactMap { event -> SocialPost? in
+        let newPosts = events.compactMap { event -> SocialPost? in
             guard let userId = event.userId,
                   let userName = event.relatedUserName else {
                 return nil
