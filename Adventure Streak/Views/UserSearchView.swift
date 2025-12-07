@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct UserSearchView: View {
     @StateObject var viewModel = UserSearchViewModel()
@@ -114,15 +117,31 @@ struct UserSearchResultCard: View {
     var body: some View {
         HStack(spacing: 16) {
             // Avatar
-            Circle()
-                .fill(Color(hex: "2C2C2E"))
+            if let data = entry.avatarData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 50, height: 50)
+                    .clipShape(Circle())
+            } else if let url = entry.avatarURL {
+                AsyncImage(url: url) { image in
+                    image.resizable()
+                } placeholder: {
+                    Circle().fill(Color(hex: "2C2C2E"))
+                }
                 .frame(width: 50, height: 50)
-                .overlay(
-                    Text(entry.displayName.prefix(1).uppercased())
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(Color(hex: "2C2C2E"))
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Text(entry.displayName.prefix(1).uppercased())
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    )
+            }
             
             // Info
             VStack(alignment: .leading, spacing: 4) {

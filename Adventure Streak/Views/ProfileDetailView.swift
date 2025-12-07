@@ -41,8 +41,25 @@ struct ProfileDetailView: View {
                 List {
                     ForEach(selectedTab == .following ? relationsViewModel.following : relationsViewModel.followers) { user in
                         HStack {
-                            Image(systemName: "person.crop.circle")
-                                .foregroundColor(.accentColor)
+                            if let data = user.avatarData, let uiImage = UIImage(data: data) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 36, height: 36)
+                                    .clipShape(Circle())
+                            } else if let url = user.avatarURL {
+                                AsyncImage(url: url) { image in
+                                    image.resizable()
+                                } placeholder: {
+                                    Circle().fill(Color.gray.opacity(0.2))
+                                }
+                                .frame(width: 36, height: 36)
+                                .clipShape(Circle())
+                            } else {
+                                Image(systemName: "person.crop.circle")
+                                    .foregroundColor(.accentColor)
+                                    .frame(width: 36, height: 36)
+                            }
                             VStack(alignment: .leading) {
                                 Text(user.displayName)
                                     .font(.headline)

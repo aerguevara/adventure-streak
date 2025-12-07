@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct RankingView: View {
     @StateObject var viewModel = RankingViewModel()
@@ -236,15 +239,7 @@ struct RankingCard: View {
                 .frame(width: 24)
             
             // Avatar
-            Circle()
-                .fill(Color(hex: "2C2C2E"))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Text(entry.displayName.prefix(1).uppercased())
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
+            avatarView(entry: entry)
             
             // Info
             VStack(alignment: .leading, spacing: 4) {
@@ -346,6 +341,35 @@ struct RankingCard: View {
         case .up: return .green
         case .down: return .red
         case .neutral: return .gray
+        }
+    }
+    
+    @ViewBuilder
+    private func avatarView(entry: RankingEntry) -> some View {
+        if let data = entry.avatarData, let uiImage = UIImage(data: data) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+        } else if let url = entry.avatarURL {
+            AsyncImage(url: url) { image in
+                image.resizable()
+            } placeholder: {
+                Circle().fill(Color(hex: "2C2C2E"))
+            }
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
+        } else {
+            Circle()
+                .fill(Color(hex: "2C2C2E"))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Text(entry.displayName.prefix(1).uppercased())
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                )
         }
     }
 }

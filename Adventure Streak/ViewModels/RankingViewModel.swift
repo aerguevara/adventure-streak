@@ -23,6 +23,7 @@ class RankingViewModel: ObservableObject {
     private let authService: AuthenticationService
     private let socialService: SocialService
     private var followingCancellable: Any?
+    private let avatarCache = AvatarCacheManager.shared
     
     // MARK: - Init
     init(repository: GamificationRepository = .shared,
@@ -55,6 +56,9 @@ class RankingViewModel: ObservableObject {
                         // Mock data for redesign
                         processedEntries[i].xpProgress = Double.random(in: 0.3...0.9)
                         processedEntries[i].isFollowing = self.socialService.isFollowing(userId: processedEntries[i].userId)
+                        if let data = self.avatarCache.data(for: processedEntries[i].userId) {
+                            processedEntries[i].avatarData = data
+                        }
                     }
                 }
                 

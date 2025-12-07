@@ -42,6 +42,7 @@ class UserSearchViewModel: ObservableObject {
                 let currentUserId = AuthenticationService.shared.userId
                 var filteredResults = results.filter { $0.userId != currentUserId }
                 filteredResults = self.applyFollowStatus(to: filteredResults)
+                filteredResults = self.applyAvatarData(to: filteredResults)
                 self.searchResults = filteredResults
                 self.isLoading = false
             }
@@ -56,6 +57,7 @@ class UserSearchViewModel: ObservableObject {
                 let currentUserId = AuthenticationService.shared.userId
                 var filtered = results.filter { $0.userId != currentUserId }
                 filtered = self.applyFollowStatus(to: filtered)
+                filtered = self.applyAvatarData(to: filtered)
                 self.topActive = filtered
                 // If no search text, show these
                 if self.searchText.isEmpty {
@@ -70,6 +72,17 @@ class UserSearchViewModel: ObservableObject {
         return entries.map { entry in
             var updated = entry
             updated.isFollowing = socialService.isFollowing(userId: entry.userId)
+            return updated
+        }
+    }
+    
+    private func applyAvatarData(to entries: [RankingEntry]) -> [RankingEntry] {
+        let cache = AvatarCacheManager.shared
+        return entries.map { entry in
+            var updated = entry
+            if let data = cache.data(for: entry.userId) {
+                updated.avatarData = data
+            }
             return updated
         }
     }
