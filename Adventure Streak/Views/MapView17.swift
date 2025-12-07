@@ -19,6 +19,7 @@ struct MapView17: View {
                             .stroke(Color.green, lineWidth: 1)
                     }
                 }
+                .mapStyle(.standard(elevation: .flat)) // Evita renderizado 3D/metal con multisample
                 .mapControls {
                     MapUserLocationButton()
                     MapCompass()
