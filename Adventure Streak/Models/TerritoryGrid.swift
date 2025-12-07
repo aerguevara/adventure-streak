@@ -46,7 +46,8 @@ struct TerritoryGrid {
             lastConqueredAt: Date(),
             expiresAt: Calendar.current.date(byAdding: .day, value: daysToExpire, to: Date())!,
             ownerUserId: ownerUserId,
-            ownerDisplayName: ownerDisplayName
+            ownerDisplayName: ownerDisplayName,
+            ownerUploadedAt: nil
         )
     }
     

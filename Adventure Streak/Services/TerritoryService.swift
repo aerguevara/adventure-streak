@@ -133,6 +133,7 @@ class TerritoryService {
         mutableCell.expiresAt = Calendar.current.date(byAdding: .day, value: TerritoryGrid.daysToExpire, to: activity.endDate)!
         mutableCell.ownerUserId = currentUserId
         mutableCell.ownerDisplayName = currentUserName
+        mutableCell.ownerUploadedAt = activity.endDate
         
         newCells.append(mutableCell)
     }

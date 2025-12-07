@@ -26,6 +26,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     let activityEndAt: Date
     // Legacy field; kept for backward compatibility
     let timestamp: Date
+    @ServerTimestamp var uploadedAt: Timestamp?
     
     // Helper to get center coordinate
     var centerCoordinate: CLLocationCoordinate2D {
@@ -33,7 +34,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case userId, centerLatitude, centerLongitude, boundary, expiresAt, activityEndAt, timestamp
+        case userId, centerLatitude, centerLongitude, boundary, expiresAt, activityEndAt, timestamp, uploadedAt
     }
     
     init(from decoder: Decoder) throws {
@@ -46,6 +47,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         activityEndAt = try container.decodeIfPresent(Date.self, forKey: .activityEndAt)
             ?? (try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date())
         timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? activityEndAt
+        uploadedAt = try container.decodeIfPresent(Timestamp.self, forKey: .uploadedAt)
         
         if let storedBoundary = try container.decodeIfPresent([TerritoryPoint].self, forKey: .boundary) {
             boundary = storedBoundary
@@ -71,5 +73,6 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         self.expiresAt = expiresAt
         self.activityEndAt = activityEndAt
         self.timestamp = activityEndAt
+        self.uploadedAt = nil
     }
 }

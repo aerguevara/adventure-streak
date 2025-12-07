@@ -154,8 +154,10 @@ class MapViewModel: ObservableObject {
 
                     let remoteEnd = territory.activityEndAt
                     let localEnd = localCell.lastConqueredAt
+                    let remoteUploaded = territory.uploadedAt?.dateValue() ?? territory.activityEndAt
+                    let localUploaded = localCell.ownerUploadedAt ?? localCell.lastConqueredAt
                     let remoteIsNewer = remoteEnd > localEnd ||
-                        (remoteEnd == localEnd && territory.expiresAt > localCell.expiresAt)
+                        (remoteEnd == localEnd && (remoteUploaded > localUploaded || territory.expiresAt > localCell.expiresAt))
                     if remoteIsNewer {
                         lostIds.insert(territoryId)
                         print("[Territories] Marking cell as rival due to newer remote activity end time: \(territoryId)")
