@@ -249,12 +249,25 @@ class HistoryViewModel: ObservableObject {
         if let title = workout.metadata?["HKMetadataKeyWorkoutTitle"] as? String, !title.isEmpty {
             return title
         }
+        if let brand = workout.metadata?[HKMetadataKeyWorkoutBrandName] as? String, !brand.isEmpty {
+            return brand
+        }
         
-        switch workout.workoutActivityType {
+        return fallbackWorkoutName(for: workout.workoutActivityType)
+    }
+    
+    nonisolated private func fallbackWorkoutName(for type: HKWorkoutActivityType) -> String {
+        switch type {
         case .running: return "Running"
         case .walking: return "Walking"
         case .cycling: return "Cycling"
         case .hiking: return "Hiking"
+        case .traditionalStrengthTraining: return "Traditional Strength Training"
+        case .functionalStrengthTraining: return "Functional Strength Training"
+        case .highIntensityIntervalTraining: return "HIIT"
+        case .flexibility: return "Flexibility"
+        case .yoga: return "Yoga"
+        case .pilates: return "Pilates"
         default: return "Workout"
         }
     }
