@@ -38,8 +38,6 @@ struct WorkoutsView: View {
                         // E) Feed
                         feedSection
                         
-                        // Secondary Buttons
-                        secondaryButtons
                     }
                     .padding(.top, 20)
                     .padding(.bottom, 40)
@@ -354,22 +352,6 @@ struct WorkoutsView: View {
                 }
             }
         }
-    }
-    
-    // MARK: - Secondary Buttons
-    var secondaryButtons: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                SecondaryButton(icon: "map", title: "View Map")
-                SecondaryButton(icon: "trophy", title: "Ranking")
-            }
-            
-            HStack(spacing: 12) {
-                SecondaryButton(icon: "clock.arrow.circlepath", title: "History")
-                SecondaryButton(icon: "gearshape", title: "Settings")
-            }
-        }
-        .padding(.horizontal)
     }
 }
 
