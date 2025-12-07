@@ -54,9 +54,23 @@ class SocialService: ObservableObject {
     }
     
     private func updatePosts(from events: [FeedEvent]) {
+        let currentUserId = AuthenticationService.shared.userId
+        let allowedIds: Set<String> = {
+            var set = followingIds
+            if let current = currentUserId {
+                set.insert(current)
+            }
+            return set
+        }()
+        
         self.posts = events.compactMap { event -> SocialPost? in
             guard let userId = event.userId,
                   let userName = event.relatedUserName else {
+                return nil
+            }
+
+            // Solo mostrar posts de seguidos (y el propio)
+            if !allowedIds.contains(userId) {
                 return nil
             }
             
@@ -99,8 +113,12 @@ class SocialService: ObservableObject {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         
+        let now = FieldValue.serverTimestamp()
+        let currentName = AuthenticationService.shared.resolvedUserName()
+        
         let data: [String: Any] = [
-            "followedAt": FieldValue.serverTimestamp()
+            "followedAt": now,
+            "displayName": currentName
         ]
         
         db.collection("users").document(currentUserId)
@@ -112,6 +130,15 @@ class SocialService: ObservableObject {
                     DispatchQueue.main.async {
                         self.followingIds.remove(userId)
                     }
+                }
+            }
+        
+        // Add follower entry to target user
+        db.collection("users").document(userId)
+            .collection("followers").document(currentUserId)
+            .setData(data) { error in
+                if let error = error {
+                    print("Error adding follower: \(error)")
                 }
             }
         #endif
@@ -135,6 +162,14 @@ class SocialService: ObservableObject {
                     DispatchQueue.main.async {
                         self.followingIds.insert(userId)
                     }
+                }
+            }
+        
+        db.collection("users").document(userId)
+            .collection("followers").document(currentUserId)
+            .delete { error in
+                if let error = error {
+                    print("Error removing follower: \(error)")
                 }
             }
         #endif
@@ -177,6 +212,37 @@ class SocialService: ObservableObject {
             }
         #endif
     }
+    
+    // MARK: - Relations fetchers
+    #if canImport(FirebaseFirestore)
+    func fetchFollowing(for userId: String) async -> [SocialUser] {
+        guard let db = db as? Firestore else { return [] }
+        do {
+            let snapshot = try await db.collection("users").document(userId).collection("following").getDocuments()
+            return snapshot.documents.map { doc in
+                let name = (doc.get("displayName") as? String) ?? "Usuario"
+                return SocialUser(id: doc.documentID, displayName: name, avatarURL: nil, level: 0, isFollowing: followingIds.contains(doc.documentID))
+            }
+        } catch {
+            print("Error fetching following: \(error)")
+            return []
+        }
+    }
+    
+    func fetchFollowers(for userId: String) async -> [SocialUser] {
+        guard let db = db as? Firestore else { return [] }
+        do {
+            let snapshot = try await db.collection("users").document(userId).collection("followers").getDocuments()
+            return snapshot.documents.map { doc in
+                let name = (doc.get("displayName") as? String) ?? "Usuario"
+                return SocialUser(id: doc.documentID, displayName: name, avatarURL: nil, level: 0, isFollowing: followingIds.contains(doc.documentID))
+            }
+        } catch {
+            print("Error fetching followers: \(error)")
+            return []
+        }
+    }
+    #endif
     
     // MARK: - Feed System
     

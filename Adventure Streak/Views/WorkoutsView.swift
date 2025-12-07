@@ -6,6 +6,7 @@ struct WorkoutsView: View {
     @ObservedObject var badgesViewModel: BadgesViewModel
     
     @State private var showSignOutConfirmation = false
+    @State private var showProfileDetail = false
     
     // Init with dependency injection
     init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel) {
@@ -71,12 +72,21 @@ struct WorkoutsView: View {
                     .padding(.horizontal, 24)
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
-            .onAppear {
-                Task {
-                    await viewModel.refresh()
-                    profileViewModel.fetchProfileData()
-                    badgesViewModel.fetchBadges()
+                .toolbar(.hidden, for: .navigationBar)
+                .background(
+                    NavigationLink(
+                        destination: ProfileDetailView(
+                            profileViewModel: profileViewModel,
+                            relationsViewModel: SocialRelationsViewModel()
+                        ),
+                        isActive: $showProfileDetail
+                    ) { EmptyView() }
+                )
+                .onAppear {
+                    Task {
+                        await viewModel.refresh()
+                        profileViewModel.fetchProfileData()
+                        badgesViewModel.fetchBadges()
                 }
             }
             .confirmationDialog("Cerrar Sesión", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
@@ -95,32 +105,33 @@ struct WorkoutsView: View {
     var headerSection: some View {
         HStack(spacing: 16) {
             // Avatar
-            ZStack {
-                Circle()
-                    .stroke(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2)
-                    .frame(width: 56, height: 56)
-                
-                if let url = profileViewModel.avatarURL {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Image(systemName: "person.fill")
-                            .foregroundColor(.gray)
-                    }
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-                } else {
-                    Image(systemName: "person.fill")
-                        .resizable()
-                        .padding(12)
-                        .foregroundColor(.white.opacity(0.8))
+            Button {
+                showProfileDetail = true
+            } label: {
+                ZStack {
+                    Circle()
+                        .stroke(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2)
+                        .frame(width: 56, height: 56)
+                    
+                    if let url = profileViewModel.avatarURL {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Image(systemName: "person.fill")
+                                .foregroundColor(.gray)
+                        }
                         .frame(width: 50, height: 50)
-                        .background(Color(hex: "1C1C1E"))
                         .clipShape(Circle())
+                    } else {
+                        Image(systemName: "person.fill")
+                            .resizable()
+                            .padding(12)
+                            .foregroundColor(.white.opacity(0.8))
+                            .frame(width: 50, height: 50)
+                            .background(Color(hex: "1C1C1E"))
+                            .clipShape(Circle())
+                    }
                 }
-            }
-            .onTapGesture {
-                showSignOutConfirmation = true
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -138,6 +149,16 @@ struct WorkoutsView: View {
             }
             
             Spacer()
+            
+            Button {
+                showSignOutConfirmation = true
+            } label: {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .foregroundColor(.white.opacity(0.8))
+                    .padding(8)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+            }
         }
         .padding(.horizontal)
     }
