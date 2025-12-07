@@ -139,19 +139,22 @@ struct MapView: UIViewRepresentable {
                     let id = polygon.title ?? ""
                     // Owner lookup: local store first, then rivals
                     var ownerName: String? = nil
+                    var ownerId: String? = nil
                     if let cell = parent.viewModel.territoryStore.conqueredCells[id] {
                         ownerName = cell.ownerDisplayName ?? cell.ownerUserId
+                        ownerId = cell.ownerUserId
                     } else if let rival = parent.viewModel.otherTerritories.first(where: { $0.id == id }) {
                         ownerName = rival.userId
+                        ownerId = rival.userId
                     }
-                    parent.viewModel.selectTerritory(id: id, ownerName: ownerName)
+                    parent.viewModel.selectTerritory(id: id, ownerName: ownerName, ownerUserId: ownerId)
                     break
                 }
             }
             
             // If no overlay matched, clear selection
             if parent.viewModel.selectedTerritoryId == nil {
-                parent.viewModel.selectTerritory(id: nil, ownerName: nil)
+                parent.viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
             }
         }
         
@@ -174,7 +177,7 @@ struct MapView: UIViewRepresentable {
         
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             parent.viewModel.updateVisibleRegion(mapView.region)
-            parent.viewModel.selectTerritory(id: nil, ownerName: nil)
+            parent.viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
         }
     }
 }

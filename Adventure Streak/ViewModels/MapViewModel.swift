@@ -15,6 +15,9 @@ class MapViewModel: ObservableObject {
     @Published var otherTerritories: [RemoteTerritory] = []
     @Published var selectedTerritoryId: String?
     @Published var selectedTerritoryOwner: String?
+    @Published var selectedTerritoryOwnerId: String?
+    @Published var selectedTerritoryOwnerXP: Int?
+    @Published var selectedTerritoryOwnerTerritories: Int?
     
     @Published var activities: [ActivitySession] = []
     @Published var isTracking = false
@@ -257,9 +260,19 @@ class MapViewModel: ObservableObject {
         self.shouldRecenter = true
     }
     
-    func selectTerritory(id: String?, ownerName: String?) {
+    func selectTerritory(id: String?, ownerName: String?, ownerUserId: String?) {
         selectedTerritoryId = id
         selectedTerritoryOwner = ownerName
+        selectedTerritoryOwnerId = ownerUserId
+        
+        if let currentUserId = AuthenticationService.shared.userId,
+           ownerUserId == currentUserId {
+            selectedTerritoryOwnerXP = GamificationService.shared.currentXP
+            selectedTerritoryOwnerTerritories = territoryStore.conqueredCells.count
+        } else {
+            selectedTerritoryOwnerXP = nil
+            selectedTerritoryOwnerTerritories = nil
+        }
     }
     
     func startActivity(type: ActivityType) {

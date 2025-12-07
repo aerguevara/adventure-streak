@@ -22,19 +22,46 @@ struct MainTabView: View {
                     MapView(viewModel: mapViewModel)
                         .ignoresSafeArea(edges: .top)
                     
-                    if let owner = mapViewModel.selectedTerritoryOwner, let territoryId = mapViewModel.selectedTerritoryId {
-                        VStack(spacing: 6) {
+                    if let owner = mapViewModel.selectedTerritoryOwner,
+                       let territoryId = mapViewModel.selectedTerritoryId {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "person.crop.circle")
+                                    .foregroundColor(.accentColor)
+                                Text(owner)
+                                    .font(.headline)
+                            }
+                            
                             Text("Territorio \(territoryId)")
                                 .font(.footnote)
-                                .foregroundColor(.primary)
-                            Text(owner)
-                                .font(.headline)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(12)
-                                .shadow(radius: 4)
+                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 12) {
+                                Label("\(mapViewModel.selectedTerritoryOwnerXP ?? 0) XP", systemImage: "star.fill")
+                                    .font(.footnote)
+                                    .foregroundColor(.primary)
+                                
+                                let territoriesLabel = mapViewModel.selectedTerritoryOwnerTerritories.map { "\($0) territorios" } ?? "Territorios desconocidos"
+                                Label(territoriesLabel, systemImage: "map")
+                                    .font(.footnote)
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            Button(action: {
+                                mapViewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
+                            }) {
+                                HStack {
+                                    Image(systemName: "xmark.circle.fill")
+                                    Text("Cerrar")
+                                }
+                                .font(.caption)
+                            }
+                            .padding(.top, 4)
                         }
+                        .padding(12)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(14)
+                        .shadow(radius: 6)
                         .padding()
                     }
                 }

@@ -5,7 +5,6 @@ import MapKit
 struct MapView17: View {
     @StateObject var viewModel: MapViewModel
     @State private var position: MapCameraPosition = .userLocation(fallback: .automatic)
-    @State private var selectedOwnerName: String?
     
     var body: some View {
         ZStack {
@@ -36,6 +35,8 @@ struct MapView17: View {
                             let point = value.location
                             if let coord = proxy.convert(point, from: .local) {
                                 selectOwner(at: coord)
+                            } else {
+                                viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
                             }
                         }
                 )
@@ -57,20 +58,36 @@ struct MapView17: View {
                 
                 Spacer()
                 
-                if let owner = selectedOwnerName {
+                if let owner = viewModel.selectedTerritoryOwner {
                     VStack(spacing: 6) {
                         Text("Dueño del territorio")
                             .font(.footnote)
                             .foregroundColor(.primary)
                         Text(owner)
                             .font(.headline)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(.ultraThinMaterial)
-                            .cornerRadius(12)
-                            .shadow(radius: 4)
+                        HStack(spacing: 12) {
+                            Label("\(viewModel.selectedTerritoryOwnerXP ?? 0) XP", systemImage: "star.fill")
+                                .font(.footnote)
+                            let territoriesLabel = viewModel.selectedTerritoryOwnerTerritories.map { "\($0) territorios" } ?? "Territorios desconocidos"
+                            Label(territoriesLabel, systemImage: "map")
+                                .font(.footnote)
+                        }
+                        Button(action: {
+                            viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
+                        }) {
+                            HStack {
+                                Image(systemName: "xmark.circle.fill")
+                                Text("Cerrar")
+                            }
+                            .font(.caption)
+                        }
                     }
                     .padding(.bottom, 12)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(12)
+                    .shadow(radius: 4)
                 }
                 
                 if viewModel.isTracking {
@@ -130,7 +147,7 @@ struct MapView17: View {
             return coordinate.latitude >= minLat && coordinate.latitude <= maxLat &&
                    coordinate.longitude >= minLon && coordinate.longitude <= maxLon
         }) {
-            selectedOwnerName = cell.ownerDisplayName ?? cell.ownerUserId ?? "Sin dueño"
+            viewModel.selectTerritory(id: cell.id, ownerName: cell.ownerDisplayName ?? cell.ownerUserId ?? "Sin dueño", ownerUserId: cell.ownerUserId)
             return
         }
         
@@ -140,10 +157,10 @@ struct MapView17: View {
             let dummyCell = TerritoryGrid.getCell(for: CLLocationCoordinate2D(latitude: territory.centerLatitude, longitude: territory.centerLongitude))
             return id == dummyCell.id
         }) {
-            selectedOwnerName = rival.userId
+            viewModel.selectTerritory(id: rival.id, ownerName: rival.userId, ownerUserId: rival.userId)
             return
         }
         
-        selectedOwnerName = nil
+        viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
     }
 }
