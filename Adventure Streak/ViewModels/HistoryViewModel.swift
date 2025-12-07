@@ -232,6 +232,8 @@ class HistoryViewModel: ObservableObject {
         let isIndoor = (workout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
         
         switch workout.workoutActivityType {
+        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
+            return .indoor
         case .running:
             return isIndoor ? .indoor : .run
         case .walking:
