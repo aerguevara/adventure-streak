@@ -175,7 +175,7 @@ struct MapView17: View {
             let dummyCell = TerritoryGrid.getCell(for: CLLocationCoordinate2D(latitude: territory.centerLatitude, longitude: territory.centerLongitude))
             return id == dummyCell.id
         }) {
-            viewModel.selectTerritory(id: rival.id, ownerName: rival.userId, ownerUserId: rival.userId)
+            viewModel.selectTerritory(id: rival.id, ownerName: nil, ownerUserId: rival.userId)
             return
         }
     }

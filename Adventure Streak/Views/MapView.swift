@@ -152,7 +152,7 @@ struct MapView: UIViewRepresentable {
                         ownerName = cell.ownerDisplayName
                             ?? (ownerId == auth.userId ? auth.resolvedUserName() : cell.ownerUserId)
                     } else if let rival = parent.viewModel.otherTerritories.first(where: { $0.id == id }) {
-                        ownerName = rival.userId
+                        ownerName = nil // evitamos mostrar el id mientras llega el perfil remoto
                         ownerId = rival.userId
                     }
                     parent.viewModel.selectTerritory(id: id, ownerName: ownerName, ownerUserId: ownerId)
