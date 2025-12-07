@@ -5,7 +5,6 @@ struct WorkoutsView: View {
     @ObservedObject var profileViewModel: ProfileViewModel
     @ObservedObject var badgesViewModel: BadgesViewModel
     
-    @State private var showSignOutConfirmation = false
     @State private var showProfileDetail = false
     
     // Init with dependency injection
@@ -73,15 +72,12 @@ struct WorkoutsView: View {
                 }
             }
                 .toolbar(.hidden, for: .navigationBar)
-                .background(
-                    NavigationLink(
-                        destination: ProfileDetailView(
-                            profileViewModel: profileViewModel,
-                            relationsViewModel: SocialRelationsViewModel()
-                        ),
-                        isActive: $showProfileDetail
-                    ) { EmptyView() }
-                )
+                .sheet(isPresented: $showProfileDetail) {
+                    ProfileDetailView(
+                        profileViewModel: profileViewModel,
+                        relationsViewModel: SocialRelationsViewModel()
+                    )
+                }
                 .onAppear {
                     Task {
                         await viewModel.refresh()
@@ -149,16 +145,6 @@ struct WorkoutsView: View {
             }
             
             Spacer()
-            
-            Button {
-                showSignOutConfirmation = true
-            } label: {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .foregroundColor(.white.opacity(0.8))
-                    .padding(8)
-                    .background(Color.white.opacity(0.08))
-                    .clipShape(Circle())
-            }
         }
         .padding(.horizontal)
     }

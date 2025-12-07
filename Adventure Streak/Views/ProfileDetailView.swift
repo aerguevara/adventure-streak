@@ -6,6 +6,7 @@ struct ProfileDetailView: View {
     @StateObject var relationsViewModel: SocialRelationsViewModel
     
     @State private var selectedTab: RelationTab = .following
+    @State private var showSignOutConfirmation = false
     private let currentUserId: String? = AuthenticationService.shared.userId
     
     enum RelationTab: String, CaseIterable, Identifiable {
@@ -72,6 +73,23 @@ struct ProfileDetailView: View {
                     await relationsViewModel.load(for: userId)
                 }
             }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(role: .destructive) {
+                    showSignOutConfirmation = true
+                } label: {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                }
+            }
+        }
+        .confirmationDialog("Cerrar sesión", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
+            Button("Cerrar sesión", role: .destructive) {
+                profileViewModel.signOut()
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("¿Estás seguro de que quieres cerrar sesión?")
         }
     }
     
