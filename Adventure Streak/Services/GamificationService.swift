@@ -108,6 +108,11 @@ class GamificationService: ObservableObject, GamificationServiceProtocol {
         case .otherOutdoor: factor *= XPConfig.factorOther
         case .indoor: factor *= XPConfig.factorIndoor
         }
+
+        // Outdoor sin ruta: aplicar factor reducido similar a indoor y sin territorios
+        if activity.activityType.isOutdoor && activity.route.isEmpty {
+            factor = XPConfig.baseFactorPerKm * XPConfig.factorIndoor
+        }
         
         let rawXP = Int(distanceKm * factor)
         

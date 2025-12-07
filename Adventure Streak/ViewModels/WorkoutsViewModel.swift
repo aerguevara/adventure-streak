@@ -89,26 +89,34 @@ class WorkoutsViewModel: ObservableObject {
             .filter { $0.startDate >= cutoffDate }
             .sorted(by: { $0.startDate > $1.startDate })
             .map { activity in
-            WorkoutItemViewData(
-                id: activity.id,
-                type: activity.activityType,
-                title: "\((activity.workoutName ?? activity.activityType.displayName)) · \(formatDistance(activity.distanceMeters))",
-                dateString: formatDate(activity.startDate),
-                duration: formatDuration(activity.durationSeconds),
-                pace: calculatePace(distance: activity.distanceMeters, duration: activity.durationSeconds, type: activity.activityType),
-                xp: activity.xpBreakdown?.total,
-                territoryXP: activity.xpBreakdown?.xpTerritory,
-                territoryCount: activity.territoryStats?.newCellsCount,
-                newTerritories: activity.territoryStats?.newCellsCount,
-                defendedTerritories: activity.territoryStats?.defendedCellsCount,
-                recapturedTerritories: activity.territoryStats?.recapturedCellsCount,
-                isStreak: (activity.xpBreakdown?.xpStreak ?? 0) > 0,
-                isRecord: (activity.xpBreakdown?.xpWeeklyRecord ?? 0) > 0,
-                hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0,
-                missionName: activity.missions?.first?.name,
-                missionDescription: activity.missions?.first?.description
-            )
-        }
+                let baseName = activity.workoutName ?? activity.activityType.displayName
+                let titlePrefix: String
+                if activity.activityType.isOutdoor && activity.route.isEmpty {
+                    titlePrefix = "\(baseName) (sin ruta)"
+                } else {
+                    titlePrefix = baseName
+                }
+
+                return WorkoutItemViewData(
+                    id: activity.id,
+                    type: activity.activityType,
+                    title: "\(titlePrefix) · \(formatDistance(activity.distanceMeters))",
+                    dateString: formatDate(activity.startDate),
+                    duration: formatDuration(activity.durationSeconds),
+                    pace: calculatePace(distance: activity.distanceMeters, duration: activity.durationSeconds, type: activity.activityType),
+                    xp: activity.xpBreakdown?.total,
+                    territoryXP: activity.xpBreakdown?.xpTerritory,
+                    territoryCount: activity.territoryStats?.newCellsCount,
+                    newTerritories: activity.territoryStats?.newCellsCount,
+                    defendedTerritories: activity.territoryStats?.defendedCellsCount,
+                    recapturedTerritories: activity.territoryStats?.recapturedCellsCount,
+                    isStreak: (activity.xpBreakdown?.xpStreak ?? 0) > 0,
+                    isRecord: (activity.xpBreakdown?.xpWeeklyRecord ?? 0) > 0,
+                    hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0,
+                    missionName: activity.missions?.first?.name,
+                    missionDescription: activity.missions?.first?.description
+                )
+            }
         
         // DEBUG: Log mission data
         print("📊 Loaded \(self.workouts.count) workouts")

@@ -78,7 +78,9 @@ struct ActivityDetailView: View {
                 }
                 
                 HStack {
-                    StatBox(title: "Type", value: activity.workoutName ?? activity.activityType.displayName)
+                    let baseName = activity.workoutName ?? activity.activityType.displayName
+                    let name = (activity.activityType.isOutdoor && activity.route.isEmpty) ? "\(baseName) (sin ruta)" : baseName
+                    StatBox(title: "Type", value: name)
                     StatBox(title: "Date", value: activity.startDate.formatted(date: .numeric, time: .omitted))
                 }
             }
