@@ -24,7 +24,7 @@ class SocialRelationsViewModel: ObservableObject {
         isLoading = false
     }
     
-    func toggleFollow(userId: String) {
+    func toggleFollow(userId: String, displayName: String) {
         if socialService.isFollowing(userId: userId) {
             socialService.unfollowUser(userId: userId)
             followers = followers.map { user in
@@ -38,7 +38,7 @@ class SocialRelationsViewModel: ObservableObject {
                 return u
             }
         } else {
-            socialService.followUser(userId: userId)
+            socialService.followUser(userId: userId, displayName: displayName)
             followers = followers.map { user in
                 var u = user
                 if u.id == userId { u.isFollowing = true }

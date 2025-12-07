@@ -5,6 +5,7 @@ struct ProfileDetailView: View {
     @ObservedObject var profileViewModel: ProfileViewModel
     @StateObject var relationsViewModel: SocialRelationsViewModel
     
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: RelationTab = .following
     @State private var showSignOutConfirmation = false
     private let currentUserId: String? = AuthenticationService.shared.userId
@@ -49,7 +50,7 @@ struct ProfileDetailView: View {
                             Spacer()
                             if user.id != currentUserId {
                                 Button(action: {
-                                    relationsViewModel.toggleFollow(userId: user.id)
+                                    relationsViewModel.toggleFollow(userId: user.id, displayName: user.displayName)
                                 }) {
                                     Text(user.isFollowing ? "Siguiendo" : "Seguir")
                                         .font(.subheadline.bold())
@@ -59,8 +60,8 @@ struct ProfileDetailView: View {
                                         .cornerRadius(8)
                                 }
                             }
+                            }
                         }
-                    }
                 }
                 .listStyle(.plain)
             }
@@ -75,6 +76,14 @@ struct ProfileDetailView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.headline)
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(role: .destructive) {
                     showSignOutConfirmation = true
@@ -86,6 +95,7 @@ struct ProfileDetailView: View {
         .confirmationDialog("Cerrar sesión", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
             Button("Cerrar sesión", role: .destructive) {
                 profileViewModel.signOut()
+                dismiss()
             }
             Button("Cancelar", role: .cancel) {}
         } message: {

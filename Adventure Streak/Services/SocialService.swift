@@ -104,7 +104,7 @@ class SocialService: ObservableObject {
     
     // MARK: - Follow System
     
-    func followUser(userId: String) {
+    func followUser(userId: String, displayName: String? = nil) {
         guard let currentUserId = AuthenticationService.shared.userId else { return }
         
         // Optimistic update
@@ -115,15 +115,21 @@ class SocialService: ObservableObject {
         
         let now = FieldValue.serverTimestamp()
         let currentName = AuthenticationService.shared.resolvedUserName()
+        let targetName = displayName ?? "Usuario"
         
-        let data: [String: Any] = [
+        let followingData: [String: Any] = [
+            "followedAt": now,
+            "displayName": targetName
+        ]
+        
+        let followerData: [String: Any] = [
             "followedAt": now,
             "displayName": currentName
         ]
         
         db.collection("users").document(currentUserId)
             .collection("following").document(userId)
-            .setData(data) { error in
+            .setData(followingData) { error in
                 if let error = error {
                     print("Error following user: \(error)")
                     // Rollback on error
@@ -136,7 +142,7 @@ class SocialService: ObservableObject {
         // Add follower entry to target user
         db.collection("users").document(userId)
             .collection("followers").document(currentUserId)
-            .setData(data) { error in
+            .setData(followerData) { error in
                 if let error = error {
                     print("Error adding follower: \(error)")
                 }

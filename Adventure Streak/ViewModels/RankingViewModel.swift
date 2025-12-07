@@ -21,11 +21,17 @@ class RankingViewModel: ObservableObject {
     // MARK: - Dependencies
     private let repository: GamificationRepository
     private let authService: AuthenticationService
+    private let socialService: SocialService
+    private var followingCancellable: Any?
     
     // MARK: - Init
-    init(repository: GamificationRepository = .shared, authService: AuthenticationService = .shared) {
+    init(repository: GamificationRepository = .shared,
+         authService: AuthenticationService = .shared,
+         socialService: SocialService = .shared) {
         self.repository = repository
         self.authService = authService
+        self.socialService = socialService
+        observeFollowing()
         fetchRanking()
     }
     
@@ -48,8 +54,7 @@ class RankingViewModel: ObservableObject {
                         
                         // Mock data for redesign
                         processedEntries[i].xpProgress = Double.random(in: 0.3...0.9)
-                        // processedEntries[i].trend = RankingTrend.allCases.randomElement() ?? .neutral
-                        processedEntries[i].isFollowing = SocialService.shared.isFollowing(userId: processedEntries[i].userId)
+                        processedEntries[i].isFollowing = self.socialService.isFollowing(userId: processedEntries[i].userId)
                     }
                 }
                 
@@ -74,14 +79,26 @@ class RankingViewModel: ObservableObject {
     
     func toggleFollow(for entry: RankingEntry) {
         if entry.isFollowing {
-            SocialService.shared.unfollowUser(userId: entry.userId)
+            socialService.unfollowUser(userId: entry.userId)
         } else {
-            SocialService.shared.followUser(userId: entry.userId)
+            socialService.followUser(userId: entry.userId, displayName: entry.displayName)
         }
         
         // Update local state
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {
             entries[index].isFollowing.toggle()
         }
+    }
+    
+    private func observeFollowing() {
+        followingCancellable = socialService.$followingIds
+            .sink { [weak self] ids in
+                guard let self = self else { return }
+                self.entries = self.entries.map { entry in
+                    var updated = entry
+                    updated.isFollowing = ids.contains(entry.userId)
+                    return updated
+                }
+            }
     }
 }

@@ -72,11 +72,13 @@ struct WorkoutsView: View {
                 }
             }
                 .toolbar(.hidden, for: .navigationBar)
-                .sheet(isPresented: $showProfileDetail) {
-                    ProfileDetailView(
-                        profileViewModel: profileViewModel,
-                        relationsViewModel: SocialRelationsViewModel()
-                    )
+                .fullScreenCover(isPresented: $showProfileDetail) {
+                    NavigationStack {
+                        ProfileDetailView(
+                            profileViewModel: profileViewModel,
+                            relationsViewModel: SocialRelationsViewModel()
+                        )
+                    }
                 }
                 .onAppear {
                     Task {
