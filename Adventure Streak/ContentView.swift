@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var configService: GameConfigService
     @StateObject private var authService = AuthenticationService.shared
+    private let activityStore: ActivityStore
     
     // ViewModels
     @StateObject private var onboardingViewModel: OnboardingViewModel
@@ -15,6 +16,7 @@ struct ContentView: View {
         let locService = LocationService()
         let actStore = ActivityStore.shared
         let terrStore = TerritoryStore.shared
+        self.activityStore = actStore
         
         // Correct way to initialize StateObject with dependencies
         _onboardingViewModel = StateObject(wrappedValue: OnboardingViewModel(locationService: locService))
@@ -51,20 +53,32 @@ struct ContentView: View {
                 }
             }
             
-            if authService.isSyncingData {
-                Color.black.opacity(0.25).ignoresSafeArea()
+            // Modal detallado para primera carga cuando no hay datos locales
+            if configService.isLoaded,
+               authService.isAuthenticated,
+               onboardingViewModel.hasCompletedOnboarding,
+               activityStore.activities.isEmpty,
+               (workoutsViewModel.isLoading || authService.isSyncingData) {
+                Color.black.opacity(0.6).ignoresSafeArea()
                 VStack(spacing: 12) {
                     ProgressView()
                         .progressViewStyle(.circular)
-                    Text("Sincronizando datos...")
-                        .font(.callout)
-                        .foregroundColor(.primary)
+                    Text("Cargando tus datos iniciales...")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text("Estamos preparando tus actividades y territorio desde la nube.")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
                 }
-                .padding(20)
+                .padding(24)
                 .background(.ultraThinMaterial)
                 .cornerRadius(16)
                 .shadow(radius: 10)
+                .padding(.horizontal, 24)
             }
+            
         }
         .task {
             await configService.loadConfigIfNeeded()

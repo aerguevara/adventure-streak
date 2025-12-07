@@ -49,6 +49,29 @@ struct WorkoutsView: View {
                     profileViewModel.fetchProfileData()
                     badgesViewModel.fetchBadges()
                 }
+                
+                // Modal de carga para primera sincronización (sin datos remotos aún)
+                if viewModel.isLoading && viewModel.workouts.isEmpty {
+                    Color.black.opacity(0.6)
+                        .ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .scaleEffect(1.4)
+                        Text("Cargando tus datos iniciales...")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Text("Estamos preparando tus actividades y territorio desde la nube.")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
+                    .padding(24)
+                    .background(Color(hex: "1C1C1E"))
+                    .cornerRadius(16)
+                    .shadow(radius: 10)
+                    .padding(.horizontal, 24)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
@@ -311,9 +334,7 @@ struct WorkoutsView: View {
                 .padding(.horizontal)
             
             if viewModel.isLoading && viewModel.workouts.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                EmptyView() // El modal global de carga ya cubre este estado
             } else if viewModel.workouts.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "figure.run")
@@ -421,5 +442,3 @@ struct SecondaryButton: View {
         }
     }
 }
-
-

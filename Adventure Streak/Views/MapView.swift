@@ -182,8 +182,11 @@ struct MapView: UIViewRepresentable {
         }
         
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
-            parent.viewModel.updateVisibleRegion(mapView.region)
-            parent.viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
+            // Defer published state changes to avoid modifying state during map view updates
+            DispatchQueue.main.async {
+                self.parent.viewModel.updateVisibleRegion(mapView.region)
+                self.parent.viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
+            }
         }
     }
 }
