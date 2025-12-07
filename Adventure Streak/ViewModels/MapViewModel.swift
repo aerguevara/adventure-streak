@@ -2,6 +2,9 @@ import Foundation
 import MapKit
 import Combine
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 @MainActor
 class MapViewModel: ObservableObject {
@@ -18,6 +21,7 @@ class MapViewModel: ObservableObject {
     @Published var selectedTerritoryOwnerId: String?
     @Published var selectedTerritoryOwnerXP: Int?
     @Published var selectedTerritoryOwnerTerritories: Int?
+    @Published var selectedTerritoryOwnerAvatarData: Data?
     
     @Published var activities: [ActivitySession] = []
     @Published var isTracking = false
@@ -261,17 +265,35 @@ class MapViewModel: ObservableObject {
     }
     
     func selectTerritory(id: String?, ownerName: String?, ownerUserId: String?) {
-        selectedTerritoryId = id
-        selectedTerritoryOwner = ownerName
-        selectedTerritoryOwnerId = ownerUserId
+        let currentUserId = AuthenticationService.shared.userId
+        let finalOwnerId = ownerUserId ?? currentUserId
+        let finalOwnerName: String? = {
+            if let ownerName = ownerName { return ownerName }
+            if let finalOwnerId, finalOwnerId == currentUserId {
+                return AuthenticationService.shared.resolvedUserName()
+            }
+            return nil
+        }()
         
-        if let currentUserId = AuthenticationService.shared.userId,
-           ownerUserId == currentUserId {
+        selectedTerritoryId = id
+        selectedTerritoryOwner = finalOwnerName
+        selectedTerritoryOwnerId = finalOwnerId
+        selectedTerritoryOwnerAvatarData = finalOwnerId.flatMap { AvatarCacheManager.shared.data(for: $0) }
+        
+        if let currentUserId,
+           finalOwnerId == currentUserId {
             selectedTerritoryOwnerXP = GamificationService.shared.currentXP
             selectedTerritoryOwnerTerritories = territoryStore.conqueredCells.count
         } else {
             selectedTerritoryOwnerXP = nil
             selectedTerritoryOwnerTerritories = nil
+        }
+        
+        // Intentar cargar avatar si no está en caché
+        if let finalOwnerId, selectedTerritoryOwnerAvatarData == nil {
+            Task {
+                await fetchOwnerAvatar(userId: finalOwnerId)
+            }
         }
     }
     
@@ -332,5 +354,32 @@ class MapViewModel: ObservableObject {
             dist += loc1.distance(from: loc2)
         }
         currentActivityDistance = dist
+    }
+    
+    private func fetchOwnerAvatar(userId: String) async {
+        if let cached = AvatarCacheManager.shared.data(for: userId) {
+            // Ya está en caché, solo refrescar selección
+            if selectedTerritoryOwnerId == userId {
+                selectedTerritoryOwnerAvatarData = cached
+            }
+            return
+        }
+        
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            let doc = try await db.collection("users").document(userId).getDocument()
+            if let urlString = doc.get("avatarURL") as? String,
+               let url = URL(string: urlString) {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                AvatarCacheManager.shared.save(data: data, for: userId)
+                if selectedTerritoryOwnerId == userId {
+                    selectedTerritoryOwnerAvatarData = data
+                }
+            }
+        } catch {
+            print("[Map] Error al obtener avatar de \(userId): \(error)")
+        }
+        #endif
     }
 }

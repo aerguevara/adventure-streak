@@ -147,8 +147,10 @@ struct MapView: UIViewRepresentable {
                     var ownerName: String? = nil
                     var ownerId: String? = nil
                     if let cell = parent.viewModel.territoryStore.conqueredCells[id] {
-                        ownerName = cell.ownerDisplayName ?? cell.ownerUserId
-                        ownerId = cell.ownerUserId
+                        let auth = AuthenticationService.shared
+                        ownerId = cell.ownerUserId ?? auth.userId
+                        ownerName = cell.ownerDisplayName
+                            ?? (ownerId == auth.userId ? auth.resolvedUserName() : cell.ownerUserId)
                     } else if let rival = parent.viewModel.otherTerritories.first(where: { $0.id == id }) {
                         ownerName = rival.userId
                         ownerId = rival.userId
@@ -182,10 +184,9 @@ struct MapView: UIViewRepresentable {
         }
         
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
-            // Defer published state changes to avoid modifying state during map view updates
+            // Defer published state changes to avoid modifying state during view updates
             DispatchQueue.main.async {
                 self.parent.viewModel.updateVisibleRegion(mapView.region)
-                self.parent.viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
             }
         }
     }

@@ -25,16 +25,30 @@ struct MainTabView: View {
                     if let owner = mapViewModel.selectedTerritoryOwner,
                        let territoryId = mapViewModel.selectedTerritoryId {
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: "person.crop.circle")
-                                    .foregroundColor(.accentColor)
-                                Text(owner)
-                                    .font(.headline)
+                            HStack(spacing: 10) {
+                                if let data = mapViewModel.selectedTerritoryOwnerAvatarData,
+                                   let image = UIImage(data: data) {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 48, height: 48)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                                } else {
+                                    Image(systemName: "person.circle.fill")
+                                        .resizable()
+                                        .foregroundStyle(.primary)
+                                        .frame(width: 48, height: 48)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(owner)
+                                        .font(.headline)
+                                    Text("Territorio \(territoryId)")
+                                        .font(.footnote)
+                                        .foregroundColor(.secondary)
+                                }
                             }
-                            
-                            Text("Territorio \(territoryId)")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
                             
                             HStack(spacing: 12) {
                                 Label("\(mapViewModel.selectedTerritoryOwnerXP ?? 0) XP", systemImage: "star.fill")

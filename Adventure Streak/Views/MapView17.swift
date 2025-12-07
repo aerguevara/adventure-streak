@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import UIKit
 
 @available(iOS 17.0, *)
 struct MapView17: View {
@@ -26,7 +27,6 @@ struct MapView17: View {
                     // Postpone state changes to avoid publishing during view updates
                     DispatchQueue.main.async {
                         viewModel.updateVisibleRegion(context.region)
-                        viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
                     }
                 }
                 .simultaneousGesture(
@@ -35,8 +35,6 @@ struct MapView17: View {
                             let point = value.location
                             if let coord = proxy.convert(point, from: .local) {
                                 selectOwner(at: coord)
-                            } else {
-                                viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
                             }
                         }
                 )
@@ -60,6 +58,20 @@ struct MapView17: View {
                 
                 if let owner = viewModel.selectedTerritoryOwner {
                     VStack(spacing: 6) {
+                        if let data = viewModel.selectedTerritoryOwnerAvatarData,
+                           let uiImage = UIImage(data: data) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 56, height: 56)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                        } else {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .foregroundStyle(.primary)
+                                .frame(width: 56, height: 56)
+                        }
                         Text("Dueño del territorio")
                             .font(.footnote)
                             .foregroundColor(.primary)
@@ -147,7 +159,12 @@ struct MapView17: View {
             return coordinate.latitude >= minLat && coordinate.latitude <= maxLat &&
                    coordinate.longitude >= minLon && coordinate.longitude <= maxLon
         }) {
-            viewModel.selectTerritory(id: cell.id, ownerName: cell.ownerDisplayName ?? cell.ownerUserId ?? "Sin dueño", ownerUserId: cell.ownerUserId)
+            let auth = AuthenticationService.shared
+            let ownerId = cell.ownerUserId ?? auth.userId
+            let displayName = cell.ownerDisplayName
+                ?? (ownerId == auth.userId ? auth.resolvedUserName() : cell.ownerUserId)
+                ?? "Sin dueño"
+            viewModel.selectTerritory(id: cell.id, ownerName: displayName, ownerUserId: ownerId)
             return
         }
         
@@ -160,7 +177,5 @@ struct MapView17: View {
             viewModel.selectTerritory(id: rival.id, ownerName: rival.userId, ownerUserId: rival.userId)
             return
         }
-        
-        viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
     }
 }
