@@ -172,15 +172,9 @@ struct PodiumItem: View {
                 }
                 
                 ZStack(alignment: .top) {
-                    Circle()
-                        .fill(Color(hex: "1C1C1E"))
+                    avatarView()
                         .frame(width: 70, height: 70)
-                        .overlay(
-                            Text(entry.displayName.prefix(1).uppercased())
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(.gray)
-                        )
+                        .clipShape(Circle())
                         .overlay(
                             Circle()
                                 .stroke(isFirst ? Color(hex: "FFD60A") : Color.clear, lineWidth: 3)
@@ -222,6 +216,30 @@ struct PodiumItem: View {
         case 2: return Color(hex: "C0C0C0") // Silver
         case 3: return Color(hex: "CD7F32") // Bronze
         default: return .gray
+        }
+    }
+    
+    @ViewBuilder
+    private func avatarView() -> some View {
+        if let data = entry.avatarData, let uiImage = UIImage(data: data) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+        } else if let url = entry.avatarURL {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Circle().fill(Color(hex: "1C1C1E"))
+            }
+        } else {
+            Circle()
+                .fill(Color(hex: "1C1C1E"))
+                .overlay(
+                    Text(entry.displayName.prefix(1).uppercased())
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.gray)
+                )
         }
     }
 }

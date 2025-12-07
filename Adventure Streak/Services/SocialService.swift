@@ -254,15 +254,24 @@ class SocialService: ObservableObject {
         guard let db = db as? Firestore else { return [] }
         do {
             let snapshot = try await db.collection("users").document(userId).collection("following").getDocuments()
-            return snapshot.documents.map { doc in
+            var users: [SocialUser] = []
+            for doc in snapshot.documents {
                 let name = (doc.get("displayName") as? String) ?? "Usuario"
                 let avatar = (doc.get("avatarURL") as? String).flatMap(URL.init(string:))
                 if let avatar {
                     avatarCache[doc.documentID] = avatar
                 }
-                let data = avatarDataCache.data(for: doc.documentID)
-                return SocialUser(id: doc.documentID, displayName: name, avatarURL: avatar, avatarData: data, level: 0, isFollowing: followingIds.contains(doc.documentID))
+                var data = avatarDataCache.data(for: doc.documentID)
+                if data == nil, let avatar {
+                    if let (download, _) = try? await URLSession.shared.data(from: avatar) {
+                        avatarDataCache.save(data: download, for: doc.documentID)
+                        data = download
+                    }
+                }
+                let user = SocialUser(id: doc.documentID, displayName: name, avatarURL: avatar, avatarData: data, level: 0, isFollowing: followingIds.contains(doc.documentID))
+                users.append(user)
             }
+            return users
         } catch {
             print("Error fetching following: \(error)")
             return []
@@ -273,15 +282,24 @@ class SocialService: ObservableObject {
         guard let db = db as? Firestore else { return [] }
         do {
             let snapshot = try await db.collection("users").document(userId).collection("followers").getDocuments()
-            return snapshot.documents.map { doc in
+            var users: [SocialUser] = []
+            for doc in snapshot.documents {
                 let name = (doc.get("displayName") as? String) ?? "Usuario"
                 let avatar = (doc.get("avatarURL") as? String).flatMap(URL.init(string:))
                 if let avatar {
                     avatarCache[doc.documentID] = avatar
                 }
-                let data = avatarDataCache.data(for: doc.documentID)
-                return SocialUser(id: doc.documentID, displayName: name, avatarURL: avatar, avatarData: data, level: 0, isFollowing: followingIds.contains(doc.documentID))
+                var data = avatarDataCache.data(for: doc.documentID)
+                if data == nil, let avatar {
+                    if let (download, _) = try? await URLSession.shared.data(from: avatar) {
+                        avatarDataCache.save(data: download, for: doc.documentID)
+                        data = download
+                    }
+                }
+                let user = SocialUser(id: doc.documentID, displayName: name, avatarURL: avatar, avatarData: data, level: 0, isFollowing: followingIds.contains(doc.documentID))
+                users.append(user)
             }
+            return users
         } catch {
             print("Error fetching followers: \(error)")
             return []
@@ -370,7 +388,7 @@ class SocialService: ObservableObject {
     }
     
     @MainActor
-    private func fetchAvatars(for userIds: Set<String>) async {
+    func fetchAvatars(for userIds: Set<String>) async {
         guard !userIds.isEmpty else { return }
         guard let db = db as? Firestore else { return }
         

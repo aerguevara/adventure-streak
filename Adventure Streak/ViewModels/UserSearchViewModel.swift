@@ -44,6 +44,17 @@ class UserSearchViewModel: ObservableObject {
                 filteredResults = self.applyFollowStatus(to: filteredResults)
                 filteredResults = self.applyAvatarData(to: filteredResults)
                 self.searchResults = filteredResults
+                
+                let missingIds = Set(filteredResults.filter { $0.avatarData == nil && $0.avatarURL == nil }.map { $0.userId })
+                if !missingIds.isEmpty {
+                    Task {
+                        await SocialService.shared.fetchAvatars(for: missingIds)
+                        await MainActor.run {
+                            self.searchResults = self.applyAvatarData(to: self.searchResults)
+                            self.topActive = self.applyAvatarData(to: self.topActive)
+                        }
+                    }
+                }
                 self.isLoading = false
             }
         }
@@ -62,6 +73,17 @@ class UserSearchViewModel: ObservableObject {
                 // If no search text, show these
                 if self.searchText.isEmpty {
                     self.searchResults = filtered
+                }
+                
+                let missingIds = Set(filtered.filter { $0.avatarData == nil && $0.avatarURL == nil }.map { $0.userId })
+                if !missingIds.isEmpty {
+                    Task {
+                        await SocialService.shared.fetchAvatars(for: missingIds)
+                        await MainActor.run {
+                            self.searchResults = self.applyAvatarData(to: self.searchResults)
+                            self.topActive = self.applyAvatarData(to: self.topActive)
+                        }
+                    }
                 }
                 self.isLoading = false
             }

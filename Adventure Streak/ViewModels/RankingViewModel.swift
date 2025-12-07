@@ -47,6 +47,7 @@ class RankingViewModel: ObservableObject {
             Task { @MainActor in
                 // Mark current user
                 var processedEntries = fetchedEntries
+                var missingAvatarIds: Set<String> = []
                 if let currentUserId = self.authService.userId {
                     for i in 0..<processedEntries.count {
                         if processedEntries[i].userId == currentUserId {
@@ -58,6 +59,8 @@ class RankingViewModel: ObservableObject {
                         processedEntries[i].isFollowing = self.socialService.isFollowing(userId: processedEntries[i].userId)
                         if let data = self.avatarCache.data(for: processedEntries[i].userId) {
                             processedEntries[i].avatarData = data
+                        } else {
+                            missingAvatarIds.insert(processedEntries[i].userId)
                         }
                     }
                 }
@@ -67,6 +70,21 @@ class RankingViewModel: ObservableObject {
                 
                 self.entries = processedEntries
                 self.isLoading = false
+                
+                if !missingAvatarIds.isEmpty {
+                    Task {
+                        await self.socialService.fetchAvatars(for: missingAvatarIds)
+                        await MainActor.run {
+                            self.entries = self.entries.map { entry in
+                                var updated = entry
+                                if let data = self.avatarCache.data(for: entry.userId) {
+                                    updated.avatarData = data
+                                }
+                                return updated
+                            }
+                        }
+                    }
+                }
                 
                 if self.entries.isEmpty {
                     // Optional: Set specific message if empty but no error
