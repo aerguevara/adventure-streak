@@ -165,8 +165,15 @@ class MapViewModel: ObservableObject {
                     let localEnd = localCell.lastConqueredAt
                     let remoteUploaded = territory.uploadedAt?.dateValue() ?? territory.activityEndAt
                     let localUploaded = localCell.ownerUploadedAt ?? localCell.lastConqueredAt
-                    let remoteIsNewer = remoteEnd > localEnd ||
-                        (remoteEnd == localEnd && (remoteUploaded > localUploaded || territory.expiresAt > localCell.expiresAt))
+                    let remoteIsNewer: Bool
+                    if remoteEnd > localEnd {
+                        remoteIsNewer = true
+                    } else if remoteEnd == localEnd {
+                        // Si empatan en hora de entreno, gana quien subió más tarde (o cualquiera si no hay uploadedAt)
+                        remoteIsNewer = remoteUploaded >= localUploaded
+                    } else {
+                        remoteIsNewer = false
+                    }
                     if remoteIsNewer {
                         lostIds.insert(territoryId)
                         print("[Territories] Marking cell as rival due to newer remote activity end time: \(territoryId)")
