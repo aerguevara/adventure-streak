@@ -24,8 +24,11 @@ struct MapView17: View {
                     MapCompass()
                 }
                 .onMapCameraChange { context in
-                    viewModel.updateVisibleRegion(context.region)
-                    selectedOwnerName = nil
+                    // Postpone state changes to avoid publishing during view updates
+                    DispatchQueue.main.async {
+                        viewModel.updateVisibleRegion(context.region)
+                        selectedOwnerName = nil
+                    }
                 }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 0)
