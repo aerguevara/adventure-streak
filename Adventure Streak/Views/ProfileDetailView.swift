@@ -152,9 +152,6 @@ struct ProfileDetailView: View {
                 VStack(spacing: 4) {
                     Text("Cambiar foto")
                         .font(.footnote.bold())
-                    Text("Usa la edición nativa para recortar.")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)

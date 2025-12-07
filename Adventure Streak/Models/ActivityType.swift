@@ -28,7 +28,7 @@ enum ActivityType: String, Codable, CaseIterable, Identifiable {
         case .bike: return "bicycle"
         case .hike: return "figure.hiking"
         case .otherOutdoor: return "figure.hiking"
-        case .indoor: return "house"
+        case .indoor: return "dumbbell"
         }
     }
     
