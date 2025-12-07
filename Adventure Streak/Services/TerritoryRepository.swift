@@ -69,7 +69,7 @@ class TerritoryRepository: ObservableObject {
                 centerLongitude: cell.centerLongitude,
                 boundary: cell.boundary,
                 expiresAt: cell.expiresAt,
-                timestamp: cell.lastConqueredAt
+                activityEndAt: cell.lastConqueredAt
             )
             
             do {

@@ -22,6 +22,9 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     // NEW: Store exact boundary
     let boundary: [TerritoryPoint]
     let expiresAt: Date
+    // Domain time when the activity ended (not upload time)
+    let activityEndAt: Date
+    // Legacy field; kept for backward compatibility
     let timestamp: Date
     
     // Helper to get center coordinate
@@ -30,7 +33,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case userId, centerLatitude, centerLongitude, boundary, expiresAt, timestamp
+        case userId, centerLatitude, centerLongitude, boundary, expiresAt, activityEndAt, timestamp
     }
     
     init(from decoder: Decoder) throws {
@@ -40,7 +43,9 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         centerLatitude = try container.decode(Double.self, forKey: .centerLatitude)
         centerLongitude = try container.decode(Double.self, forKey: .centerLongitude)
         expiresAt = try container.decode(Date.self, forKey: .expiresAt)
-        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        activityEndAt = try container.decodeIfPresent(Date.self, forKey: .activityEndAt)
+            ?? (try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date())
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? activityEndAt
         
         if let storedBoundary = try container.decodeIfPresent([TerritoryPoint].self, forKey: .boundary) {
             boundary = storedBoundary
@@ -57,13 +62,14 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     // Default init
-    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, timestamp: Date) {
+    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date) {
         self.id = id
         self.userId = userId
         self.centerLatitude = centerLatitude
         self.centerLongitude = centerLongitude
         self.boundary = boundary
         self.expiresAt = expiresAt
-        self.timestamp = timestamp
+        self.activityEndAt = activityEndAt
+        self.timestamp = activityEndAt
     }
 }
