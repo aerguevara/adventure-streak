@@ -89,14 +89,7 @@ class WorkoutsViewModel: ObservableObject {
             .filter { $0.startDate >= cutoffDate }
             .sorted(by: { $0.startDate > $1.startDate })
             .map { activity in
-                let baseName = activity.workoutName ?? activity.activityType.displayName
-                let titlePrefix: String
-                if activity.activityType.isOutdoor && activity.route.isEmpty {
-                    titlePrefix = "\(baseName) (sin ruta)"
-                } else {
-                    titlePrefix = baseName
-                }
-
+                let titlePrefix = activity.workoutName ?? activity.activityType.displayName
                 return WorkoutItemViewData(
                     id: activity.id,
                     type: activity.activityType,
