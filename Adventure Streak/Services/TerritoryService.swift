@@ -9,7 +9,7 @@ class TerritoryService {
         self.territoryStore = territoryStore
     }
     
-    func processActivity(_ activity: ActivitySession) -> TerritoryStats {
+    func processActivity(_ activity: ActivitySession) -> (cells: [TerritoryCell], stats: TerritoryStats) {
         // Reuse the static helper logic
         let existingCells = territoryStore.conqueredCells
         let (newCells, stats) = TerritoryService.calculateTerritories(activities: [activity], existingCells: existingCells)
@@ -25,7 +25,7 @@ class TerritoryService {
             }
         }
         
-        return stats
+        return (newCells, stats)
     }
     
 

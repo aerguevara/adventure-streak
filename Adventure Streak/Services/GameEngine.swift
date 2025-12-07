@@ -26,12 +26,20 @@ class GameEngine {
         activityStore.saveActivity(activity)
         print("✅ Activity saved")
         
+        // 1b. Check remote to avoid double-processing (XP/feed/territories) if already processed
+        let alreadyProcessed = await activityRepository.activityExists(activityId: activity.id, userId: userId)
+        if alreadyProcessed {
+            print("⚠️ Activity \(activity.id) already exists in Firestore. Skipping XP and feed application.")
+            return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+        }
+        
         // 2. Get XP context
         let context = try await GamificationRepository.shared.buildXPContext(for: userId)
         print("✅ XP Context loaded")
         
         // 3. Calculate territorial delta
-        let territoryStats = territoryService.processActivity(activity)
+        let territoryResult = territoryService.processActivity(activity)
+        let territoryStats = territoryResult.stats
         print("✅ Territory processed: \(territoryStats.newCellsCount) new, \(territoryStats.defendedCellsCount) defended")
         
         // 4. Classify missions
@@ -66,7 +74,7 @@ class GameEngine {
         
         // 7b. Persist remotely in dedicated collection (non-blocking)
         Task {
-            await self.activityRepository.saveActivity(updatedActivity, userId: userId)
+            await self.activityRepository.saveActivity(updatedActivity, territories: territoryResult.cells, userId: userId)
         }
         
         // 7. Apply XP to user
