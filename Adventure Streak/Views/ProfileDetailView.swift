@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import AuthenticationServices
 
 struct ProfileDetailView: View {
@@ -8,6 +9,7 @@ struct ProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: RelationTab = .following
     @State private var showSignOutConfirmation = false
+    @State private var photoItem: PhotosPickerItem?
     private let currentUserId: String? = AuthenticationService.shared.userId
     
     enum RelationTab: String, CaseIterable, Identifiable {
@@ -59,9 +61,10 @@ struct ProfileDetailView: View {
                                         .background(user.isFollowing ? Color.gray.opacity(0.2) : Color.blue.opacity(0.2))
                                         .cornerRadius(8)
                                 }
-                            }
+                                .buttonStyle(.borderless) // Limita el tap solo al botón
                             }
                         }
+                    }
                 }
                 .listStyle(.plain)
             }
@@ -122,6 +125,27 @@ struct ProfileDetailView: View {
                     .padding(12)
                     .background(Color.gray.opacity(0.2))
                     .clipShape(Circle())
+            }
+            PhotosPicker(selection: $photoItem, matching: .images) {
+                VStack(spacing: 4) {
+                    Text("Cambiar foto")
+                        .font(.footnote.bold())
+                    Text("En construcción: puede fallar si Storage no está activo.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.blue.opacity(0.15))
+                .cornerRadius(8)
+            }
+            .onChange(of: photoItem) { _, newItem in
+                guard let newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self) {
+                        await profileViewModel.uploadAvatar(imageData: data)
+                    }
+                }
             }
             
             Text(profileViewModel.userDisplayName)

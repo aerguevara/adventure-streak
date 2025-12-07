@@ -27,10 +27,10 @@ class RankingViewModel: ObservableObject {
     // MARK: - Init
     init(repository: GamificationRepository = .shared,
          authService: AuthenticationService = .shared,
-         socialService: SocialService = .shared) {
+         socialService: SocialService? = nil) {
         self.repository = repository
         self.authService = authService
-        self.socialService = socialService
+        self.socialService = socialService ?? SocialService.shared
         observeFollowing()
         fetchRanking()
     }

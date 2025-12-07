@@ -18,6 +18,7 @@ struct User: Identifiable, Codable {
     let email: String?
     let displayName: String?
     let joinedAt: Date?
+    var avatarURL: String?
     var xp: Int = 0
     var level: Int = 1
 }

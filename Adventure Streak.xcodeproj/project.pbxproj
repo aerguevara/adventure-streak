@@ -11,6 +11,7 @@
 		DA45082C2ED2432400D3C493 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = DA45082B2ED2432400D3C493 /* FirebaseAnalytics */; };
 		DA4508382ED2467600D3C493 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = DA4508372ED2467600D3C493 /* FirebaseAuth */; };
 		DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = DA4508392ED2495300D3C493 /* FirebaseCore */; };
+		DA450A482EE5DC1200D3C493 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = DA450A472EE5DC1200D3C493 /* FirebaseStorage */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +63,7 @@
 				DA45082C2ED2432400D3C493 /* FirebaseAnalytics in Frameworks */,
 				DA4508382ED2467600D3C493 /* FirebaseAuth in Frameworks */,
 				DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */,
+				DA450A482EE5DC1200D3C493 /* FirebaseStorage in Frameworks */,
 				DA45082A2ED242EE00D3C493 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -135,6 +137,7 @@
 				DA45082B2ED2432400D3C493 /* FirebaseAnalytics */,
 				DA4508372ED2467600D3C493 /* FirebaseAuth */,
 				DA4508392ED2495300D3C493 /* FirebaseCore */,
+				DA450A472EE5DC1200D3C493 /* FirebaseStorage */,
 			);
 			productName = "Adventure Streak";
 			productReference = DA4507A82ED21A0B00D3C493 /* Adventure Streak.app */;
@@ -421,7 +424,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
@@ -441,7 +444,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -457,7 +460,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
@@ -477,7 +480,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -630,6 +633,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCore;
+		};
+		DA450A472EE5DC1200D3C493 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

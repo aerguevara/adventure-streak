@@ -47,6 +47,13 @@ struct UserSearchView: View {
                     } else if !viewModel.searchResults.isEmpty {
                         ScrollView {
                             LazyVStack(spacing: 12) {
+                                if viewModel.searchText.isEmpty {
+                                    Text("Top 20 más activos")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal)
+                                }
                                 ForEach(viewModel.searchResults) { entry in
                                     UserSearchResultCard(entry: entry) {
                                         viewModel.toggleFollow(for: entry)

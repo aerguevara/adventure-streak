@@ -113,40 +113,41 @@ class SocialService: ObservableObject {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         
-        let now = FieldValue.serverTimestamp()
-        let currentName = AuthenticationService.shared.resolvedUserName()
         let targetName = displayName ?? "Usuario"
+        let now = FieldValue.serverTimestamp()
         
-        let followingData: [String: Any] = [
-            "followedAt": now,
-            "displayName": targetName
-        ]
-        
-        let followerData: [String: Any] = [
-            "followedAt": now,
-            "displayName": currentName
-        ]
-        
-        db.collection("users").document(currentUserId)
-            .collection("following").document(userId)
-            .setData(followingData) { error in
-                if let error = error {
-                    print("Error following user: \(error)")
-                    // Rollback on error
-                    DispatchQueue.main.async {
-                        self.followingIds.remove(userId)
+        resolveCurrentUserName { currentName in
+            let followingData: [String: Any] = [
+                "followedAt": now,
+                "displayName": targetName
+            ]
+            
+            let followerData: [String: Any] = [
+                "followedAt": now,
+                "displayName": currentName
+            ]
+            
+            db.collection("users").document(currentUserId)
+                .collection("following").document(userId)
+                .setData(followingData) { error in
+                    if let error = error {
+                        print("Error following user: \(error)")
+                        // Rollback on error
+                        DispatchQueue.main.async {
+                            self.followingIds.remove(userId)
+                        }
                     }
                 }
-            }
-        
-        // Add follower entry to target user
-        db.collection("users").document(userId)
-            .collection("followers").document(currentUserId)
-            .setData(followerData) { error in
-                if let error = error {
-                    print("Error adding follower: \(error)")
+            
+            // Add follower entry to target user
+            db.collection("users").document(userId)
+                .collection("followers").document(currentUserId)
+                .setData(followerData) { error in
+                    if let error = error {
+                        print("Error adding follower: \(error)")
+                    }
                 }
-            }
+        }
         #endif
     }
     
@@ -249,6 +250,46 @@ class SocialService: ObservableObject {
         }
     }
     #endif
+
+    private func resolveCurrentUserName(completion: @escaping (String) -> Void) {
+        let auth = AuthenticationService.shared
+        let emailPrefix = auth.userEmail?
+            .split(separator: "@")
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        
+        // Si el nombre actual existe y es distinto al prefijo del correo, úsalo
+        if let name = auth.userName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !name.isEmpty,
+           name != emailPrefix {
+            completion(name)
+            return
+        }
+        
+        // Intentar obtener displayName desde Firestore (perfil remoto)
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore, let currentUserId = auth.userId else {
+            let fallback = !emailPrefix.isEmpty ? emailPrefix : "Aventurero"
+            completion(fallback)
+            return
+        }
+        
+        db.collection("users").document(currentUserId).getDocument { snapshot, _ in
+            if let remoteName = snapshot?.get("displayName") as? String,
+               !remoteName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                completion(remoteName.trimmingCharacters(in: .whitespacesAndNewlines))
+            } else if !emailPrefix.isEmpty {
+                completion(emailPrefix)
+            } else {
+                completion("Aventurero")
+            }
+        }
+        #else
+        let fallback = !emailPrefix.isEmpty ? emailPrefix : "Aventurero"
+        completion(fallback)
+        #endif
+    }
     
     // MARK: - Feed System
     

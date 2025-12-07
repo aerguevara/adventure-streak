@@ -5,6 +5,11 @@ import FirebaseFirestore
 #if canImport(FirebaseAuth)
 import FirebaseAuth
 #endif
+#if canImport(FirebaseStorage)
+import FirebaseStorage
+#elseif canImport(Firebase)
+import Firebase
+#endif
 
 class UserRepository: ObservableObject {
     static let shared = UserRepository()
@@ -14,6 +19,16 @@ class UserRepository: ObservableObject {
     init() {
         #if canImport(FirebaseFirestore)
         db = Firestore.firestore()
+        #endif
+    }
+    
+    private var storage: Storage? {
+        #if canImport(FirebaseStorage)
+        return Storage.storage()
+        #elseif canImport(Firebase)
+        return Storage.storage()
+        #else
+        return nil
         #endif
     }
     
@@ -40,6 +55,8 @@ class UserRepository: ObservableObject {
                     data["displayName"] = name
                 }
                 
+                // Keep avatarURL if already set; no change here
+                
                 userRef.updateData(data)
             } else {
                 // Create new user
@@ -47,7 +64,8 @@ class UserRepository: ObservableObject {
                     id: user.uid,
                     email: user.email,
                     displayName: name ?? "Adventurer",
-                    joinedAt: Date()
+                    joinedAt: Date(),
+                    avatarURL: nil
                 )
                 
                 do {

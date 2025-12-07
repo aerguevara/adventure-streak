@@ -1,6 +1,14 @@
 import Foundation
 import SwiftUI
 import Combine
+#if canImport(FirebaseStorage)
+import FirebaseStorage
+#elseif canImport(Firebase)
+import Firebase
+#endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 @MainActor
 class ProfileViewModel: ObservableObject {
@@ -40,6 +48,9 @@ class ProfileViewModel: ObservableObject {
     private let authService: AuthenticationService
     private let gamificationService: GamificationService
     private let configService: GameConfigService
+    #if canImport(FirebaseStorage)
+    private let storage = Storage.storage()
+    #endif
     
     // MARK: - Init
     init(activityStore: ActivityStore, 
@@ -177,9 +188,39 @@ class ProfileViewModel: ObservableObject {
     
     private func updateWithUser(_ user: User) {
         self.userDisplayName = user.displayName ?? "Adventurer"
+        if let urlString = user.avatarURL, let url = URL(string: urlString) {
+            self.avatarURL = url
+        }
         
         // Sync GamificationService with fetched data
         // This will trigger the observers above to update the UI properties
         gamificationService.syncState(xp: user.xp, level: user.level)
+    }
+    
+    // MARK: - Avatar Upload
+    func uploadAvatar(imageData: Data) async {
+        guard let userId = authService.userId else { return }
+        #if canImport(FirebaseStorage)
+        let storageRef = storage.reference().child("users/\(userId)/avatar.jpg")
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
+        do {
+            _ = try await storageRef.putDataAsync(imageData, metadata: metadata)
+            let url = try await storageRef.downloadURL()
+            
+            // Update Firestore user document
+            let userRef = Firestore.firestore().collection("users").document(userId)
+            try await userRef.setData(["avatarURL": url.absoluteString], merge: true)
+            
+            await MainActor.run {
+                self.avatarURL = url
+            }
+        } catch {
+            print("Error uploading avatar: \(error)")
+        }
+        #else
+        print("FirebaseStorage not available")
+        #endif
     }
 }
