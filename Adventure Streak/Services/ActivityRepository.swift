@@ -167,51 +167,6 @@ final class ActivityRepository {
         }
         return chunks
     }
-    
-    private func fetchRouteChunks(activityId: String, expectedCount: Int, fallbackRoute: [RoutePoint]?) async -> [RoutePoint] {
-        #if canImport(FirebaseFirestore)
-        if expectedCount == 0, let fallbackRoute = fallbackRoute {
-            return fallbackRoute
-        }
-        
-        let routesRef = db.collection("activities").document(activityId).collection("routes")
-        var points: [RoutePoint] = []
-        
-        if expectedCount > 0 {
-            for order in 0..<expectedCount {
-                do {
-                    let doc = try await routesRef.document("chunk_\(order)").getDocument()
-                    if doc.exists {
-                        let chunk = try doc.data(as: FirestoreRouteChunk.self)
-                        points.append(contentsOf: chunk.points)
-                    }
-                } catch {
-                    print("[Activities] Failed to fetch chunk \(order) for \(activityId): \(error)")
-                }
-            }
-        } else {
-            do {
-                let snapshot = try await routesRef.getDocuments()
-                let sorted = snapshot.documents.sorted { $0.documentID < $1.documentID }
-                for doc in sorted {
-                    do {
-                        let chunk = try doc.data(as: FirestoreRouteChunk.self)
-                        points.append(contentsOf: chunk.points)
-                    } catch {
-                        print("[Activities] Failed to decode chunk \(doc.documentID) for \(activityId): \(error)")
-                    }
-                }
-            } catch {
-                print("[Activities] Failed to fetch chunks for \(activityId): \(error)")
-            }
-        }
-        
-        return points
-        #else
-        return fallbackRoute ?? []
-        #endif
-    }
-    
     private func fetchRouteChunks(activityId: String, expectedCount: Int, fallbackRoute: [RoutePoint]?) async -> [RoutePoint] {
         #if canImport(FirebaseFirestore)
         if expectedCount == 0, let fallbackRoute = fallbackRoute {
@@ -327,7 +282,7 @@ final class ActivityRepository {
             print("[Activities] Remote has \(extraRemoteIds.count) activities not present locally (ids: \(Array(extraRemoteIds.prefix(5)))) — pulling to local")
             let pulled = await fetchRemoteActivities(userId: userId, ids: extraRemoteIds)
             if !pulled.isEmpty {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     activityStore.saveActivities(pulled)
                 }
                 print("[Activities] Pulled \(pulled.count) remote activities into local store")
