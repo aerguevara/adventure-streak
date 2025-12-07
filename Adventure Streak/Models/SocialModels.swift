@@ -4,6 +4,7 @@ struct SocialUser: Identifiable, Codable, Hashable {
     let id: String
     let displayName: String
     let avatarURL: URL?
+    let avatarData: Data?
     let level: Int
     var isFollowing: Bool
 }

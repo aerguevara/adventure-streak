@@ -13,6 +13,8 @@ class SocialService: ObservableObject {
     
     @Published var followingIds: Set<String> = []
     @Published var posts: [SocialPost] = []
+    private var avatarCache: [String: URL] = [:]
+    private let avatarDataCache = AvatarCacheManager.shared
     
     private let feedRepository = FeedRepository.shared
     private var cancellables = Set<AnyCancellable>()
@@ -63,6 +65,8 @@ class SocialService: ObservableObject {
             return set
         }()
         
+        var missingAvatarIds: Set<String> = []
+        
         self.posts = events.compactMap { event -> SocialPost? in
             guard let userId = event.userId,
                   let userName = event.relatedUserName else {
@@ -83,10 +87,25 @@ class SocialService: ObservableObject {
                 newZonesCount: 0
             )
             
+            let avatarURL: URL? = {
+                if let provided = event.userAvatarURL {
+                    avatarCache[userId] = provided
+                    return provided
+                }
+                if let cached = avatarCache[userId] {
+                    return cached
+                }
+                missingAvatarIds.insert(userId)
+                return nil
+            }()
+            
+            let avatarData = avatarDataCache.data(for: userId)
+            
             let user = SocialUser(
                 id: userId,
                 displayName: userName,
-                avatarURL: event.userAvatarURL,
+                avatarURL: avatarURL,
+                avatarData: avatarData,
                 level: event.userLevel ?? 1,
                 isFollowing: followingIds.contains(userId)
             )
@@ -100,6 +119,15 @@ class SocialService: ObservableObject {
             )
         }
         .sorted(by: { $0.date > $1.date })
+        
+        if !missingAvatarIds.isEmpty {
+            Task {
+                await fetchAvatars(for: missingAvatarIds)
+                await MainActor.run {
+                    self.updatePosts(from: events)
+                }
+            }
+        }
     }
     
     // MARK: - Follow System
@@ -228,7 +256,12 @@ class SocialService: ObservableObject {
             let snapshot = try await db.collection("users").document(userId).collection("following").getDocuments()
             return snapshot.documents.map { doc in
                 let name = (doc.get("displayName") as? String) ?? "Usuario"
-                return SocialUser(id: doc.documentID, displayName: name, avatarURL: nil, level: 0, isFollowing: followingIds.contains(doc.documentID))
+                let avatar = (doc.get("avatarURL") as? String).flatMap(URL.init(string:))
+                if let avatar {
+                    avatarCache[doc.documentID] = avatar
+                }
+                let data = avatarDataCache.data(for: doc.documentID)
+                return SocialUser(id: doc.documentID, displayName: name, avatarURL: avatar, avatarData: data, level: 0, isFollowing: followingIds.contains(doc.documentID))
             }
         } catch {
             print("Error fetching following: \(error)")
@@ -242,7 +275,12 @@ class SocialService: ObservableObject {
             let snapshot = try await db.collection("users").document(userId).collection("followers").getDocuments()
             return snapshot.documents.map { doc in
                 let name = (doc.get("displayName") as? String) ?? "Usuario"
-                return SocialUser(id: doc.documentID, displayName: name, avatarURL: nil, level: 0, isFollowing: followingIds.contains(doc.documentID))
+                let avatar = (doc.get("avatarURL") as? String).flatMap(URL.init(string:))
+                if let avatar {
+                    avatarCache[doc.documentID] = avatar
+                }
+                let data = avatarDataCache.data(for: doc.documentID)
+                return SocialUser(id: doc.documentID, displayName: name, avatarURL: avatar, avatarData: data, level: 0, isFollowing: followingIds.contains(doc.documentID))
             }
         } catch {
             print("Error fetching followers: \(error)")
@@ -293,8 +331,6 @@ class SocialService: ObservableObject {
     
     // MARK: - Feed System
     
-    // MARK: - Feed System
-    
     // Posts are now exposed via @Published var posts
     
     func createPost(from activity: ActivitySession) {
@@ -331,6 +367,53 @@ class SocialService: ObservableObject {
         )
         
         feedRepository.postEvent(event)
+    }
+    
+    @MainActor
+    private func fetchAvatars(for userIds: Set<String>) async {
+        guard !userIds.isEmpty else { return }
+        guard let db = db as? Firestore else { return }
+        
+        for userId in userIds {
+            do {
+                let doc = try await db.collection("users").document(userId).getDocument()
+                if let urlString = doc.get("avatarURL") as? String,
+                   let url = URL(string: urlString) {
+                    avatarCache[userId] = url
+                    // Download and cache data
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    avatarDataCache.save(data: data, for: userId)
+                }
+            } catch {
+                print("Error fetching avatar for \(userId): \(error)")
+            }
+        }
+    }
+    
+    func updateAvatar(for userId: String, url: URL, data: Data) {
+        avatarCache[userId] = url
+        avatarDataCache.save(data: data, for: userId)
+        
+        posts = posts.map { post in
+            if post.userId == userId {
+                let updatedUser = SocialUser(
+                    id: post.user.id,
+                    displayName: post.user.displayName,
+                    avatarURL: url,
+                    avatarData: data,
+                    level: post.user.level,
+                    isFollowing: post.user.isFollowing
+                )
+                return SocialPost(
+                    id: post.id,
+                    userId: post.userId,
+                    user: updatedUser,
+                    date: post.date,
+                    activityData: post.activityData
+                )
+            }
+            return post
+        }
     }
     
     // MARK: - Mock Data

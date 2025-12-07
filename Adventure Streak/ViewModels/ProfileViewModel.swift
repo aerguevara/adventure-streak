@@ -9,6 +9,9 @@ import Firebase
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 class ProfileViewModel: ObservableObject {
@@ -215,6 +218,8 @@ class ProfileViewModel: ObservableObject {
             
             await MainActor.run {
                 self.avatarURL = url
+                AvatarCacheManager.shared.save(data: imageData, for: userId)
+                SocialService.shared.updateAvatar(for: userId, url: url, data: imageData)
             }
         } catch {
             print("Error uploading avatar: \(error)")
@@ -223,4 +228,7 @@ class ProfileViewModel: ObservableObject {
         print("FirebaseStorage not available")
         #endif
     }
+    
+    // Procesamiento delegado al cropper; no reprocesar aquí
+    private func processImageData(_ data: Data) -> Data? { nil }
 }

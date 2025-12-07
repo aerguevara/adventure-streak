@@ -1,6 +1,8 @@
 import SwiftUI
-import PhotosUI
 import AuthenticationServices
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct ProfileDetailView: View {
     @ObservedObject var profileViewModel: ProfileViewModel
@@ -9,7 +11,8 @@ struct ProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: RelationTab = .following
     @State private var showSignOutConfirmation = false
-    @State private var photoItem: PhotosPickerItem?
+    @State private var showImagePicker = false
+    @State private var pickedImage: UIImage?
     private let currentUserId: String? = AuthenticationService.shared.userId
     
     enum RelationTab: String, CaseIterable, Identifiable {
@@ -126,11 +129,13 @@ struct ProfileDetailView: View {
                     .background(Color.gray.opacity(0.2))
                     .clipShape(Circle())
             }
-            PhotosPicker(selection: $photoItem, matching: .images) {
+            Button {
+                showImagePicker = true
+            } label: {
                 VStack(spacing: 4) {
                     Text("Cambiar foto")
                         .font(.footnote.bold())
-                    Text("En construcción: puede fallar si Storage no está activo.")
+                    Text("Usa la edición nativa para recortar.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -139,10 +144,13 @@ struct ProfileDetailView: View {
                 .background(Color.blue.opacity(0.15))
                 .cornerRadius(8)
             }
-            .onChange(of: photoItem) { _, newItem in
-                guard let newItem else { return }
+            .sheet(isPresented: $showImagePicker) {
+                AvatarImagePicker(image: $pickedImage)
+            }
+            .onChange(of: pickedImage) { _, newImage in
+                guard let img = newImage else { return }
                 Task {
-                    if let data = try? await newItem.loadTransferable(type: Data.self) {
+                    if let data = img.resizedSquareData(maxSide: 256, quality: 0.7) {
                         await profileViewModel.uploadAvatar(imageData: data)
                     }
                 }
@@ -178,3 +186,66 @@ private struct StatMini: View {
         .cornerRadius(10)
     }
 }
+
+#if canImport(UIKit)
+struct AvatarImagePicker: UIViewControllerRepresentable {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var image: UIImage?
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.allowsEditing = true
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: AvatarImagePicker
+        
+        init(parent: AvatarImagePicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            defer { parent.dismiss() }
+            if let edited = info[.editedImage] as? UIImage {
+                parent.image = edited
+                return
+            }
+            if let original = info[.originalImage] as? UIImage {
+                parent.image = original
+            }
+        }
+    }
+}
+
+extension UIImage {
+    func resizedSquareData(maxSide: CGFloat, quality: CGFloat) -> Data? {
+        let minSide = min(size.width, size.height)
+        let cropRect = CGRect(
+            x: (size.width - minSide) / 2,
+            y: (size.height - minSide) / 2,
+            width: minSide,
+            height: minSide
+        )
+        guard let cg = cgImage?.cropping(to: cropRect) else { return nil }
+        let square = UIImage(cgImage: cg, scale: scale, orientation: imageOrientation)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: maxSide, height: maxSide))
+        let img = renderer.image { _ in
+            square.draw(in: CGRect(x: 0, y: 0, width: maxSide, height: maxSide))
+        }
+        return img.jpegData(compressionQuality: quality)
+    }
+}
+#endif

@@ -57,14 +57,31 @@ struct SocialPostCard: View {
             // Header
             HStack(spacing: 12) {
                 // Avatar
-                Circle()
-                    .fill(Color(hex: "2C2C2E"))
+                if let data = post.user.avatarData, let uiImage = UIImage(data: data) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                } else if let avatarURL = post.user.avatarURL {
+                    AsyncImage(url: avatarURL) { image in
+                        image.resizable()
+                    } placeholder: {
+                        Circle()
+                            .fill(Color(hex: "2C2C2E"))
+                    }
                     .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(post.user.displayName.prefix(1).uppercased())
-                            .font(.headline)
-                            .foregroundColor(.white)
-                    )
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color(hex: "2C2C2E"))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text(post.user.displayName.prefix(1).uppercased())
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        )
+                }
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.user.displayName)
