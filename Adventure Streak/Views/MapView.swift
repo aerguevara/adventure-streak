@@ -11,6 +11,12 @@ struct MapView: UIViewRepresentable {
         mapView.isRotateEnabled = false
         mapView.isPitchEnabled = false
         
+        // Use a simpler 2D configuration to avoid Metal multisample resolve issues on some devices
+        if #available(iOS 15.0, *) {
+            let config = MKStandardMapConfiguration(elevationStyle: .flat)
+            mapView.preferredConfiguration = config
+        }
+        
         // Set initial region
         mapView.setRegion(viewModel.region, animated: false)
         

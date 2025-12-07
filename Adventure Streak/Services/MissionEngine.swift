@@ -190,7 +190,7 @@ class MissionEngine {
             return pace < 180 // < 3 min/km (20+ km/h)
         case .walk, .hike:
             return pace < 720 // < 12 min/km
-        case .otherOutdoor:
+        case .otherOutdoor, .indoor:
             return false
         }
     }

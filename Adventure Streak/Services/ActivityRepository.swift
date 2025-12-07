@@ -19,6 +19,7 @@ private struct FirestoreActivity: Codable {
     let activityType: ActivityType
     let distanceMeters: Double
     let durationSeconds: Double
+    let workoutName: String?
     // Route is now stored in subcollection "routes" to avoid 1MB limit.
     // Keep optional for backward compatibility if older docs had the full route.
     let route: [RoutePoint]?
@@ -39,6 +40,7 @@ private struct FirestoreActivity: Codable {
         self.activityType = activity.activityType
         self.distanceMeters = activity.distanceMeters
         self.durationSeconds = activity.durationSeconds
+        self.workoutName = activity.workoutName
         self.route = nil // store route in subcollection
         self.xpBreakdown = activity.xpBreakdown
         self.territoryStats = activity.territoryStats
@@ -366,6 +368,7 @@ final class ActivityRepository {
                         activityType: remote.activityType,
                         distanceMeters: remote.distanceMeters,
                         durationSeconds: remote.durationSeconds,
+                        workoutName: remote.workoutName,
                         route: route,
                         xpBreakdown: remote.xpBreakdown,
                         territoryStats: remote.territoryStats,
@@ -412,6 +415,7 @@ final class ActivityRepository {
                 activityType: remote.activityType,
                 distanceMeters: remote.distanceMeters,
                 durationSeconds: remote.durationSeconds,
+                workoutName: remote.workoutName,
                 route: route,
                 xpBreakdown: remote.xpBreakdown,
                 territoryStats: remote.territoryStats,
@@ -442,6 +446,7 @@ final class ActivityRepository {
                     activityType: remote.activityType,
                     distanceMeters: remote.distanceMeters,
                     durationSeconds: remote.durationSeconds,
+                    workoutName: remote.workoutName,
                     route: route,
                     xpBreakdown: remote.xpBreakdown,
                     territoryStats: remote.territoryStats,

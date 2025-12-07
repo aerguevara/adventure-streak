@@ -152,6 +152,7 @@ struct GamifiedWorkoutCard: View {
         case .bike: return "bicycle"
         case .hike: return "figure.hiking"
         case .otherOutdoor: return "figure.outdoor.cycle"
+        case .indoor: return "house"
         }
     }
 }

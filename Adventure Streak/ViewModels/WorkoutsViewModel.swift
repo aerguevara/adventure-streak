@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import HealthKit
 
 struct WorkoutItemViewData: Identifiable {
     let id: UUID
@@ -91,7 +92,7 @@ class WorkoutsViewModel: ObservableObject {
             WorkoutItemViewData(
                 id: activity.id,
                 type: activity.activityType,
-                title: "\(activity.activityType.displayName) · \(formatDistance(activity.distanceMeters))",
+                title: "\((activity.workoutName ?? activity.activityType.displayName)) · \(formatDistance(activity.distanceMeters))",
                 dateString: formatDate(activity.startDate),
                 duration: formatDuration(activity.durationSeconds),
                 pace: calculatePace(distance: activity.distanceMeters, duration: activity.durationSeconds, type: activity.activityType),
@@ -146,7 +147,7 @@ class WorkoutsViewModel: ObservableObject {
                 return
             }
             
-            HealthKitManager.shared.fetchOutdoorWorkouts { [weak self] workouts, error in
+            HealthKitManager.shared.fetchWorkouts { [weak self] workouts, error in
                 guard let self = self else { return }
                 
                 if let error = error {
@@ -159,7 +160,7 @@ class WorkoutsViewModel: ObservableObject {
                 }
                 
                 guard let workouts = workouts, !workouts.isEmpty else {
-                    print("No outdoor workouts found in HealthKit.")
+                    print("No se encontraron entrenos en HealthKit.")
                     DispatchQueue.main.async { 
                         self.isImporting = false
                         self.isLoading = false
@@ -204,30 +205,24 @@ class WorkoutsViewModel: ObservableObject {
                                 group.leave()
                                 semaphore.signal() // Release slot
                             }
+
+                            // Clasificamos indoor/outdoor y permitimos que sesiones indoor no tengan ruta
+                            let type = self.activityType(for: workout)
+                            let points = routePoints ?? []
                             
-                            if let points = routePoints, !points.isEmpty {
-                                let type: ActivityType
-                                switch workout.workoutActivityType {
-                                case .running: type = .run
-                                case .walking: type = .walk
-                                case .cycling: type = .bike
-                                case .hiking: type = .hike
-                                default: type = .otherOutdoor
-                                }
-                                
-                                let session = ActivitySession(
-                                    id: workout.uuid, // use stable HKWorkout id to avoid duplicates
-                                    startDate: workout.startDate,
-                                    endDate: workout.endDate,
-                                    activityType: type,
-                                    distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
-                                    durationSeconds: workout.duration,
-                                    route: points
-                                )
-                                
-                                DispatchQueue.global(qos: .utility).sync {
-                                    newSessions.append(session)
-                                }
+                            let session = ActivitySession(
+                                id: workout.uuid, // use stable HKWorkout id to avoid duplicates
+                                startDate: workout.startDate,
+                                endDate: workout.endDate,
+                                activityType: type,
+                                distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
+                                durationSeconds: workout.duration,
+                                workoutName: self.workoutName(for: workout),
+                                route: points
+                            )
+                            
+                            DispatchQueue.global(qos: .utility).sync {
+                                newSessions.append(session)
                             }
                         }
                     }
@@ -342,5 +337,38 @@ class WorkoutsViewModel: ObservableObject {
         let minutes = Int(paceSecondsPerKm / 60)
         let seconds = Int(paceSecondsPerKm.truncatingRemainder(dividingBy: 60))
         return String(format: "%d:%02d/km", minutes, seconds)
+    }
+
+    nonisolated private func activityType(for workout: HKWorkout) -> ActivityType {
+        let isIndoor = (workout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
+        
+        switch workout.workoutActivityType {
+        case .running:
+            return isIndoor ? .indoor : .run
+        case .walking:
+            return isIndoor ? .indoor : .walk
+        case .cycling:
+            return isIndoor ? .indoor : .bike
+        case .hiking:
+            return .hike
+        default:
+            return isIndoor ? .indoor : .otherOutdoor
+        }
+    }
+    
+    nonisolated private func workoutName(for workout: HKWorkout) -> String {
+        // Usa el título que viene de HealthKit si existe (clave libre por si no está declarada en SDK)
+        if let title = workout.metadata?["HKMetadataKeyWorkoutTitle"] as? String, !title.isEmpty {
+            return title
+        }
+        
+        // Fallback: nombre por tipo en inglés (sin traducciones)
+        switch workout.workoutActivityType {
+        case .running: return "Running"
+        case .walking: return "Walking"
+        case .cycling: return "Cycling"
+        case .hiking: return "Hiking"
+        default: return "Workout"
+        }
     }
 }

@@ -106,6 +106,7 @@ class GamificationService: ObservableObject, GamificationServiceProtocol {
         case .walk: factor *= XPConfig.factorWalk
         case .hike: factor *= XPConfig.factorWalk
         case .otherOutdoor: factor *= XPConfig.factorOther
+        case .indoor: factor *= XPConfig.factorIndoor
         }
         
         let rawXP = Int(distanceKm * factor)

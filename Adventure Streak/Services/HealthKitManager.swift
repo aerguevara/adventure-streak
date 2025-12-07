@@ -28,31 +28,20 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    func fetchOutdoorWorkouts(completion: @escaping ([HKWorkout]?, Error?) -> Void) {
-        // We want all workouts, so we pass nil as predicate and filter locally
+    func fetchWorkouts(completion: @escaping ([HKWorkout]?, Error?) -> Void) {
+        // We want all workouts (indoor y outdoor), so we pass nil as predicate and filter later
         let predicate: NSPredicate? = nil
-        // Filter for outdoor activities if needed, but for now we get all and filter locally or let user choose
-        // Ideally we filter by .running, .walking, .cycling
+        // Nota: ya no filtramos a solo actividades outdoor, la clasificación se hace en el ViewModel.
         
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
         
-        let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: 50, sortDescriptors: [sortDescriptor]) { _, samples, error in
+        let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: 100, sortDescriptors: [sortDescriptor]) { _, samples, error in
             guard let workouts = samples as? [HKWorkout], error == nil else {
                 completion(nil, error)
                 return
             }
-            
-            // Filter for outdoor types relevant to us
-            let relevantWorkouts = workouts.filter { workout in
-                switch workout.workoutActivityType {
-                case .running, .walking, .cycling, .hiking:
-                    return true
-                default:
-                    return false
-                }
-            }
-            
-            completion(relevantWorkouts, nil)
+                        
+            completion(workouts, nil)
         }
         
         healthStore.execute(query)

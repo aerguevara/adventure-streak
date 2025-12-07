@@ -78,7 +78,7 @@ struct ActivityDetailView: View {
                 }
                 
                 HStack {
-                    StatBox(title: "Type", value: activity.activityType.displayName)
+                    StatBox(title: "Type", value: activity.workoutName ?? activity.activityType.displayName)
                     StatBox(title: "Date", value: activity.startDate.formatted(date: .numeric, time: .omitted))
                 }
             }
