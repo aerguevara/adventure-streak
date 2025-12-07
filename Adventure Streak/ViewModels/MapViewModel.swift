@@ -166,7 +166,10 @@ class MapViewModel: ObservableObject {
                     let remoteUploaded = territory.uploadedAt?.dateValue() ?? territory.activityEndAt
                     let localUploaded = localCell.ownerUploadedAt ?? localCell.lastConqueredAt
                     let remoteIsNewer: Bool
-                    if remoteEnd > localEnd {
+                    if localCell.ownerUserId == currentUserId && territory.userId != currentUserId {
+                        // El servidor dice que pertenece a otro usuario: confiar en servidor y soltarla
+                        remoteIsNewer = true
+                    } else if remoteEnd > localEnd {
                         remoteIsNewer = true
                     } else if remoteEnd == localEnd {
                         // Si empatan en hora de entreno, gana quien subió más tarde (o cualquiera si no hay uploadedAt)
