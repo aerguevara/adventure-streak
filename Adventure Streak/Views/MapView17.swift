@@ -9,36 +9,32 @@ struct MapView17: View {
     
     var body: some View {
         ZStack {
-            Map(position: $position) {
-                UserAnnotation()
-                
-                ForEach(viewModel.conqueredTerritories) { cell in
-                    MapPolygon(coordinates: TerritoryGrid.polygon(for: cell))
-                        .foregroundStyle(Color.green.opacity(0.4))
-                        .stroke(Color.green, lineWidth: 1)
+            MapReader { proxy in
+                Map(position: $position) {
+                    UserAnnotation()
+                    
+                    ForEach(viewModel.conqueredTerritories) { cell in
+                        MapPolygon(coordinates: TerritoryGrid.polygon(for: cell))
+                            .foregroundStyle(Color.green.opacity(0.4))
+                            .stroke(Color.green, lineWidth: 1)
+                    }
                 }
-            }
-            .mapControls {
-                MapUserLocationButton()
-                MapCompass()
-            }
-            .onMapCameraChange { context in
-                viewModel.updateVisibleRegion(context.region)
-            }
-            .onTapGesture { location in
-                // iOS 17 Map provides location if available
-                guard let coordinate = location else { return }
-                if let cell = viewModel.conqueredTerritories.first(where: { TerritoryGrid.polygon(for: $0).contains(coordinate: coordinate) }) {
-                    selectedOwnerName = cell.ownerDisplayName ?? cell.ownerUserId
-                } else if let rival = viewModel.otherTerritories.first(where: { territory in
-                    guard let id = territory.id else { return false }
-                    let dummyCell = TerritoryGrid.getCell(for: CLLocationCoordinate2D(latitude: territory.centerLatitude, longitude: territory.centerLongitude))
-                    return id == dummyCell.id
-                }) {
-                    selectedOwnerName = rival.userId
-                } else {
-                    selectedOwnerName = nil
+                .mapControls {
+                    MapUserLocationButton()
+                    MapCompass()
                 }
+                .onMapCameraChange { context in
+                    viewModel.updateVisibleRegion(context.region)
+                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onEnded { value in
+                            let point = value.location
+                            if let coord = proxy.convert(point, from: .local) {
+                                selectOwner(at: coord)
+                            }
+                        }
+                )
             }
             
             VStack {
@@ -117,5 +113,33 @@ struct MapView17: View {
         formatter.unitsStyle = .positional
         formatter.zeroFormattingBehavior = .pad
         return formatter.string(from: duration) ?? "00:00"
+    }
+    
+    private func selectOwner(at coordinate: CLLocationCoordinate2D) {
+        // Check local cells (axis-aligned square, bounding box is enough)
+        if let cell = viewModel.conqueredTerritories.first(where: { cell in
+            let poly = TerritoryGrid.polygon(for: cell)
+            guard let minLat = poly.map(\.latitude).min(),
+                  let maxLat = poly.map(\.latitude).max(),
+                  let minLon = poly.map(\.longitude).min(),
+                  let maxLon = poly.map(\.longitude).max() else { return false }
+            return coordinate.latitude >= minLat && coordinate.latitude <= maxLat &&
+                   coordinate.longitude >= minLon && coordinate.longitude <= maxLon
+        }) {
+            selectedOwnerName = cell.ownerDisplayName ?? cell.ownerUserId ?? "Sin dueño"
+            return
+        }
+        
+        // Rivals: match by polygon id
+        if let rival = viewModel.otherTerritories.first(where: { territory in
+            guard let id = territory.id else { return false }
+            let dummyCell = TerritoryGrid.getCell(for: CLLocationCoordinate2D(latitude: territory.centerLatitude, longitude: territory.centerLongitude))
+            return id == dummyCell.id
+        }) {
+            selectedOwnerName = rival.userId
+            return
+        }
+        
+        selectedOwnerName = nil
     }
 }
