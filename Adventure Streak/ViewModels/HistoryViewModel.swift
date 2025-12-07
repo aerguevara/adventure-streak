@@ -153,7 +153,8 @@ class HistoryViewModel: ObservableObject {
                                 let userId = AuthenticationService.shared.userId ?? "unknown_user"
                                 
                                 // A. Batch Process Territories (Updates Store ONCE)
-                                let totalStats = await self.territoryService.processActivities(newSessions)
+                                let userName = AuthenticationService.shared.userName
+                                let totalStats = await self.territoryService.processActivities(newSessions, ownerUserId: userId, ownerDisplayName: userName)
                                 print("Batch Import: \(totalStats.newCellsCount) new cells.")
                                 
                                 // B. Calculate & Award XP

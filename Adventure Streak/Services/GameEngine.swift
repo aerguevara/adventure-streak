@@ -41,7 +41,7 @@ class GameEngine {
         print("✅ XP Context loaded")
         
         // 3. Calculate territorial delta
-        let territoryResult = territoryService.processActivity(activity)
+        let territoryResult = territoryService.processActivity(activity, ownerUserId: AuthenticationService.shared.userId, ownerDisplayName: AuthenticationService.shared.userName)
         let territoryStats = territoryResult.stats
         print("✅ Territory processed: \(territoryStats.newCellsCount) new, \(territoryStats.defendedCellsCount) defended")
         

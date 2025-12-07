@@ -186,7 +186,9 @@ class MapViewModel: ObservableObject {
                             centerLongitude: remoteT.centerLongitude,
                             boundary: remoteT.boundary,
                             lastConqueredAt: remoteT.activityEndAt,
-                            expiresAt: remoteT.expiresAt
+                            expiresAt: remoteT.expiresAt,
+                            ownerUserId: remoteT.userId,
+                            ownerDisplayName: nil
                         )
                     }
                     // Async update to store - This will trigger the pipeline again, but localIds will be updated next time

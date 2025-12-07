@@ -9,10 +9,10 @@ class TerritoryService {
         self.territoryStore = territoryStore
     }
     
-    func processActivity(_ activity: ActivitySession) -> (cells: [TerritoryCell], stats: TerritoryStats) {
+    func processActivity(_ activity: ActivitySession, ownerUserId: String? = nil, ownerDisplayName: String? = nil) -> (cells: [TerritoryCell], stats: TerritoryStats) {
         // Reuse the static helper logic
         let existingCells = territoryStore.conqueredCells
-        let (newCells, stats) = TerritoryService.calculateTerritories(activities: [activity], existingCells: existingCells)
+        let (newCells, stats) = TerritoryService.calculateTerritories(activities: [activity], existingCells: existingCells, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
         
         if !newCells.isEmpty {
             territoryStore.upsertCells(newCells)
@@ -37,13 +37,13 @@ class TerritoryService {
     // NEW: Batch processing to prevent update storms
     // NEW: Batch processing to prevent update storms
     // Now async to allow offloading to background thread
-    func processActivities(_ activities: [ActivitySession]) async -> TerritoryStats {
+    func processActivities(_ activities: [ActivitySession], ownerUserId: String? = nil, ownerDisplayName: String? = nil) async -> TerritoryStats {
         // 1. Capture existing cells (Main Actor access)
         let existingCells = territoryStore.conqueredCells
         
         // 2. Perform heavy calculation on background thread
         let result = await Task.detached(priority: .userInitiated) {
-            return TerritoryService.calculateTerritories(activities: activities, existingCells: existingCells)
+            return TerritoryService.calculateTerritories(activities: activities, existingCells: existingCells, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
         }.value
         
         // 3. Update store ONCE (Main Actor access)
@@ -62,7 +62,7 @@ class TerritoryService {
     }
     
     // Pure logic helper - Non-isolated to run on background thread
-    nonisolated private static func calculateTerritories(activities: [ActivitySession], existingCells: [String: TerritoryCell]) -> (newCells: [TerritoryCell], stats: TerritoryStats) {
+    nonisolated private static func calculateTerritories(activities: [ActivitySession], existingCells: [String: TerritoryCell], ownerUserId: String?, ownerDisplayName: String?) -> (newCells: [TerritoryCell], stats: TerritoryStats) {
         var newConqueredCount = 0
         var defendedCount = 0
         var recapturedCount = 0
@@ -75,8 +75,8 @@ class TerritoryService {
             
             // Add start point cell
             if let first = activity.route.first {
-                let cell = existingCells[TerritoryGrid.cellId(x: TerritoryGrid.cellIndex(for: first.coordinate).x, y: TerritoryGrid.cellIndex(for: first.coordinate).y)] ?? TerritoryGrid.getCell(for: first.coordinate)
-                processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity)
+                let cell = existingCells[TerritoryGrid.cellId(x: TerritoryGrid.cellIndex(for: first.coordinate).x, y: TerritoryGrid.cellIndex(for: first.coordinate).y)] ?? TerritoryGrid.getCell(for: first.coordinate, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
+                processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName)
             }
             
             // Process segments
@@ -93,7 +93,7 @@ class TerritoryService {
                     }
                     
                     let cell = existingCells[cellTemplate.id] ?? cellTemplate
-                    processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity)
+                    processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName)
                 }
             }
         }
@@ -108,23 +108,31 @@ class TerritoryService {
     }
     
     // Helper must be static or non-isolated to be called from detached task without capturing self
-    nonisolated private static func processCell(_ cell: TerritoryCell, existingCells: [String: TerritoryCell], newCells: inout [TerritoryCell], newConqueredCount: inout Int, defendedCount: inout Int, recapturedCount: inout Int, activity: ActivitySession) {
+    nonisolated private static func processCell(_ cell: TerritoryCell, existingCells: [String: TerritoryCell], newCells: inout [TerritoryCell], newConqueredCount: inout Int, defendedCount: inout Int, recapturedCount: inout Int, activity: ActivitySession, currentUserId: String?, currentUserName: String?) {
         var mutableCell = cell
-        let wasExpiredOrNew = mutableCell.isExpired || existingCells[mutableCell.id] == nil
-        let wasPreviouslyOwned = existingCells[mutableCell.id] != nil
-
+        let existing = existingCells[mutableCell.id]
+        let wasExpiredOrNew = mutableCell.isExpired || existing == nil
+        let wasPreviouslyOwned = existing != nil
+        let ownedByCurrent = mutableCell.ownerUserId == currentUserId
+        let ownedByOther = (mutableCell.ownerUserId != nil) && (mutableCell.ownerUserId != currentUserId)
+        
         if wasExpiredOrNew {
-            if wasPreviouslyOwned {
+            if wasPreviouslyOwned && ownedByCurrent {
                 recapturedCount += 1
             } else {
                 newConqueredCount += 1
             }
+        } else if ownedByOther {
+            // Stealing from another active owner
+            recapturedCount += 1
         } else {
             defendedCount += 1
         }
         
         mutableCell.lastConqueredAt = activity.endDate
         mutableCell.expiresAt = Calendar.current.date(byAdding: .day, value: TerritoryGrid.daysToExpire, to: activity.endDate)!
+        mutableCell.ownerUserId = currentUserId
+        mutableCell.ownerDisplayName = currentUserName
         
         newCells.append(mutableCell)
     }

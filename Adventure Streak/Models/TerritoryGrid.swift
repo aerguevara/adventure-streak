@@ -24,7 +24,7 @@ struct TerritoryGrid {
         return "\(x)_\(y)"
     }
     
-    static func getCell(for coordinate: CLLocationCoordinate2D) -> TerritoryCell {
+    static func getCell(for coordinate: CLLocationCoordinate2D, ownerUserId: String? = nil, ownerDisplayName: String? = nil) -> TerritoryCell {
         let (x, y) = cellIndex(for: coordinate)
         let center = cellCenter(x: x, y: y)
         let id = cellId(x: x, y: y)
@@ -44,7 +44,9 @@ struct TerritoryGrid {
             centerLongitude: center.longitude,
             boundary: boundary,
             lastConqueredAt: Date(),
-            expiresAt: Calendar.current.date(byAdding: .day, value: daysToExpire, to: Date())!
+            expiresAt: Calendar.current.date(byAdding: .day, value: daysToExpire, to: Date())!,
+            ownerUserId: ownerUserId,
+            ownerDisplayName: ownerDisplayName
         )
     }
     
