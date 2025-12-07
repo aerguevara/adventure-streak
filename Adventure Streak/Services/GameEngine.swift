@@ -22,6 +22,11 @@ class GameEngine {
     func completeActivity(_ activity: ActivitySession, for userId: String) async throws -> TerritoryStats {
         print("🎮 GameEngine: Processing activity \(activity.id)")
         
+        // Asegurar que ya tenemos foto de territorios remotos antes de calcular conquistas
+        let territoryRepo = TerritoryRepository.shared
+        territoryRepo.observeTerritories()
+        await territoryRepo.waitForInitialSync()
+        
         // 1. Save activity to store
         activityStore.saveActivity(activity)
         print("✅ Activity saved")

@@ -11,9 +11,11 @@ class TerritoryRepository: ObservableObject {
     static let shared = TerritoryRepository()
     
     @Published var otherTerritories: [RemoteTerritory] = []
+    @Published private(set) var hasInitialSnapshot: Bool = false
     
     private var db: Any? // Type-erased Firestore reference to avoid build errors if SDK missing
     private var listener: Any?
+    private var isObserving = false
     
     init() {
         #if canImport(FirebaseFirestore)
@@ -25,6 +27,8 @@ class TerritoryRepository: ObservableObject {
     func observeTerritories() {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
+        guard !isObserving else { return }
+        isObserving = true
         
         // Listen to "remote_territories" collection
         listener = db.collection("remote_territories")
@@ -46,10 +50,21 @@ class TerritoryRepository: ObservableObject {
                     // Update UI on main thread
                     DispatchQueue.main.async {
                         self?.otherTerritories = territories
+                        self?.hasInitialSnapshot = true
                     }
                 }
             }
+        
         #endif
+    }
+    
+    /// Espera a la primera sincronización remota (o timeout) para evitar cálculos con store vacío.
+    func waitForInitialSync(timeout: TimeInterval = 3.0) async {
+        if hasInitialSnapshot { return }
+        let start = Date()
+        while !hasInitialSnapshot && Date().timeIntervalSince(start) < timeout {
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
+        }
     }
     
     // NEW: Save conquered cells to Firestore
