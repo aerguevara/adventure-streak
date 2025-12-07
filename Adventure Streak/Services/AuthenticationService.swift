@@ -11,6 +11,7 @@ class AuthenticationService: NSObject, ObservableObject {
     @Published var userId: String?
     @Published var userEmail: String?
     @Published var userName: String?
+    @Published var isSyncingData = false
     
     // Helper for nonce
     fileprivate var currentNonce: String?
@@ -225,7 +226,9 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                     
                     // Backfill + parity check so remote list matches local feed/events
                     Task {
+                        await MainActor.run { self.isSyncingData = true }
                         await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                        await MainActor.run { self.isSyncingData = false }
                     }
                 }
             }

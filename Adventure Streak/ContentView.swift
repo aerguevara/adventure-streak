@@ -27,26 +27,43 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Group {
-            if !configService.isLoaded {
-                VStack(spacing: 12) {
-                    ProgressView("Cargando configuración...")
-                        .progressViewStyle(.circular)
+        ZStack {
+            Group {
+                if !configService.isLoaded {
+                    VStack(spacing: 12) {
+                        ProgressView("Cargando configuración...")
+                            .progressViewStyle(.circular)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                } else if !authService.isAuthenticated {
+                    LoginView()
+                } else if !onboardingViewModel.hasCompletedOnboarding {
+                    OnboardingView(viewModel: onboardingViewModel)
+                } else {
+                    MainTabView(
+                        mapViewModel: mapViewModel,
+                        workoutsViewModel: workoutsViewModel,
+                        profileViewModel: profileViewModel,
+                        activityStore: mapViewModel.activityStore,
+                        territoryStore: mapViewModel.territoryStore
+                    )
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemBackground))
-            } else if !authService.isAuthenticated {
-                LoginView()
-            } else if !onboardingViewModel.hasCompletedOnboarding {
-                OnboardingView(viewModel: onboardingViewModel)
-            } else {
-                MainTabView(
-                    mapViewModel: mapViewModel,
-                    workoutsViewModel: workoutsViewModel,
-                    profileViewModel: profileViewModel,
-                    activityStore: mapViewModel.activityStore,
-                    territoryStore: mapViewModel.territoryStore
-                )
+            }
+            
+            if authService.isSyncingData {
+                Color.black.opacity(0.25).ignoresSafeArea()
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                    Text("Sincronizando datos...")
+                        .font(.callout)
+                        .foregroundColor(.primary)
+                }
+                .padding(20)
+                .background(.ultraThinMaterial)
+                .cornerRadius(16)
+                .shadow(radius: 10)
             }
         }
         .task {
