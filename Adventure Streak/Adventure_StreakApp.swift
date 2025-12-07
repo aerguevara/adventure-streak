@@ -9,6 +9,7 @@ import SwiftUI
 #if canImport(FirebaseCore)
 import FirebaseCore
 #endif
+import BackgroundTasks
 
 class AppDelegate: NSObject, UIApplicationDelegate {
   func application(_ application: UIApplication,
@@ -16,6 +17,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     #if canImport(FirebaseCore)
     FirebaseApp.configure()
     #endif
+    // Registrar tareas en background (HealthKit refresh)
+    BackgroundTaskService.shared.registerTasks()
     return true
   }
 }

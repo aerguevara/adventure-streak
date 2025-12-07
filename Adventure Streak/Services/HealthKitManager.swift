@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import CoreLocation
+import UserNotifications
 
 class HealthKitManager: ObservableObject {
     static let shared = HealthKitManager()
@@ -8,6 +9,10 @@ class HealthKitManager: ObservableObject {
     let healthStore = HKHealthStore()
     
     @Published var isAuthorized = false
+    
+    private let workoutAnchorKey = "hk_workout_anchor"
+    private let notifiedWorkoutsKey = "hk_notified_workouts"
+    private let userDefaults = UserDefaults.standard
     
     func requestPermissions(completion: @escaping (Bool, Error?) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -26,6 +31,49 @@ class HealthKitManager: ObservableObject {
                 completion(success, error)
             }
         }
+    }
+    
+    // MARK: - Background delivery
+    func startBackgroundObservers() {
+        // Asegura permisos de HealthKit
+        requestPermissions { success, error in
+            guard success else {
+                if let error { print("HK permisos rechazados: \(error)") }
+                return
+            }
+            self.enableBackgroundDelivery()
+            self.registerWorkoutObserver()
+        }
+    }
+    
+    private func enableBackgroundDelivery() {
+        healthStore.enableBackgroundDelivery(for: .workoutType(), frequency: .immediate) { success, error in
+            if let error {
+                print("❌ enableBackgroundDelivery error: \(error)")
+            } else {
+                print("✅ Background delivery activada para workouts: \(success)")
+            }
+        }
+    }
+    
+    private func registerWorkoutObserver() {
+        let query = HKObserverQuery(sampleType: .workoutType(), predicate: nil) { [weak self] _, completion, error in
+            guard let self else {
+                completion()
+                return
+            }
+            if let error {
+                print("❌ HKObserverQuery error: \(error)")
+                completion()
+                return
+            }
+            
+            self.handleWorkoutUpdates {
+                completion()
+            }
+        }
+        
+        healthStore.execute(query)
     }
     
     func fetchWorkouts(completion: @escaping ([HKWorkout]?, Error?) -> Void) {
@@ -78,5 +126,72 @@ class HealthKitManager: ObservableObject {
         }
         
         healthStore.execute(routeQuery)
+    }
+    
+    // MARK: - Anchored query para detectar nuevos entrenos
+    private func handleWorkoutUpdates(completion: @escaping () -> Void) {
+        let anchor = loadAnchor()
+        let query = HKAnchoredObjectQuery(type: .workoutType(), predicate: nil, anchor: anchor, limit: HKObjectQueryNoLimit) { [weak self] _, samplesOrNil, _, newAnchor, error in
+            guard let self else {
+                completion()
+                return
+            }
+            
+            if let error {
+                print("❌ HKAnchoredObjectQuery error: \(error)")
+                completion()
+                return
+            }
+            
+            let workouts = (samplesOrNil as? [HKWorkout]) ?? []
+            if let newAnchor { self.saveAnchor(newAnchor) }
+            
+            guard !workouts.isEmpty else {
+                completion()
+                return
+            }
+            
+            notifyNewWorkouts(workouts)
+            completion()
+        }
+        
+        healthStore.execute(query)
+    }
+    
+    private func notifyNewWorkouts(_ workouts: [HKWorkout]) {
+        let notified = Set(userDefaults.stringArray(forKey: notifiedWorkoutsKey) ?? [])
+        var newNotified = notified
+        
+        for workout in workouts {
+            let id = workout.uuid.uuidString
+            if newNotified.contains(id) { continue }
+            newNotified.insert(id)
+            
+            let content = UNMutableNotificationContent()
+            content.title = "Nuevo entreno detectado"
+            let distance = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
+            let km = distance / 1000
+            let formattedDistance = km > 0 ? String(format: "%.1f km", km) : ""
+            content.body = formattedDistance.isEmpty
+                ? "Abre Adventure Streak para procesarlo y ganar XP."
+                : "Entreno de \(formattedDistance). Abre Adventure Streak para procesarlo y ganar XP."
+            content.sound = .default
+            
+            let request = UNNotificationRequest(identifier: "workout_\(id)", content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(request)
+        }
+        
+        userDefaults.set(Array(newNotified), forKey: notifiedWorkoutsKey)
+    }
+    
+    private func loadAnchor() -> HKQueryAnchor? {
+        guard let data = userDefaults.data(forKey: workoutAnchorKey) else { return nil }
+        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
+    }
+    
+    private func saveAnchor(_ anchor: HKQueryAnchor) {
+        if let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) {
+            userDefaults.set(data, forKey: workoutAnchorKey)
+        }
     }
 }

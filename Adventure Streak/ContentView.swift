@@ -1,4 +1,5 @@
 import SwiftUI
+import BackgroundTasks
 
 struct ContentView: View {
     @EnvironmentObject private var configService: GameConfigService
@@ -82,6 +83,10 @@ struct ContentView: View {
         }
         .task {
             await configService.loadConfigIfNeeded()
+            // Arranca observadores de HealthKit y programa BGTask para detectar entrenos nuevos
+            HealthKitManager.shared.startBackgroundObservers()
+            BackgroundTaskService.shared.scheduleRefresh()
+            NotificationService.shared.requestPermissions()
         }
     }
 }
