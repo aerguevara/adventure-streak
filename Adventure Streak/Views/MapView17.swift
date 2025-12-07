@@ -5,6 +5,7 @@ import MapKit
 struct MapView17: View {
     @StateObject var viewModel: MapViewModel
     @State private var position: MapCameraPosition = .userLocation(fallback: .automatic)
+    @State private var selectedOwnerName: String?
     
     var body: some View {
         ZStack {
@@ -20,6 +21,24 @@ struct MapView17: View {
             .mapControls {
                 MapUserLocationButton()
                 MapCompass()
+            }
+            .onMapCameraChange { context in
+                viewModel.updateVisibleRegion(context.region)
+            }
+            .onTapGesture { location in
+                // iOS 17 Map provides location if available
+                guard let coordinate = location else { return }
+                if let cell = viewModel.conqueredTerritories.first(where: { TerritoryGrid.polygon(for: $0).contains(coordinate: coordinate) }) {
+                    selectedOwnerName = cell.ownerDisplayName ?? cell.ownerUserId
+                } else if let rival = viewModel.otherTerritories.first(where: { territory in
+                    guard let id = territory.id else { return false }
+                    let dummyCell = TerritoryGrid.getCell(for: CLLocationCoordinate2D(latitude: territory.centerLatitude, longitude: territory.centerLongitude))
+                    return id == dummyCell.id
+                }) {
+                    selectedOwnerName = rival.userId
+                } else {
+                    selectedOwnerName = nil
+                }
             }
             
             VStack {
@@ -37,6 +56,22 @@ struct MapView17: View {
                 .padding()
                 
                 Spacer()
+                
+                if let owner = selectedOwnerName {
+                    VStack(spacing: 6) {
+                        Text("Dueño del territorio")
+                            .font(.footnote)
+                            .foregroundColor(.primary)
+                        Text(owner)
+                            .font(.headline)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(12)
+                            .shadow(radius: 4)
+                    }
+                    .padding(.bottom, 12)
+                }
                 
                 if viewModel.isTracking {
                     VStack {

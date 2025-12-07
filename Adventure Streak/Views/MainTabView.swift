@@ -18,8 +18,26 @@ struct MainTabView: View {
                 }
             
             ZStack(alignment: .bottomTrailing) {
-                MapView(viewModel: mapViewModel)
-                    .ignoresSafeArea(edges: .top)
+                ZStack {
+                    MapView(viewModel: mapViewModel)
+                        .ignoresSafeArea(edges: .top)
+                    
+                    if let owner = mapViewModel.selectedTerritoryOwner, let territoryId = mapViewModel.selectedTerritoryId {
+                        VStack(spacing: 6) {
+                            Text("Territorio \(territoryId)")
+                                .font(.footnote)
+                                .foregroundColor(.primary)
+                            Text(owner)
+                                .font(.headline)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial)
+                                .cornerRadius(12)
+                                .shadow(radius: 4)
+                        }
+                        .padding()
+                    }
+                }
                 
                 // Location Button
                 Button(action: {

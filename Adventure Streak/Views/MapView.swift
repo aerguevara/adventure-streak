@@ -20,6 +20,10 @@ struct MapView: UIViewRepresentable {
         // Request permissions only when the map is actually shown
         viewModel.checkLocationPermissions()
         
+        // Tap gesture to detect territory selection
+        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        mapView.addGestureRecognizer(tapGesture)
+        
         return mapView
     }
     
@@ -118,6 +122,32 @@ struct MapView: UIViewRepresentable {
         
         init(_ parent: MapView) {
             self.parent = parent
+        }
+        
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            guard let mapView = gesture.view as? MKMapView else { return }
+            let point = gesture.location(in: mapView)
+            let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+            let mapPoint = MKMapPoint(coordinate)
+            
+            for overlay in mapView.overlays {
+                guard let polygon = overlay as? MKPolygon,
+                      let renderer = mapView.renderer(for: polygon) as? MKPolygonRenderer else { continue }
+                
+                let polygonPoint = renderer.point(for: mapPoint)
+                if renderer.path.contains(polygonPoint) {
+                    let id = polygon.title ?? ""
+                    // Owner lookup: local store first, then rivals
+                    var ownerName: String? = nil
+                    if let cell = parent.viewModel.territoryStore.conqueredCells[id] {
+                        ownerName = cell.ownerDisplayName ?? cell.ownerUserId
+                    } else if let rival = parent.viewModel.otherTerritories.first(where: { $0.id == id }) {
+                        ownerName = rival.userId
+                    }
+                    parent.viewModel.selectTerritory(id: id, ownerName: ownerName)
+                    break
+                }
+            }
         }
         
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {

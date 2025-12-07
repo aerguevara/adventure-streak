@@ -13,6 +13,8 @@ class MapViewModel: ObservableObject {
     @Published var conqueredTerritories: [TerritoryCell] = []
     // NEW: Added for multiplayer conquest feature
     @Published var otherTerritories: [RemoteTerritory] = []
+    @Published var selectedTerritoryId: String?
+    @Published var selectedTerritoryOwner: String?
     
     @Published var activities: [ActivitySession] = []
     @Published var isTracking = false
@@ -253,6 +255,11 @@ class MapViewModel: ObservableObject {
         
         self.region = newRegion
         self.shouldRecenter = true
+    }
+    
+    func selectTerritory(id: String, ownerName: String?) {
+        selectedTerritoryId = id
+        selectedTerritoryOwner = ownerName
     }
     
     func startActivity(type: ActivityType) {
