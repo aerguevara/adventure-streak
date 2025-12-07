@@ -344,6 +344,36 @@ final class ActivityRepository {
         return []
         #endif
     }
+
+    func fetchActivity(activityId: UUID, userId: String) async -> ActivitySession? {
+        #if canImport(FirebaseFirestore)
+        do {
+            let doc = try await db.collection("activities").document(activityId.uuidString).getDocument()
+            guard doc.exists else { return nil }
+            let remote = try doc.data(as: FirestoreActivity.self)
+            guard remote.userId == userId else { return nil }
+            let route = await fetchRouteChunks(activityId: doc.documentID, expectedCount: remote.routeChunkCount ?? 0, fallbackRoute: remote.route)
+            
+            return ActivitySession(
+                id: UUID(uuidString: remote.id ?? doc.documentID) ?? activityId,
+                startDate: remote.startDate,
+                endDate: remote.endDate,
+                activityType: remote.activityType,
+                distanceMeters: remote.distanceMeters,
+                durationSeconds: remote.durationSeconds,
+                route: route,
+                xpBreakdown: remote.xpBreakdown,
+                territoryStats: remote.territoryStats,
+                missions: remote.missions
+            )
+        } catch {
+            print("[Activities] Failed to fetch activity \(activityId): \(error)")
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
     
     #if canImport(FirebaseFirestore)
     private func fetchActivitiesIndividually(ids: Set<String>) async throws -> [ActivitySession] {

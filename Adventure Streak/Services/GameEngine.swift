@@ -29,7 +29,10 @@ class GameEngine {
         // 1b. Check remote to avoid double-processing (XP/feed/territories) if already processed
         let alreadyProcessed = await activityRepository.activityExists(activityId: activity.id, userId: userId)
         if alreadyProcessed {
-            print("⚠️ Activity \(activity.id) already exists in Firestore. Skipping XP and feed application.")
+            print("⚠️ Activity \(activity.id) already exists in Firestore. Skipping XP and feed application. Refreshing local copy from remote.")
+            if let remoteActivity = await activityRepository.fetchActivity(activityId: activity.id, userId: userId) {
+                activityStore.updateActivity(remoteActivity)
+            }
             return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
         }
         
