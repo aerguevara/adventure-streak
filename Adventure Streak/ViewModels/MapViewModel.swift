@@ -295,6 +295,13 @@ class MapViewModel: ObservableObject {
                 await fetchOwnerAvatar(userId: finalOwnerId)
             }
         }
+        
+        // Completar datos del dueño si es un rival
+        if let finalOwnerId, finalOwnerId != currentUserId {
+            Task {
+                await fetchOwnerProfile(userId: finalOwnerId)
+            }
+        }
     }
     
     func startActivity(type: ActivityType) {
@@ -379,6 +386,39 @@ class MapViewModel: ObservableObject {
             }
         } catch {
             print("[Map] Error al obtener avatar de \(userId): \(error)")
+        }
+        #endif
+    }
+    
+    private func fetchOwnerProfile(userId: String) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            let doc = try await db.collection("users").document(userId).getDocument()
+            let displayName = (doc.get("displayName") as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let xpValue = doc.get("xp") as? Int
+            let avatarURLString = doc.get("avatarURL") as? String
+            
+            if let urlString = avatarURLString,
+               let url = URL(string: urlString),
+               AvatarCacheManager.shared.data(for: userId) == nil {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                AvatarCacheManager.shared.save(data: data, for: userId)
+                if selectedTerritoryOwnerId == userId {
+                    selectedTerritoryOwnerAvatarData = data
+                }
+            }
+            
+            if selectedTerritoryOwnerId == userId {
+                if let name = displayName, !name.isEmpty {
+                    selectedTerritoryOwner = name
+                }
+                if let xpValue {
+                    selectedTerritoryOwnerXP = xpValue
+                }
+            }
+        } catch {
+            print("[Map] Error al obtener perfil remoto de \(userId): \(error)")
         }
         #endif
     }

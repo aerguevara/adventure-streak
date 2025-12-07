@@ -120,6 +120,13 @@ class SocialService: ObservableObject {
         }
         .sorted(by: { $0.date > $1.date })
         
+        // Evita flasheos si la lista es idéntica
+        if newPosts == self.posts {
+            return
+        }
+        
+        self.posts = newPosts
+        
         if !missingAvatarIds.isEmpty {
             Task {
                 await fetchAvatars(for: missingAvatarIds)
