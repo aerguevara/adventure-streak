@@ -141,40 +141,55 @@ class SocialService: ObservableObject {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         
-        let targetName = displayName ?? "Usuario"
         let now = FieldValue.serverTimestamp()
         
-        resolveCurrentUserName { currentName in
-            let followingData: [String: Any] = [
+        Task {
+            let currentName = await resolveCurrentUserName()
+            var targetName = displayName ?? "Usuario"
+            var targetAvatarURL: String? = nil
+            var followerAvatarURL: String? = nil
+            
+            do {
+                let targetDoc = try await db.collection("users").document(userId).getDocument()
+                if let remoteName = targetDoc.get("displayName") as? String, !remoteName.isEmpty {
+                    targetName = remoteName
+                }
+                targetAvatarURL = targetDoc.get("avatarURL") as? String
+            } catch {
+                print("Error fetching target user for follow: \(error)")
+            }
+            
+            do {
+                let currentDoc = try await db.collection("users").document(currentUserId).getDocument()
+                followerAvatarURL = currentDoc.get("avatarURL") as? String
+            } catch {
+                print("Error fetching current user avatar for follow: \(error)")
+            }
+            
+            let followingData: [String: Any?] = [
                 "followedAt": now,
-                "displayName": targetName
+                "displayName": targetName,
+                "avatarURL": targetAvatarURL
             ]
             
-            let followerData: [String: Any] = [
+            let followerData: [String: Any?] = [
                 "followedAt": now,
-                "displayName": currentName
+                "displayName": currentName,
+                "avatarURL": followerAvatarURL
             ]
             
-            db.collection("users").document(currentUserId)
-                .collection("following").document(userId)
-                .setData(followingData) { error in
-                    if let error = error {
-                        print("Error following user: \(error)")
-                        // Rollback on error
-                        DispatchQueue.main.async {
-                            self.followingIds.remove(userId)
-                        }
-                    }
-                }
-            
-            // Add follower entry to target user
-            db.collection("users").document(userId)
-                .collection("followers").document(currentUserId)
-                .setData(followerData) { error in
-                    if let error = error {
-                        print("Error adding follower: \(error)")
-                    }
-                }
+            do {
+                try await db.collection("users").document(currentUserId)
+                    .collection("following").document(userId)
+                    .setData(followingData.compactMapValues { $0 })
+                
+                try await db.collection("users").document(userId)
+                    .collection("followers").document(currentUserId)
+                    .setData(followerData.compactMapValues { $0 })
+            } catch {
+                print("Error following user: \(error)")
+                self.followingIds.remove(userId)
+            }
         }
         #endif
     }
@@ -307,7 +322,7 @@ class SocialService: ObservableObject {
     }
     #endif
 
-    private func resolveCurrentUserName(completion: @escaping (String) -> Void) {
+    private func resolveCurrentUserName() async -> String {
         let auth = AuthenticationService.shared
         let emailPrefix = auth.userEmail?
             .split(separator: "@")
@@ -319,31 +334,31 @@ class SocialService: ObservableObject {
         if let name = auth.userName?.trimmingCharacters(in: .whitespacesAndNewlines),
            !name.isEmpty,
            name != emailPrefix {
-            completion(name)
-            return
+            return name
         }
         
         // Intentar obtener displayName desde Firestore (perfil remoto)
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore, let currentUserId = auth.userId else {
             let fallback = !emailPrefix.isEmpty ? emailPrefix : "Aventurero"
-            completion(fallback)
-            return
+            return fallback
         }
         
-        db.collection("users").document(currentUserId).getDocument { snapshot, _ in
-            if let remoteName = snapshot?.get("displayName") as? String,
+        do {
+            let snapshot = try await db.collection("users").document(currentUserId).getDocument()
+            if let remoteName = snapshot.get("displayName") as? String,
                !remoteName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                completion(remoteName.trimmingCharacters(in: .whitespacesAndNewlines))
-            } else if !emailPrefix.isEmpty {
-                completion(emailPrefix)
-            } else {
-                completion("Aventurero")
+                return remoteName.trimmingCharacters(in: .whitespacesAndNewlines)
             }
+            if !emailPrefix.isEmpty { return emailPrefix }
+            return "Aventurero"
+        } catch {
+            if !emailPrefix.isEmpty { return emailPrefix }
+            return "Aventurero"
         }
         #else
         let fallback = !emailPrefix.isEmpty ? emailPrefix : "Aventurero"
-        completion(fallback)
+        return fallback
         #endif
     }
     
