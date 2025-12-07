@@ -100,6 +100,15 @@ class ProfileViewModel: ObservableObject {
                 self.xpProgress = self.gamificationService.progressToNextLevel(currentXP: xp, currentLevel: level)
             }
             .store(in: &cancellables)
+        
+        // Recalculate local stats whenever activities or territories change
+        activityStore.$activities
+            .combineLatest(territoryStore.$conqueredCells)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _, _ in
+                self?.refreshLocalStats()
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Actions
