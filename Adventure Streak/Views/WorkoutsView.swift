@@ -85,14 +85,6 @@ struct WorkoutsView: View {
                         badgesViewModel.fetchBadges()
                 }
             }
-            .confirmationDialog("Cerrar Sesión", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
-                Button("Cerrar Sesión", role: .destructive) {
-                    profileViewModel.signOut()
-                }
-                Button("Cancelar", role: .cancel) {}
-            } message: {
-                Text("¿Estás seguro de que quieres cerrar sesión?")
-            }
         }
         .preferredColorScheme(.dark)
     }
