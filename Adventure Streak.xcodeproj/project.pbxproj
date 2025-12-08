@@ -424,12 +424,13 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Adventure Streak";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Necesitamos acceder a tus entrenamientos para importar tus rutas y conquistar territorios";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adventure Streak usa tus datos de Salud para registrar y actualizar tus entrenos, rachas de actividad y progreso deportivo dentro de la app.";
@@ -444,7 +445,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.6;
+				MARKETING_VERSION = 1.7;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -460,12 +461,13 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Adventure Streak";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Necesitamos acceder a tus entrenamientos para importar tus rutas y conquistar territorios";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adventure Streak usa tus datos de Salud para registrar y actualizar tus entrenos, rachas de actividad y progreso deportivo dentro de la app.";
@@ -480,7 +482,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.6;
+				MARKETING_VERSION = 1.7;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

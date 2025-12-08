@@ -25,6 +25,9 @@ struct WorkoutItemViewData: Identifiable {
     // NEW: Mission info
     let missionName: String?
     let missionDescription: String?
+    // NEW: Horarios
+    let startDateTime: String
+    let endDateTime: String
     
     // NEW: Rarity Logic
     var rarity: String {
@@ -107,7 +110,9 @@ class WorkoutsViewModel: ObservableObject {
                     isRecord: (activity.xpBreakdown?.xpWeeklyRecord ?? 0) > 0,
                     hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0,
                     missionName: activity.missions?.first?.name,
-                    missionDescription: activity.missions?.first?.description
+                    missionDescription: activity.missions?.first?.description,
+                    startDateTime: formatDateTime(activity.startDate),
+                    endDateTime: formatDateTime(activity.endDate)
                 )
             }
         
@@ -322,6 +327,13 @@ class WorkoutsViewModel: ObservableObject {
         formatter.dateFormat = "E, d MMM · HH:mm"
         formatter.locale = Locale(identifier: "es_ES")
         return formatter.string(from: date).capitalized
+    }
+    
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_ES")
+        formatter.dateFormat = "d MMM, HH:mm"
+        return formatter.string(from: date)
     }
     
     private func formatDuration(_ seconds: Double) -> String {

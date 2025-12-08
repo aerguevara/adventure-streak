@@ -54,6 +54,25 @@ struct GamifiedWorkoutCard: View {
             Divider()
                 .background(Color.white.opacity(0.1))
             
+            // Fechas de inicio y fin
+            HStack(spacing: 12) {
+                Label {
+                    Text("Inicio \(workout.startDateTime)")
+                } icon: {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.8))
+                
+                Label {
+                    Text("Fin \(workout.endDateTime)")
+                } icon: {
+                    Image(systemName: "clock")
+                }
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.8))
+            }
+            
             // 2. Metrics & Territory
             HStack(alignment: .top, spacing: 20) {
                 // Activity
