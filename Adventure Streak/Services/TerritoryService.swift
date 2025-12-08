@@ -163,6 +163,16 @@ class TerritoryService {
     nonisolated private static func processCell(_ cell: TerritoryCell, existingCells: [String: TerritoryCell], newCells: inout [TerritoryCell], newConqueredCount: inout Int, defendedCount: inout Int, recapturedCount: inout Int, activity: ActivitySession, currentUserId: String?, currentUserName: String?) {
         var mutableCell = cell
         let existing = existingCells[mutableCell.id]
+        
+        // Si ya existe un dueño distinto con fecha más reciente o igual, no lo podemos reclamar
+        if let existing,
+           let currentUserId,
+           existing.ownerUserId != nil,
+           existing.ownerUserId != currentUserId,
+           existing.lastConqueredAt >= activity.endDate,
+           existing.expiresAt > Date() {
+            return
+        }
         let wasExpiredOrNew = mutableCell.isExpired || existing == nil
         let wasPreviouslyOwned = existing != nil
         let ownedByCurrent = mutableCell.ownerUserId == currentUserId
