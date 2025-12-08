@@ -73,13 +73,9 @@ struct WorkoutsView: View {
                 }
             }
                 .toolbar(.hidden, for: .navigationBar)
-                .background(
-                    NavigationLink(
-                        destination: MissionGuideView(),
-                        isActive: $showMissionGuide,
-                        label: { EmptyView() }
-                    )
-                )
+                .navigationDestination(isPresented: $showMissionGuide) {
+                    MissionGuideView()
+                }
                 .fullScreenCover(isPresented: $showProfileDetail) {
                     NavigationStack {
                         ProfileDetailView(
