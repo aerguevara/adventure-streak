@@ -9,10 +9,10 @@ class TerritoryService {
         self.territoryStore = territoryStore
     }
     
-    func processActivity(_ activity: ActivitySession, ownerUserId: String? = nil, ownerDisplayName: String? = nil) -> (cells: [TerritoryCell], stats: TerritoryStats) {
-        // Reuse the static helper logic
-        let existingCells = territoryStore.conqueredCells
-        let (newCells, stats) = TerritoryService.calculateTerritories(activities: [activity], existingCells: existingCells, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
+    func processActivity(_ activity: ActivitySession, ownerUserId: String? = nil, ownerDisplayName: String? = nil) async -> (cells: [TerritoryCell], stats: TerritoryStats) {
+        // Prefetch dueños remotos de las celdas que se van a tocar para clasificar correctamente (robo vs nuevo)
+        let mergedCells = await mergeWithRemoteOwners(for: [activity], existing: territoryStore.conqueredCells)
+        let (newCells, stats) = TerritoryService.calculateTerritories(activities: [activity], existingCells: mergedCells, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
         
         if !newCells.isEmpty {
             territoryStore.upsertCells(newCells)
@@ -40,10 +40,11 @@ class TerritoryService {
     func processActivities(_ activities: [ActivitySession], ownerUserId: String? = nil, ownerDisplayName: String? = nil) async -> TerritoryStats {
         // 1. Capture existing cells (Main Actor access)
         let existingCells = territoryStore.conqueredCells
+        let mergedCells = await mergeWithRemoteOwners(for: activities, existing: existingCells)
         
         // 2. Perform heavy calculation on background thread
         let result = await Task.detached(priority: .userInitiated) {
-            return TerritoryService.calculateTerritories(activities: activities, existingCells: existingCells, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
+            return TerritoryService.calculateTerritories(activities: activities, existingCells: mergedCells, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
         }.value
         
         // 3. Update store ONCE (Main Actor access)
@@ -59,6 +60,49 @@ class TerritoryService {
         }
         
         return result.stats
+    }
+    
+    // Prefetch remote owners for cells involved to avoid misclassification (robo vs nuevo)
+    private func mergeWithRemoteOwners(for activities: [ActivitySession], existing: [String: TerritoryCell]) async -> [String: TerritoryCell] {
+        var merged = existing
+        let cellIds = collectCellIds(for: activities)
+        let remotes = await TerritoryRepository.shared.fetchTerritories(ids: Array(cellIds))
+        for remote in remotes {
+            guard let id = remote.id else { continue }
+            merged[id] = TerritoryCell(
+                id: id,
+                centerLatitude: remote.centerLatitude,
+                centerLongitude: remote.centerLongitude,
+                boundary: remote.boundary,
+                lastConqueredAt: remote.activityEndAt,
+                expiresAt: remote.expiresAt,
+                ownerUserId: remote.userId,
+                ownerDisplayName: nil,
+                ownerUploadedAt: remote.uploadedAt?.dateValue()
+            )
+        }
+        return merged
+    }
+    
+    // Build the set of cell IDs the activities traverse
+    nonisolated private func collectCellIds(for activities: [ActivitySession]) -> Set<String> {
+        var ids = Set<String>()
+        for activity in activities {
+            guard !activity.route.isEmpty else { continue }
+            if let first = activity.route.first {
+                let cell = TerritoryGrid.getCell(for: first.coordinate)
+                ids.insert(cell.id)
+            }
+            for i in 0..<max(0, activity.route.count - 1) {
+                let start = activity.route[i].coordinate
+                let end = activity.route[i+1].coordinate
+                let interpolatedCells = TerritoryGrid.cellsBetween(start: start, end: end)
+                for cell in interpolatedCells {
+                    ids.insert(cell.id)
+                }
+            }
+        }
+        return ids
     }
     
     // Pure logic helper - Non-isolated to run on background thread

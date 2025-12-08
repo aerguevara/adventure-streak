@@ -67,6 +67,34 @@ class TerritoryRepository: ObservableObject {
         }
     }
     
+    // Fetch a set of territories by IDs (used for prefetch before calcular)
+    func fetchTerritories(ids: [String]) async -> [RemoteTerritory] {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore, !ids.isEmpty else { return [] }
+        var results: [RemoteTerritory] = []
+        let chunkSize = 10 // Firestore "in" queries limited to 10
+        let chunks = stride(from: 0, to: ids.count, by: chunkSize).map { Array(ids[$0..<min($0 + chunkSize, ids.count)]) }
+        
+        for chunk in chunks {
+            do {
+                let snapshot = try await db.collection("remote_territories")
+                    .whereField(FieldPath.documentID(), in: chunk)
+                    .getDocuments()
+                for doc in snapshot.documents {
+                    var territory = try? doc.data(as: RemoteTerritory.self)
+                    territory?.id = doc.documentID
+                    if let territory { results.append(territory) }
+                }
+            } catch {
+                print("[Territories] fetchTerritories error: \(error)")
+            }
+        }
+        return results
+        #else
+        return []
+        #endif
+    }
+    
     // NEW: Save conquered cells to Firestore
     func saveCells(_ cells: [TerritoryCell], userId: String) {
         #if canImport(FirebaseFirestore)

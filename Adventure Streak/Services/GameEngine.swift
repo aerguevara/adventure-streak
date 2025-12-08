@@ -48,7 +48,7 @@ class GameEngine {
         // 3. Calculate territorial delta
         let territoryResult: (cells: [TerritoryCell], stats: TerritoryStats)
         if activity.activityType.isOutdoor {
-            territoryResult = territoryService.processActivity(activity, ownerUserId: AuthenticationService.shared.userId, ownerDisplayName: AuthenticationService.shared.userName)
+            territoryResult = await territoryService.processActivity(activity, ownerUserId: AuthenticationService.shared.userId, ownerDisplayName: AuthenticationService.shared.userName)
             print("✅ Territory processed: \(territoryResult.stats.newCellsCount) new, \(territoryResult.stats.defendedCellsCount) defended")
         } else {
             territoryResult = ([], TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0))
