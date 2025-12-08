@@ -66,8 +66,16 @@ class TerritoryService {
     private func mergeWithRemoteOwners(for activities: [ActivitySession], existing: [String: TerritoryCell]) async -> [String: TerritoryCell] {
         var merged = existing
         let cellIds = collectCellIds(for: activities)
-        let remotes = await TerritoryRepository.shared.fetchTerritories(ids: Array(cellIds))
-        for remote in remotes {
+        
+        // Usar snapshot ya observado para no depender solo de 'in' queries
+        let repo = TerritoryRepository.shared
+        await repo.waitForInitialSync()
+        let cachedRemotes = repo.otherTerritories.filter { cellIds.contains($0.id ?? "") }
+        
+        // Fallback: traer por ids en caso de no estar en cache
+        let fetchedRemotes = await repo.fetchTerritories(ids: Array(cellIds))
+        
+        for remote in (cachedRemotes + fetchedRemotes) {
             guard let id = remote.id else { continue }
             merged[id] = TerritoryCell(
                 id: id,
