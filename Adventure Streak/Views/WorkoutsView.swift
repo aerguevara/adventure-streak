@@ -6,6 +6,7 @@ struct WorkoutsView: View {
     @ObservedObject var badgesViewModel: BadgesViewModel
     
     @State private var showProfileDetail = false
+    @State private var showMissionGuide = false
     
     // Init with dependency injection
     init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel) {
@@ -72,6 +73,13 @@ struct WorkoutsView: View {
                 }
             }
                 .toolbar(.hidden, for: .navigationBar)
+                .background(
+                    NavigationLink(
+                        destination: MissionGuideView(),
+                        isActive: $showMissionGuide,
+                        label: { EmptyView() }
+                    )
+                )
                 .fullScreenCover(isPresented: $showProfileDetail) {
                     NavigationStack {
                         ProfileDetailView(
@@ -139,6 +147,25 @@ struct WorkoutsView: View {
             }
             
             Spacer()
+            
+            Button {
+                showMissionGuide = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                    Text("Misiones")
+                }
+                .font(.caption.bold())
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(hex: "1C1C1E"))
+                .cornerRadius(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+            }
         }
         .padding(.horizontal)
     }
