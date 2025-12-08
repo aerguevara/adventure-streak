@@ -4,7 +4,9 @@ import BackgroundTasks
 struct ContentView: View {
     @EnvironmentObject private var configService: GameConfigService
     @StateObject private var authService = AuthenticationService.shared
+    @Environment(\.scenePhase) private var scenePhase
     private let activityStore: ActivityStore
+    private let locService: LocationService
     
     // ViewModels
     @StateObject private var onboardingViewModel: OnboardingViewModel
@@ -18,6 +20,7 @@ struct ContentView: View {
         let actStore = ActivityStore.shared
         let terrStore = TerritoryStore.shared
         self.activityStore = actStore
+        self.locService = locService
         
         // Correct way to initialize StateObject with dependencies
         _onboardingViewModel = StateObject(wrappedValue: OnboardingViewModel(locationService: locService))
@@ -87,6 +90,15 @@ struct ContentView: View {
             HealthKitManager.shared.startBackgroundObservers()
             BackgroundTaskService.shared.scheduleRefresh()
             NotificationService.shared.requestPermissions()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background:
+                locService.stopMonitoring()
+                locService.stopTracking()
+            default:
+                break
+            }
         }
     }
 }
