@@ -24,6 +24,8 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     let expiresAt: Date
     // Domain time when the activity ended (not upload time)
     let activityEndAt: Date
+    // NEW: Activity that conquered this territory
+    let activityId: String?
     // Legacy field; kept for backward compatibility
     let timestamp: Date
     @ServerTimestamp var uploadedAt: Timestamp?
@@ -34,7 +36,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case userId, centerLatitude, centerLongitude, boundary, expiresAt, activityEndAt, timestamp, uploadedAt
+        case userId, centerLatitude, centerLongitude, boundary, expiresAt, activityEndAt, activityId, timestamp, uploadedAt
     }
     
     init(from decoder: Decoder) throws {
@@ -46,6 +48,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         expiresAt = try container.decode(Date.self, forKey: .expiresAt)
         activityEndAt = try container.decodeIfPresent(Date.self, forKey: .activityEndAt)
             ?? (try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date())
+        activityId = try container.decodeIfPresent(String.self, forKey: .activityId)
         timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? activityEndAt
         uploadedAt = try container.decodeIfPresent(Timestamp.self, forKey: .uploadedAt)
         
@@ -64,7 +67,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     // Default init
-    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date) {
+    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date, activityId: String? = nil) {
         self.id = id
         self.userId = userId
         self.centerLatitude = centerLatitude
@@ -72,6 +75,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         self.boundary = boundary
         self.expiresAt = expiresAt
         self.activityEndAt = activityEndAt
+        self.activityId = activityId
         self.timestamp = activityEndAt
         self.uploadedAt = nil
     }

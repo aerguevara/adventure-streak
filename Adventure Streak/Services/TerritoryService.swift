@@ -19,7 +19,7 @@ class TerritoryService {
 
             // Multiplayer Sync - only if we have a valid user
             if let userId = AuthenticationService.shared.userId, !userId.isEmpty {
-                TerritoryRepository.shared.saveCells(newCells, userId: userId)
+                TerritoryRepository.shared.saveCells(newCells, userId: userId, activityId: activity.id.uuidString)
             } else {
                 print("[Territories] Skipping cloud save because userId is missing")
             }

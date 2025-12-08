@@ -96,7 +96,7 @@ class TerritoryRepository: ObservableObject {
     }
     
     // NEW: Save conquered cells to Firestore
-    func saveCells(_ cells: [TerritoryCell], userId: String) {
+    func saveCells(_ cells: [TerritoryCell], userId: String, activityId: String? = nil) {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         
@@ -112,7 +112,8 @@ class TerritoryRepository: ObservableObject {
                 centerLongitude: cell.centerLongitude,
                 boundary: cell.boundary,
                 expiresAt: cell.expiresAt,
-                activityEndAt: cell.lastConqueredAt
+                activityEndAt: cell.lastConqueredAt,
+                activityId: activityId
             )
             
             do {
