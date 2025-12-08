@@ -90,7 +90,28 @@ struct MissionGuideView: View {
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.7))
                 
-                XPCard()
+                NavigationLink(destination: XPDetailView()) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Cálculo de XP")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Text("Ver fórmula y ejemplo detallado.")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                    .padding()
+                    .background(Color(hex: "111114"))
+                    .cornerRadius(14)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                }
                 
                 SectionView(title: "Rarezas de actividad", items: rarities)
                 SectionView(title: "Categorías de misión", items: categories)
@@ -223,43 +244,44 @@ private struct GuideItem: Identifiable {
     let icon: String
 }
 
-private struct XPCard: View {
+private struct XPDetailView: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("¿Cómo calculamos el XP?")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("¿Cómo calculamos el XP?")
+                            .font(.title2.bold())
+                            .foregroundColor(.white)
+                        Text("Base por esfuerzo + bonus territorial + racha/misiones.")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    Spacer()
+                    Image(systemName: "star.circle.fill")
+                        .foregroundColor(Color(hex: "FFC300"))
+                        .font(.system(size: 30))
+                }
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Fórmula simplificada")
                         .font(.headline)
                         .foregroundColor(.white)
-                    Text("Base por esfuerzo + bonus territorial + racha/misiones.")
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.7))
-                }
-                Spacer()
-                Image(systemName: "star.circle.fill")
-                    .foregroundColor(Color(hex: "FFC300"))
-                    .font(.system(size: 28))
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Fórmula simplificada")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text("""
+                    Text("""
 Base por tipo y distancia/tiempo +
 Territorios: +25 nuevo / +15 defensa / +20 reconquista (aprox) +
 Misiones: según rareza (Común < Rara < Épica < Legendaria) +
 Racha/consistencia: bonus creciente por días/semana activa.
 """)
-                .font(.callout)
-                .foregroundColor(.white.opacity(0.8))
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Ejemplo detallado")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text("""
+                    .font(.callout)
+                    .foregroundColor(.white.opacity(0.8))
+                }
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Ejemplo detallado")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text("""
 Sesión: 10 km run en 55 min
 Base: ~140 XP (distancia/ritmo)
 Territorio: 3 nuevos (+75 XP) + 1 defendido (+15 XP)
@@ -267,16 +289,31 @@ Misión: rara (p.ej. ritmo objetivo) +30 XP
 Racha: semana activa +20 XP
 Total aproximado: 280 XP
 """)
-                .font(.callout)
-                .foregroundColor(.white.opacity(0.85))
+                    .font(.callout)
+                    .foregroundColor(.white.opacity(0.85))
+                }
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Comparativa rápida")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text("""
+• Caminata 3 km (sin territorios): ~40 XP
+• Run 5 km con 1 territorio nuevo: ~110 XP
+• Run 10 km con 3 territorios nuevos + 1 defendido: ~230-280 XP
+• Entreno indoor 45 min sin territorios: ~60-80 XP
+""")
+                    .font(.callout)
+                    .foregroundColor(.white.opacity(0.8))
+                }
+                
+                Spacer()
             }
+            .padding()
         }
-        .padding()
-        .background(Color(hex: "111114"))
-        .cornerRadius(14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
+        .background(Color(hex: "000000").ignoresSafeArea())
+        .navigationTitle("Cálculo de XP")
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(Color(hex: "000000"), for: .navigationBar)
     }
 }
