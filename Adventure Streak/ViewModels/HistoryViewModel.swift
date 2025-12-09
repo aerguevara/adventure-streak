@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 
 @MainActor
 class HistoryViewModel: ObservableObject {
@@ -6,17 +7,30 @@ class HistoryViewModel: ObservableObject {
     
     private let activityStore: ActivityStore
     private let territoryService: TerritoryService
+    private let configService: GameConfigService
     
     @Published var isImporting = false
     @Published var showAlert = false
     @Published var alertMessage = ""
     
-    init(activityStore: ActivityStore, territoryService: TerritoryService) {
+    init(
+        activityStore: ActivityStore,
+        territoryService: TerritoryService,
+        configService: GameConfigService
+    ) {
         self.activityStore = activityStore
         self.territoryService = territoryService
+        self.configService = configService
         loadActivities()
-        // Automatic import on launch
-        importFromHealthKit()
+        Task {
+            await configService.loadConfigIfNeeded()
+            await MainActor.run {
+                self.loadActivities()
+            }
+            await MainActor.run {
+                self.importFromHealthKit()
+            }
+        }
     }
     
     func loadActivities() {
@@ -24,6 +38,11 @@ class HistoryViewModel: ObservableObject {
     }
     
     func importFromHealthKit() {
+        guard configService.config.loadHistoricalWorkouts else {
+            print("Historical import disabled by config")
+            return
+        }
+        
         guard !isImporting else { return }
         isImporting = true
         print("Starting automatic HealthKit import...")
@@ -38,7 +57,7 @@ class HistoryViewModel: ObservableObject {
                 return
             }
             
-            HealthKitManager.shared.fetchOutdoorWorkouts { [weak self] workouts, error in
+            HealthKitManager.shared.fetchWorkouts { [weak self] workouts, error in
                 guard let self = self else { return }
                 
                 if let error = error {
@@ -48,14 +67,16 @@ class HistoryViewModel: ObservableObject {
                 }
                 
                 guard let workouts = workouts, !workouts.isEmpty else {
-                    print("No outdoor workouts found in HealthKit.")
+                    print("No se encontraron entrenos en HealthKit.")
                     DispatchQueue.main.async { self.isImporting = false }
                     return
                 }
                 
-                // Filter out duplicates BEFORE processing
+                // Filter out duplicates BEFORE processing and respect configured lookback
+                let cutoffDate = self.configService.cutoffDate()
                 let newWorkouts = workouts.filter { workout in
-                    !self.activityStore.activities.contains(where: { $0.startDate == workout.startDate })
+                    guard workout.startDate >= cutoffDate else { return false }
+                    return !self.activityStore.activities.contains(where: { $0.startDate == workout.startDate })
                 }
                 
                 guard !newWorkouts.isEmpty else {
@@ -83,30 +104,23 @@ class HistoryViewModel: ObservableObject {
                                 semaphore.signal() // Release slot
                             }
                             
-                            if let points = routePoints, !points.isEmpty {
-                                let type: ActivityType
-                                switch workout.workoutActivityType {
-                                case .running: type = .run
-                                case .walking: type = .walk
-                                case .cycling: type = .bike
-                                case .hiking: type = .hike
-                                default: type = .otherOutdoor
-                                }
-                                
-                                let session = ActivitySession(
-                                    id: workout.uuid, // stable id from HKWorkout to prevent duplicates
-                                    startDate: workout.startDate,
-                                    endDate: workout.endDate,
-                                    activityType: type,
-                                    distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
-                                    durationSeconds: workout.duration,
-                                    route: points
-                                )
-                                
-                                // Thread-safe append
-                                DispatchQueue.global(qos: .utility).sync {
-                                    newSessions.append(session)
-                                }
+                            let type = self.activityType(for: workout)
+                            let points = routePoints ?? []
+                            
+                            let session = ActivitySession(
+                                id: workout.uuid, // stable id from HKWorkout to prevent duplicates
+                                startDate: workout.startDate,
+                                endDate: workout.endDate,
+                                activityType: type,
+                                distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
+                                durationSeconds: workout.duration,
+                                workoutName: self.workoutName(for: workout),
+                                route: points
+                            )
+                            
+                            // Thread-safe append
+                            DispatchQueue.global(qos: .utility).sync {
+                                newSessions.append(session)
                             }
                         }
                     }
@@ -118,15 +132,23 @@ class HistoryViewModel: ObservableObject {
                         if !newSessions.isEmpty {
                             print("Saving \(newSessions.count) imported activities...")
                             
-                            // 1. Save Activities
+                            // 1. Save Activities locally
                             self.activityStore.saveActivities(newSessions)
+                            
+                            // 1b. Persist remotely in independent collection
+                            if let userId = AuthenticationService.shared.userId {
+                                Task {
+                                    await ActivityRepository.shared.saveActivities(newSessions, userId: userId)
+                                }
+                            }
                             
                             // 2. Process Territories (BATCHED)
                             Task {
                                 let userId = AuthenticationService.shared.userId ?? "unknown_user"
                                 
                                 // A. Batch Process Territories (Updates Store ONCE)
-                                let totalStats = await self.territoryService.processActivities(newSessions)
+                                let userName = AuthenticationService.shared.userName
+                                let totalStats = await self.territoryService.processActivities(newSessions, ownerUserId: userId, ownerDisplayName: userName)
                                 print("Batch Import: \(totalStats.newCellsCount) new cells.")
                                 
                                 // B. Calculate & Award XP
@@ -203,6 +225,52 @@ class HistoryViewModel: ObservableObject {
                     }
                 }
             }
+        }
+    }
+    
+    nonisolated private func activityType(for workout: HKWorkout) -> ActivityType {
+        let isIndoor = (workout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
+        
+        switch workout.workoutActivityType {
+        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
+            return .indoor
+        case .running:
+            return isIndoor ? .indoor : .run
+        case .walking:
+            return isIndoor ? .indoor : .walk
+        case .cycling:
+            return isIndoor ? .indoor : .bike
+        case .hiking:
+            return .hike
+        default:
+            return isIndoor ? .indoor : .otherOutdoor
+        }
+    }
+    
+    nonisolated private func workoutName(for workout: HKWorkout) -> String {
+        if let title = workout.metadata?["HKMetadataKeyWorkoutTitle"] as? String, !title.isEmpty {
+            return title
+        }
+        if let brand = workout.metadata?[HKMetadataKeyWorkoutBrandName] as? String, !brand.isEmpty {
+            return brand
+        }
+        
+        return fallbackWorkoutName(for: workout.workoutActivityType)
+    }
+    
+    nonisolated private func fallbackWorkoutName(for type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .running: return "Running"
+        case .walking: return "Walking"
+        case .cycling: return "Cycling"
+        case .hiking: return "Hiking"
+        case .traditionalStrengthTraining: return "Traditional Strength Training"
+        case .functionalStrengthTraining: return "Functional Strength Training"
+        case .highIntensityIntervalTraining: return "HIIT"
+        case .flexibility: return "Flexibility"
+        case .yoga: return "Yoga"
+        case .pilates: return "Pilates"
+        default: return "Workout"
         }
     }
 }

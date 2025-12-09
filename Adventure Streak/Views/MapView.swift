@@ -11,6 +11,12 @@ struct MapView: UIViewRepresentable {
         mapView.isRotateEnabled = false
         mapView.isPitchEnabled = false
         
+        // Use a simpler 2D configuration to avoid Metal multisample resolve issues on some devices
+        if #available(iOS 15.0, *) {
+            let config = MKStandardMapConfiguration(elevationStyle: .flat)
+            mapView.preferredConfiguration = config
+        }
+        
         // Set initial region
         mapView.setRegion(viewModel.region, animated: false)
         
@@ -19,6 +25,10 @@ struct MapView: UIViewRepresentable {
         
         // Request permissions only when the map is actually shown
         viewModel.checkLocationPermissions()
+        
+        // Tap gesture to detect territory selection
+        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        mapView.addGestureRecognizer(tapGesture)
         
         return mapView
     }
@@ -120,6 +130,42 @@ struct MapView: UIViewRepresentable {
             self.parent = parent
         }
         
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            guard let mapView = gesture.view as? MKMapView else { return }
+            let point = gesture.location(in: mapView)
+            let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+            let mapPoint = MKMapPoint(coordinate)
+            
+            for overlay in mapView.overlays {
+                guard let polygon = overlay as? MKPolygon,
+                      let renderer = mapView.renderer(for: polygon) as? MKPolygonRenderer else { continue }
+                
+                let polygonPoint = renderer.point(for: mapPoint)
+                if renderer.path.contains(polygonPoint) {
+                    let id = polygon.title ?? ""
+                    // Owner lookup: local store first, then rivals
+                    var ownerName: String? = nil
+                    var ownerId: String? = nil
+                    if let cell = parent.viewModel.territoryStore.conqueredCells[id] {
+                        let auth = AuthenticationService.shared
+                        ownerId = cell.ownerUserId ?? auth.userId
+                        ownerName = cell.ownerDisplayName
+                            ?? (ownerId == auth.userId ? auth.resolvedUserName() : cell.ownerUserId)
+                    } else if let rival = parent.viewModel.otherTerritories.first(where: { $0.id == id }) {
+                        ownerName = nil // evitamos mostrar el id mientras llega el perfil remoto
+                        ownerId = rival.userId
+                    }
+                    parent.viewModel.selectTerritory(id: id, ownerName: ownerName, ownerUserId: ownerId)
+                    break
+                }
+            }
+            
+            // If no overlay matched, clear selection
+            if parent.viewModel.selectedTerritoryId == nil {
+                parent.viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
+            }
+        }
+        
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let polygon = overlay as? MKPolygon {
                 let renderer = MKPolygonRenderer(polygon: polygon)
@@ -138,7 +184,10 @@ struct MapView: UIViewRepresentable {
         }
         
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
-            parent.viewModel.updateVisibleRegion(mapView.region)
+            // Defer published state changes to avoid modifying state during view updates
+            DispatchQueue.main.async {
+                self.parent.viewModel.updateVisibleRegion(mapView.region)
+            }
         }
     }
 }

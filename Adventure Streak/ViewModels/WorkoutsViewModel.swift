@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import HealthKit
 
 struct WorkoutItemViewData: Identifiable {
     let id: UUID
@@ -24,6 +25,9 @@ struct WorkoutItemViewData: Identifiable {
     // NEW: Mission info
     let missionName: String?
     let missionDescription: String?
+    // NEW: Horarios
+    let startDateTime: String
+    let endDateTime: String
     
     // NEW: Rarity Logic
     var rarity: String {
@@ -47,53 +51,72 @@ class WorkoutsViewModel: ObservableObject {
     @Published var workouts: [WorkoutItemViewData] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
+    @Published var importTotal: Int = 0
+    @Published var importProcessed: Int = 0
     
     private let activityStore: ActivityStore
     private let territoryService: TerritoryService
+    private let configService: GameConfigService
+    private var cancellables = Set<AnyCancellable>()
     
     @Published var isImporting = false
     
-    init(activityStore: ActivityStore? = nil, territoryService: TerritoryService? = nil) {
+    init(
+        activityStore: ActivityStore? = nil,
+        territoryService: TerritoryService? = nil,
+        configService: GameConfigService
+    ) {
         self.activityStore = activityStore ?? ActivityStore.shared
         self.territoryService = territoryService ?? TerritoryService(territoryStore: TerritoryStore.shared)
+        self.configService = configService
         
-        loadWorkouts()
-        
-        // Fix missing XP for previously imported activities
         Task {
+            await configService.loadConfigIfNeeded()
+            await MainActor.run {
+                self.loadWorkouts()
+            }
             await fixMissingXP()
         }
+        
+        configService.$config
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.loadWorkouts()
+            }
+            .store(in: &cancellables)
     }
     
     func loadWorkouts() {
         let activities = activityStore.fetchAllActivities()
-        // Filter for last 7 days
-        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let cutoffDate = configService.cutoffDate()
         
         self.workouts = activities
-            .filter { $0.startDate >= sevenDaysAgo }
+            .filter { $0.startDate >= cutoffDate }
             .sorted(by: { $0.startDate > $1.startDate })
             .map { activity in
-            WorkoutItemViewData(
-                id: activity.id,
-                type: activity.activityType,
-                title: "\(activity.activityType.displayName) · \(formatDistance(activity.distanceMeters))",
-                dateString: formatDate(activity.startDate),
-                duration: formatDuration(activity.durationSeconds),
-                pace: calculatePace(distance: activity.distanceMeters, duration: activity.durationSeconds, type: activity.activityType),
-                xp: activity.xpBreakdown?.total,
-                territoryXP: activity.xpBreakdown?.xpTerritory,
-                territoryCount: activity.territoryStats?.newCellsCount,
-                newTerritories: activity.territoryStats?.newCellsCount,
-                defendedTerritories: activity.territoryStats?.defendedCellsCount,
-                recapturedTerritories: activity.territoryStats?.recapturedCellsCount,
-                isStreak: (activity.xpBreakdown?.xpStreak ?? 0) > 0,
-                isRecord: (activity.xpBreakdown?.xpWeeklyRecord ?? 0) > 0,
-                hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0,
-                missionName: activity.missions?.first?.name,
-                missionDescription: activity.missions?.first?.description
-            )
-        }
+                let titlePrefix = activity.workoutName ?? activity.activityType.displayName
+                return WorkoutItemViewData(
+                    id: activity.id,
+                    type: activity.activityType,
+                    title: "\(titlePrefix) · \(formatDistance(activity.distanceMeters))",
+                    dateString: formatDate(activity.startDate),
+                    duration: formatDuration(activity.durationSeconds),
+                    pace: calculatePace(distance: activity.distanceMeters, duration: activity.durationSeconds, type: activity.activityType),
+                    xp: activity.xpBreakdown?.total,
+                    territoryXP: activity.xpBreakdown?.xpTerritory,
+                    territoryCount: activity.territoryStats?.newCellsCount,
+                    newTerritories: activity.territoryStats?.newCellsCount,
+                    defendedTerritories: activity.territoryStats?.defendedCellsCount,
+                    recapturedTerritories: activity.territoryStats?.recapturedCellsCount,
+                    isStreak: (activity.xpBreakdown?.xpStreak ?? 0) > 0,
+                    isRecord: (activity.xpBreakdown?.xpWeeklyRecord ?? 0) > 0,
+                    hasBadge: (activity.xpBreakdown?.xpBadges ?? 0) > 0,
+                    missionName: activity.missions?.first?.name,
+                    missionDescription: activity.missions?.first?.description,
+                    startDateTime: formatDateTime(activity.startDate),
+                    endDateTime: formatDateTime(activity.endDate)
+                )
+            }
         
         // DEBUG: Log mission data
         print("📊 Loaded \(self.workouts.count) workouts")
@@ -109,6 +132,12 @@ class WorkoutsViewModel: ObservableObject {
     
     func importFromHealthKit() {
         guard !isImporting else { return }
+        
+        guard configService.config.loadHistoricalWorkouts else {
+            errorMessage = "La importación de entrenos históricos está desactivada en la configuración."
+            return
+        }
+        
         isImporting = true
         isLoading = true
         print("Starting automatic HealthKit import...")
@@ -126,7 +155,7 @@ class WorkoutsViewModel: ObservableObject {
                 return
             }
             
-            HealthKitManager.shared.fetchOutdoorWorkouts { [weak self] workouts, error in
+            HealthKitManager.shared.fetchWorkouts { [weak self] workouts, error in
                 guard let self = self else { return }
                 
                 if let error = error {
@@ -139,7 +168,7 @@ class WorkoutsViewModel: ObservableObject {
                 }
                 
                 guard let workouts = workouts, !workouts.isEmpty else {
-                    print("No outdoor workouts found in HealthKit.")
+                    print("No se encontraron entrenos en HealthKit.")
                     DispatchQueue.main.async { 
                         self.isImporting = false
                         self.isLoading = false
@@ -147,12 +176,12 @@ class WorkoutsViewModel: ObservableObject {
                     return
                 }
                 
-                // Filter out duplicates AND restrict to last 7 days
-                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+                // Filter out duplicates AND restrict to configured window
+                let cutoffDate = self.configService.cutoffDate()
                 
                 let newWorkouts = workouts.filter { workout in
-                    // 1. Date Check: Must be within last 7 days
-                    guard workout.startDate >= sevenDaysAgo else { return false }
+                    // 1. Date Check: Must be within configured window
+                    guard workout.startDate >= cutoffDate else { return false }
                     
                     // 2. Duplicate Check: Must not already exist
                     return !self.activityStore.activities.contains(where: { $0.startDate == workout.startDate })
@@ -170,6 +199,10 @@ class WorkoutsViewModel: ObservableObject {
                 print("Found \(newWorkouts.count) new workouts. Processing in background...")
                 
                 // Process in background to avoid blocking Main Thread
+                DispatchQueue.main.async {
+                    self.importTotal = newWorkouts.count
+                    self.importProcessed = 0
+                }
                 DispatchQueue.global(qos: .utility).async {
                     var newSessions: [ActivitySession] = []
                     let group = DispatchGroup()
@@ -184,30 +217,24 @@ class WorkoutsViewModel: ObservableObject {
                                 group.leave()
                                 semaphore.signal() // Release slot
                             }
+
+                            // Clasificamos indoor/outdoor y permitimos que sesiones indoor no tengan ruta
+                            let type = self.activityType(for: workout)
+                            let points = routePoints ?? []
                             
-                            if let points = routePoints, !points.isEmpty {
-                                let type: ActivityType
-                                switch workout.workoutActivityType {
-                                case .running: type = .run
-                                case .walking: type = .walk
-                                case .cycling: type = .bike
-                                case .hiking: type = .hike
-                                default: type = .otherOutdoor
-                                }
-                                
-                                let session = ActivitySession(
-                                    id: workout.uuid, // use stable HKWorkout id to avoid duplicates
-                                    startDate: workout.startDate,
-                                    endDate: workout.endDate,
-                                    activityType: type,
-                                    distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
-                                    durationSeconds: workout.duration,
-                                    route: points
-                                )
-                                
-                                DispatchQueue.global(qos: .utility).sync {
-                                    newSessions.append(session)
-                                }
+                            let session = ActivitySession(
+                                id: workout.uuid, // use stable HKWorkout id to avoid duplicates
+                                startDate: workout.startDate,
+                                endDate: workout.endDate,
+                                activityType: type,
+                                distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
+                                durationSeconds: workout.duration,
+                                workoutName: self.workoutName(for: workout),
+                                route: points
+                            )
+                            
+                            DispatchQueue.global(qos: .utility).sync {
+                                newSessions.append(session)
                             }
                         }
                     }
@@ -215,34 +242,44 @@ class WorkoutsViewModel: ObservableObject {
                     group.wait() // Wait for all to finish
                     
                     // Save all at once on Main Thread
-                    DispatchQueue.main.async {
-                        if !newSessions.isEmpty {
-                            // Sort by date ascending to ensure correct historical replay
-                            let sortedSessions = newSessions.sorted { $0.startDate < $1.startDate }
-                            
-                            print("Saving \(sortedSessions.count) imported activities...")
+                DispatchQueue.main.async {
+                    if !newSessions.isEmpty {
+                        // Sort by date ascending to ensure correct historical replay
+                        let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
+                        
+                        print("Saving \(sortedSessions.count) imported activities...")
                             
                             // 1. Save Activities - REMOVED: GameEngine handles saving individually
                             // self.activityStore.saveActivities(sortedSessions)
                             
-                            // 2. Process through GameEngine (Individually for accuracy)
-                            Task {
-                                let userId = AuthenticationService.shared.userId ?? "unknown_user"
-                                var totalNewCells = 0
-                                
-                                do {
-                                    for session in sortedSessions {
-                                        // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
-                                        // Use GameEngine to process each imported activity
-                                        let stats = try await GameEngine.shared.completeActivity(session, for: userId)
-                                        
-                                        // Track total for summary
-                                        totalNewCells += stats.newCellsCount
-                                    }
-                                    
-                                } catch {
-                                    print("Error processing import: \(error)")
+                        // 2. Process through GameEngine (Individually for accuracy)
+                        Task {
+                            let userId = AuthenticationService.shared.userId ?? "unknown_user"
+                            var totalNewCells = 0
+                            defer {
+                                // Reset progress when finished (success or failure)
+                                Task { @MainActor in
+                                    self.importTotal = 0
+                                    self.importProcessed = 0
                                 }
+                            }
+                            
+                            do {
+                                for session in sortedSessions {
+                                    // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
+                                    // Use GameEngine to process each imported activity
+                                    let stats = try await GameEngine.shared.completeActivity(session, for: userId)
+                                    
+                                    // Track total for summary
+                                    totalNewCells += stats.newCellsCount
+                                    await MainActor.run {
+                                        self.importProcessed += 1
+                                    }
+                                }
+                                
+                            } catch {
+                                print("Error processing import: \(error)")
+                            }
                                 
                                 // Refresh UI
                                 self.loadWorkouts()
@@ -253,6 +290,8 @@ class WorkoutsViewModel: ObservableObject {
                         } else {
                             self.isImporting = false
                             self.isLoading = false
+                            self.importTotal = 0
+                            self.importProcessed = 0
                         }
                     }
                 }
@@ -308,6 +347,13 @@ class WorkoutsViewModel: ObservableObject {
         return formatter.string(from: date).capitalized
     }
     
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_ES")
+        formatter.dateFormat = "d MMM, HH:mm"
+        return formatter.string(from: date)
+    }
+    
     private func formatDuration(_ seconds: Double) -> String {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.hour, .minute, .second]
@@ -322,5 +368,53 @@ class WorkoutsViewModel: ObservableObject {
         let minutes = Int(paceSecondsPerKm / 60)
         let seconds = Int(paceSecondsPerKm.truncatingRemainder(dividingBy: 60))
         return String(format: "%d:%02d/km", minutes, seconds)
+    }
+
+    nonisolated private func activityType(for workout: HKWorkout) -> ActivityType {
+        let isIndoor = (workout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
+        
+        switch workout.workoutActivityType {
+        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
+            return .indoor
+        case .running:
+            return isIndoor ? .indoor : .run
+        case .walking:
+            return isIndoor ? .indoor : .walk
+        case .cycling:
+            return isIndoor ? .indoor : .bike
+        case .hiking:
+            return .hike
+        default:
+            return isIndoor ? .indoor : .otherOutdoor
+        }
+    }
+    
+    nonisolated private func workoutName(for workout: HKWorkout) -> String {
+        // Usa el título que viene de HealthKit si existe
+        if let title = workout.metadata?["HKMetadataKeyWorkoutTitle"] as? String, !title.isEmpty {
+            return title
+        }
+        if let brand = workout.metadata?[HKMetadataKeyWorkoutBrandName] as? String, !brand.isEmpty {
+            return brand
+        }
+        
+        // Fallback: nombre por tipo en inglés (sin traducciones)
+        return fallbackWorkoutName(for: workout.workoutActivityType)
+    }
+    
+    nonisolated private func fallbackWorkoutName(for type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .running: return "Running"
+        case .walking: return "Walking"
+        case .cycling: return "Cycling"
+        case .hiking: return "Hiking"
+        case .traditionalStrengthTraining: return "Traditional Strength Training"
+        case .functionalStrengthTraining: return "Functional Strength Training"
+        case .highIntensityIntervalTraining: return "HIIT"
+        case .flexibility: return "Flexibility"
+        case .yoga: return "Yoga"
+        case .pilates: return "Pilates"
+        default: return "Workout"
+        }
     }
 }

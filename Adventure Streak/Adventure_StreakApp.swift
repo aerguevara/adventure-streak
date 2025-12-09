@@ -9,6 +9,7 @@ import SwiftUI
 #if canImport(FirebaseCore)
 import FirebaseCore
 #endif
+import BackgroundTasks
 
 class AppDelegate: NSObject, UIApplicationDelegate {
   func application(_ application: UIApplication,
@@ -16,6 +17,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     #if canImport(FirebaseCore)
     FirebaseApp.configure()
     #endif
+    // Registrar tareas en background (HealthKit refresh)
+    BackgroundTaskService.shared.registerTasks()
     return true
   }
 }
@@ -24,10 +27,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct Adventure_StreakApp: App {
     // register app delegate for Firebase setup
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var configService = GameConfigService.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(configService)
+                .task {
+                    await configService.loadConfigIfNeeded()
+                }
         }
     }
 }

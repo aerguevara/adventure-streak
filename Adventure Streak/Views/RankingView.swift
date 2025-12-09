@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct RankingView: View {
     @StateObject var viewModel = RankingViewModel()
@@ -169,15 +172,9 @@ struct PodiumItem: View {
                 }
                 
                 ZStack(alignment: .top) {
-                    Circle()
-                        .fill(Color(hex: "1C1C1E"))
+                    avatarView()
                         .frame(width: 70, height: 70)
-                        .overlay(
-                            Text(entry.displayName.prefix(1).uppercased())
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(.gray)
-                        )
+                        .clipShape(Circle())
                         .overlay(
                             Circle()
                                 .stroke(isFirst ? Color(hex: "FFD60A") : Color.clear, lineWidth: 3)
@@ -221,6 +218,30 @@ struct PodiumItem: View {
         default: return .gray
         }
     }
+    
+    @ViewBuilder
+    private func avatarView() -> some View {
+        if let data = entry.avatarData, let uiImage = UIImage(data: data) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+        } else if let url = entry.avatarURL {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Circle().fill(Color(hex: "1C1C1E"))
+            }
+        } else {
+            Circle()
+                .fill(Color(hex: "1C1C1E"))
+                .overlay(
+                    Text(entry.displayName.prefix(1).uppercased())
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.gray)
+                )
+        }
+    }
 }
 
 struct RankingCard: View {
@@ -236,15 +257,7 @@ struct RankingCard: View {
                 .frame(width: 24)
             
             // Avatar
-            Circle()
-                .fill(Color(hex: "2C2C2E"))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Text(entry.displayName.prefix(1).uppercased())
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
+            avatarView(entry: entry)
             
             // Info
             VStack(alignment: .leading, spacing: 4) {
@@ -346,6 +359,35 @@ struct RankingCard: View {
         case .up: return .green
         case .down: return .red
         case .neutral: return .gray
+        }
+    }
+    
+    @ViewBuilder
+    private func avatarView(entry: RankingEntry) -> some View {
+        if let data = entry.avatarData, let uiImage = UIImage(data: data) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+        } else if let url = entry.avatarURL {
+            AsyncImage(url: url) { image in
+                image.resizable()
+            } placeholder: {
+                Circle().fill(Color(hex: "2C2C2E"))
+            }
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
+        } else {
+            Circle()
+                .fill(Color(hex: "2C2C2E"))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Text(entry.displayName.prefix(1).uppercased())
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                )
         }
     }
 }

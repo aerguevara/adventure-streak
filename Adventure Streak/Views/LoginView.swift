@@ -3,11 +3,20 @@ import AuthenticationServices
 
 struct LoginView: View {
     @StateObject private var viewModel = LoginViewModel()
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         ZStack {
             // Background
-            Color.white.ignoresSafeArea()
+            LinearGradient(
+                colors: [
+                    Color(.systemBackground),
+                    Color(.secondarySystemBackground)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // 1. Logo
@@ -35,6 +44,7 @@ struct LoginView: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .padding(.top, 20)
+                    .foregroundColor(.primary)
                 
                 // 3. Tagline
                 Text("Corre. Conquista. Mantén tu territorio.")
@@ -59,7 +69,7 @@ struct LoginView: View {
                             // Handled via delegate in Service, but we can catch errors here too
                         }
                     )
-                    .signInWithAppleButtonStyle(.black)
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                     .frame(height: 50)
                     .cornerRadius(10)
                     .overlay(
@@ -78,7 +88,7 @@ struct LoginView: View {
                         HStack(spacing: 12) {
                             // G Logo
                             ZStack {
-                                Color.white
+                                Color(.systemBackground)
                                 Image(systemName: "g.circle.fill") // Placeholder for G logo
                                     .resizable()
                                     .frame(width: 20, height: 20)
@@ -88,17 +98,17 @@ struct LoginView: View {
                             
                             Text("Continuar con Google")
                                 .font(.system(size: 17, weight: .medium))
-                                .foregroundColor(.black.opacity(0.54))
+                                .foregroundColor(.primary)
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(10)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
                         )
-                        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                        .shadow(color: Color.primary.opacity(0.05), radius: 2, x: 0, y: 1)
                     }
                     
                     // C. Guest Login (Temporary)
@@ -152,7 +162,7 @@ struct LoginView: View {
                 ProgressView()
                     .scaleEffect(1.5)
                     .padding()
-                    .background(Color.white)
+                    .background(Color(.systemBackground))
                     .cornerRadius(12)
                     .shadow(radius: 10)
             }

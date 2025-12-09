@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import UIKit
 
 @available(iOS 17.0, *)
 struct MapView17: View {
@@ -8,18 +9,36 @@ struct MapView17: View {
     
     var body: some View {
         ZStack {
-            Map(position: $position) {
-                UserAnnotation()
-                
-                ForEach(viewModel.conqueredTerritories) { cell in
-                    MapPolygon(coordinates: TerritoryGrid.polygon(for: cell))
-                        .foregroundStyle(Color.green.opacity(0.4))
-                        .stroke(Color.green, lineWidth: 1)
+            MapReader { proxy in
+                Map(position: $position) {
+                    UserAnnotation()
+                    
+                    ForEach(viewModel.conqueredTerritories) { cell in
+                        MapPolygon(coordinates: TerritoryGrid.polygon(for: cell))
+                            .foregroundStyle(Color.green.opacity(0.4))
+                            .stroke(Color.green, lineWidth: 1)
+                    }
                 }
-            }
-            .mapControls {
-                MapUserLocationButton()
-                MapCompass()
+                .mapStyle(.standard(elevation: .flat)) // Evita renderizado 3D/metal con multisample
+                .mapControls {
+                    MapUserLocationButton()
+                    MapCompass()
+                }
+                .onMapCameraChange { context in
+                    // Postpone state changes to avoid publishing during view updates
+                    DispatchQueue.main.async {
+                        viewModel.updateVisibleRegion(context.region)
+                    }
+                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onEnded { value in
+                            let point = value.location
+                            if let coord = proxy.convert(point, from: .local) {
+                                selectOwner(at: coord)
+                            }
+                        }
+                )
             }
             
             VStack {
@@ -37,6 +56,52 @@ struct MapView17: View {
                 .padding()
                 
                 Spacer()
+                
+                if let owner = viewModel.selectedTerritoryOwner {
+                    VStack(spacing: 6) {
+                        if let data = viewModel.selectedTerritoryOwnerAvatarData,
+                           let uiImage = UIImage(data: data) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 56, height: 56)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                        } else {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .foregroundStyle(.primary)
+                                .frame(width: 56, height: 56)
+                        }
+                        Text("Dueño del territorio")
+                            .font(.footnote)
+                            .foregroundColor(.primary)
+                        Text(owner)
+                            .font(.headline)
+                        HStack(spacing: 12) {
+                            Label("\(viewModel.selectedTerritoryOwnerXP ?? 0) XP", systemImage: "star.fill")
+                                .font(.footnote)
+                            let territoriesLabel = viewModel.selectedTerritoryOwnerTerritories.map { "\($0) territorios" } ?? "Territorios desconocidos"
+                            Label(territoriesLabel, systemImage: "map")
+                                .font(.footnote)
+                        }
+                        Button(action: {
+                            viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
+                        }) {
+                            HStack {
+                                Image(systemName: "xmark.circle.fill")
+                                Text("Cerrar")
+                            }
+                            .font(.caption)
+                        }
+                    }
+                    .padding(.bottom, 12)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(12)
+                    .shadow(radius: 4)
+                }
                 
                 if viewModel.isTracking {
                     VStack {
@@ -82,5 +147,36 @@ struct MapView17: View {
         formatter.unitsStyle = .positional
         formatter.zeroFormattingBehavior = .pad
         return formatter.string(from: duration) ?? "00:00"
+    }
+    
+    private func selectOwner(at coordinate: CLLocationCoordinate2D) {
+        // Check local cells (axis-aligned square, bounding box is enough)
+        if let cell = viewModel.conqueredTerritories.first(where: { cell in
+            let poly = TerritoryGrid.polygon(for: cell)
+            guard let minLat = poly.map(\.latitude).min(),
+                  let maxLat = poly.map(\.latitude).max(),
+                  let minLon = poly.map(\.longitude).min(),
+                  let maxLon = poly.map(\.longitude).max() else { return false }
+            return coordinate.latitude >= minLat && coordinate.latitude <= maxLat &&
+                   coordinate.longitude >= minLon && coordinate.longitude <= maxLon
+        }) {
+            let auth = AuthenticationService.shared
+            let ownerId = cell.ownerUserId ?? auth.userId
+            let displayName = cell.ownerDisplayName
+                ?? (ownerId == auth.userId ? auth.resolvedUserName() : cell.ownerUserId)
+                ?? "Sin dueño"
+            viewModel.selectTerritory(id: cell.id, ownerName: displayName, ownerUserId: ownerId)
+            return
+        }
+        
+        // Rivals: match by polygon id
+        if let rival = viewModel.otherTerritories.first(where: { territory in
+            guard let id = territory.id else { return false }
+            let dummyCell = TerritoryGrid.getCell(for: CLLocationCoordinate2D(latitude: territory.centerLatitude, longitude: territory.centerLongitude))
+            return id == dummyCell.id
+        }) {
+            viewModel.selectTerritory(id: rival.id, ownerName: nil, ownerUserId: rival.userId)
+            return
+        }
     }
 }

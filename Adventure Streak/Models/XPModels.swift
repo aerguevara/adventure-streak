@@ -12,6 +12,8 @@ enum XPConfig {
     static let factorBike: Double = 0.7
     static let factorWalk: Double = 0.9
     static let factorOther: Double = 1.0
+    static let factorIndoor: Double = 0.5
+    static let indoorXPPerMinute: Double = 3.0
 
     static let dailyBaseXPCap: Int = 300
 

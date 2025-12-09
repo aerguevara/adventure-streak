@@ -93,9 +93,19 @@ class GamificationService: ObservableObject, GamificationServiceProtocol {
     
     func computeBaseXP(for activity: ActivitySession, context: XPContext) -> Int {
         let distanceKm = activity.distanceMeters / 1000.0
+        let durationSeconds = activity.durationSeconds
+        
+        // Indoor sin distancia: calcula por minutos
+        if activity.activityType == .indoor {
+            guard durationSeconds >= XPConfig.minDurationSeconds else { return 0 }
+            let minutes = durationSeconds / 60.0
+            let rawXP = Int(minutes * XPConfig.indoorXPPerMinute)
+            let remainingCap = max(0, XPConfig.dailyBaseXPCap - context.todayBaseXPEarned)
+            return min(rawXP, remainingCap)
+        }
         
         guard distanceKm >= XPConfig.minDistanceKm,
-              activity.durationSeconds >= XPConfig.minDurationSeconds else {
+              durationSeconds >= XPConfig.minDurationSeconds else {
             return 0
         }
         
@@ -106,11 +116,16 @@ class GamificationService: ObservableObject, GamificationServiceProtocol {
         case .walk: factor *= XPConfig.factorWalk
         case .hike: factor *= XPConfig.factorWalk
         case .otherOutdoor: factor *= XPConfig.factorOther
+        case .indoor: factor *= XPConfig.factorIndoor
+        }
+
+        // Outdoor sin ruta: factor reducido
+        if activity.activityType.isOutdoor && activity.route.isEmpty {
+            factor = XPConfig.baseFactorPerKm * XPConfig.factorIndoor
         }
         
         let rawXP = Int(distanceKm * factor)
         
-        // Apply Daily Cap
         let remainingCap = max(0, XPConfig.dailyBaseXPCap - context.todayBaseXPEarned)
         return min(rawXP, remainingCap)
     }

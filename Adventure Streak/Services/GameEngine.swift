@@ -10,6 +10,7 @@ class GameEngine {
     private let missionEngine = MissionEngine.shared
     private let gamificationService = GamificationService.shared
     private let feedRepository = FeedRepository.shared
+    private let activityRepository = ActivityRepository.shared
     
     private init() {
         self.territoryService = TerritoryService(territoryStore: TerritoryStore.shared)
@@ -21,17 +22,39 @@ class GameEngine {
     func completeActivity(_ activity: ActivitySession, for userId: String) async throws -> TerritoryStats {
         print("🎮 GameEngine: Processing activity \(activity.id)")
         
+        // Asegurar que ya tenemos foto de territorios remotos antes de calcular conquistas
+        let territoryRepo = TerritoryRepository.shared
+        territoryRepo.observeTerritories()
+        await territoryRepo.waitForInitialSync()
+        
         // 1. Save activity to store
         activityStore.saveActivity(activity)
         print("✅ Activity saved")
+        
+        // 1b. Check remote to avoid double-processing (XP/feed/territories) if already processed
+        let alreadyProcessed = await activityRepository.activityExists(activityId: activity.id, userId: userId)
+        if alreadyProcessed {
+            print("⚠️ Activity \(activity.id) already exists in Firestore. Skipping XP and feed application. Refreshing local copy from remote.")
+            if let remoteActivity = await activityRepository.fetchActivity(activityId: activity.id, userId: userId) {
+                activityStore.updateActivity(remoteActivity)
+            }
+            return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+        }
         
         // 2. Get XP context
         let context = try await GamificationRepository.shared.buildXPContext(for: userId)
         print("✅ XP Context loaded")
         
         // 3. Calculate territorial delta
-        let territoryStats = territoryService.processActivity(activity)
-        print("✅ Territory processed: \(territoryStats.newCellsCount) new, \(territoryStats.defendedCellsCount) defended")
+        let territoryResult: (cells: [TerritoryCell], stats: TerritoryStats)
+        if activity.activityType.isOutdoor {
+            territoryResult = await territoryService.processActivity(activity, ownerUserId: AuthenticationService.shared.userId, ownerDisplayName: AuthenticationService.shared.userName)
+            print("✅ Territory processed: \(territoryResult.stats.newCellsCount) new, \(territoryResult.stats.defendedCellsCount) defended")
+        } else {
+            territoryResult = ([], TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0))
+            print("ℹ️ Actividad indoor: se omite conquista de territorios")
+        }
+        let territoryStats = territoryResult.stats
         
         // 4. Classify missions
         let missions = try await missionEngine.classifyMissions(
@@ -62,6 +85,11 @@ class GameEngine {
             print("   First mission: \(firstMission.name)")
         }
         activityStore.updateActivity(updatedActivity)
+        
+        // 7b. Persist remotely in dedicated collection (non-blocking)
+        Task {
+            await self.activityRepository.saveActivity(updatedActivity, territories: territoryResult.cells, userId: userId)
+        }
         
         // 7. Apply XP to user
         try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)

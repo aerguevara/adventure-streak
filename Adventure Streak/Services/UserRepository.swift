@@ -5,6 +5,11 @@ import FirebaseFirestore
 #if canImport(FirebaseAuth)
 import FirebaseAuth
 #endif
+#if canImport(FirebaseStorage)
+import FirebaseStorage
+#elseif canImport(Firebase)
+import Firebase
+#endif
 
 class UserRepository: ObservableObject {
     static let shared = UserRepository()
@@ -17,6 +22,16 @@ class UserRepository: ObservableObject {
         #endif
     }
     
+    private var storage: Storage? {
+        #if canImport(FirebaseStorage)
+        return Storage.storage()
+        #elseif canImport(Firebase)
+        return Storage.storage()
+        #else
+        return nil
+        #endif
+    }
+    
     #if canImport(FirebaseAuth)
     func syncUser(user: FirebaseAuth.User, name: String?) {
         #if canImport(FirebaseFirestore)
@@ -26,13 +41,22 @@ class UserRepository: ObservableObject {
         
         userRef.getDocument { (document, error) in
             if let document = document, document.exists {
-                // User exists, update last login AND name if provided
+                // User exists: only update displayName if missing/empty, always bump lastLogin
                 var data: [String: Any] = [
                     "lastLogin": FieldValue.serverTimestamp()
                 ]
-                if let name = name, !name.isEmpty {
+                
+                let existingName = (document.get("displayName") as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if let name = name,
+                   !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   (existingName == nil || existingName?.isEmpty == true) {
                     data["displayName"] = name
                 }
+                
+                // Keep avatarURL if already set; no change here
+                
                 userRef.updateData(data)
             } else {
                 // Create new user
@@ -40,7 +64,8 @@ class UserRepository: ObservableObject {
                     id: user.uid,
                     email: user.email,
                     displayName: name ?? "Adventurer",
-                    joinedAt: Date()
+                    joinedAt: Date(),
+                    avatarURL: nil
                 )
                 
                 do {

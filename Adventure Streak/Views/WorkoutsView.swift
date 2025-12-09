@@ -5,7 +5,8 @@ struct WorkoutsView: View {
     @ObservedObject var profileViewModel: ProfileViewModel
     @ObservedObject var badgesViewModel: BadgesViewModel
     
-    @State private var showSignOutConfirmation = false
+    @State private var showProfileDetail = false
+    @State private var showMissionGuide = false
     
     // Init with dependency injection
     init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel) {
@@ -38,8 +39,6 @@ struct WorkoutsView: View {
                         // E) Feed
                         feedSection
                         
-                        // Secondary Buttons
-                        secondaryButtons
                     }
                     .padding(.top, 20)
                     .padding(.bottom, 40)
@@ -49,22 +48,54 @@ struct WorkoutsView: View {
                     profileViewModel.fetchProfileData()
                     badgesViewModel.fetchBadges()
                 }
-            }
-            .toolbar(.hidden, for: .navigationBar)
-            .onAppear {
-                Task {
-                    await viewModel.refresh()
-                    profileViewModel.fetchProfileData()
-                    badgesViewModel.fetchBadges()
+                
+                // Modal de importación
+                if viewModel.importTotal > 0 {
+                    Color.black.opacity(0.6)
+                        .ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView(
+                            value: Double(viewModel.importProcessed),
+                            total: Double(viewModel.importTotal)
+                        )
+                        .progressViewStyle(.linear)
+                        .tint(Color(hex: "4DA8FF"))
+                        
+                        Text("Importando entrenos: \(viewModel.importProcessed) de \(viewModel.importTotal)")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Text("Estamos preparando tus actividades y territorio desde la nube.")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
+                    .padding(24)
+                    .background(Color(hex: "1C1C1E"))
+                    .cornerRadius(16)
+                    .shadow(radius: 10)
+                    .padding(.horizontal, 24)
                 }
             }
-            .confirmationDialog("Cerrar Sesión", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
-                Button("Cerrar Sesión", role: .destructive) {
-                    profileViewModel.signOut()
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(isPresented: $showMissionGuide) {
+                    MissionGuideView()
                 }
-                Button("Cancelar", role: .cancel) {}
-            } message: {
-                Text("¿Estás seguro de que quieres cerrar sesión?")
+                .fullScreenCover(isPresented: $showProfileDetail) {
+                    NavigationStack {
+                        ProfileDetailView(
+                            profileViewModel: profileViewModel,
+                            relationsViewModel: SocialRelationsViewModel()
+                        )
+                    }
+                }
+                .onAppear {
+                    Task {
+                        await viewModel.refresh()
+                        profileViewModel.fetchProfileData()
+                        badgesViewModel.fetchBadges()
+                }
             }
         }
         .preferredColorScheme(.dark)
@@ -74,32 +105,33 @@ struct WorkoutsView: View {
     var headerSection: some View {
         HStack(spacing: 16) {
             // Avatar
-            ZStack {
-                Circle()
-                    .stroke(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2)
-                    .frame(width: 56, height: 56)
-                
-                if let url = profileViewModel.avatarURL {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Image(systemName: "person.fill")
-                            .foregroundColor(.gray)
-                    }
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-                } else {
-                    Image(systemName: "person.fill")
-                        .resizable()
-                        .padding(12)
-                        .foregroundColor(.white.opacity(0.8))
+            Button {
+                showProfileDetail = true
+            } label: {
+                ZStack {
+                    Circle()
+                        .stroke(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2)
+                        .frame(width: 56, height: 56)
+                    
+                    if let url = profileViewModel.avatarURL {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Image(systemName: "person.fill")
+                                .foregroundColor(.gray)
+                        }
                         .frame(width: 50, height: 50)
-                        .background(Color(hex: "1C1C1E"))
                         .clipShape(Circle())
+                    } else {
+                        Image(systemName: "person.fill")
+                            .resizable()
+                            .padding(12)
+                            .foregroundColor(.white.opacity(0.8))
+                            .frame(width: 50, height: 50)
+                            .background(Color(hex: "1C1C1E"))
+                            .clipShape(Circle())
+                    }
                 }
-            }
-            .onTapGesture {
-                showSignOutConfirmation = true
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -117,6 +149,25 @@ struct WorkoutsView: View {
             }
             
             Spacer()
+            
+            Button {
+                showMissionGuide = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                    Text("Misiones")
+                }
+                .font(.caption.bold())
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(hex: "1C1C1E"))
+                .cornerRadius(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+            }
         }
         .padding(.horizontal)
     }
@@ -311,9 +362,7 @@ struct WorkoutsView: View {
                 .padding(.horizontal)
             
             if viewModel.isLoading && viewModel.workouts.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                EmptyView() // El modal global de carga ya cubre este estado
             } else if viewModel.workouts.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "figure.run")
@@ -333,22 +382,6 @@ struct WorkoutsView: View {
                 }
             }
         }
-    }
-    
-    // MARK: - Secondary Buttons
-    var secondaryButtons: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                SecondaryButton(icon: "map", title: "View Map")
-                SecondaryButton(icon: "trophy", title: "Ranking")
-            }
-            
-            HStack(spacing: 12) {
-                SecondaryButton(icon: "clock.arrow.circlepath", title: "History")
-                SecondaryButton(icon: "gearshape", title: "Settings")
-            }
-        }
-        .padding(.horizontal)
     }
 }
 
@@ -421,5 +454,3 @@ struct SecondaryButton: View {
         }
     }
 }
-
-

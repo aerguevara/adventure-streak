@@ -11,6 +11,7 @@ class AuthenticationService: NSObject, ObservableObject {
     @Published var userId: String?
     @Published var userEmail: String?
     @Published var userName: String?
+    @Published var isSyncingData = false
     
     // Helper for nonce
     fileprivate var currentNonce: String?
@@ -199,25 +200,40 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                     self.userId = user.uid
                     self.userEmail = user.email
                     
-                    // Handle name (only available on first sign in)
-                    var name = AuthenticationService.resolveDisplayName(for: user)
-                    if let fullName = appleIDCredential.fullName {
+                    // Prefer existing Firestore displayName; fallback to Apple fullName; then to resolved name/email.
+                    let resolvedFallback = AuthenticationService.resolveDisplayName(for: user) ?? "Aventurero"
+                    let appleName: String? = {
+                        guard let fullName = appleIDCredential.fullName else { return nil }
                         let formatter = PersonNameComponentsFormatter()
-                        let formatted = formatter.string(from: fullName)
-                        if !formatted.isEmpty {
-                            name = formatted
-                        }
+                        let formatted = formatter.string(from: fullName).trimmingCharacters(in: .whitespacesAndNewlines)
+                        return formatted.isEmpty ? nil : formatted
+                    }()
+                    
+                    // Set an early value to avoid nil in UI while fetching remote
+                    self.userName = appleName ?? resolvedFallback
+                    
+                    UserRepository.shared.fetchUser(userId: user.uid) { [weak self] remoteUser in
+                        guard let self = self else { return }
+                        let remoteName = remoteUser?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let chosenName = (remoteName?.isEmpty == false) ? remoteName! : (appleName ?? resolvedFallback)
+                        
+                        DispatchQueue.main.async {
+                        self.userName = chosenName
                     }
-                    self.userName = name
                     
-                    // Sync User to Firestore
-                    UserRepository.shared.syncUser(user: user, name: name)
+                    // Sync without clobbering: use chosenName (remote preferred) so displayName stays consistent, and update lastLogin.
+                    UserRepository.shared.syncUser(user: user, name: chosenName)
                     
-                    // Fallback: fetch from remote profile if still nil/empty
-                    self.loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
+                    // Backfill + parity check so remote list matches local feed/events
+                    Task {
+                        await MainActor.run { self.isSyncingData = true }
+                        await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                        await MainActor.run { self.isSyncingData = false }
+                    }
                 }
             }
         }
+    }
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {

@@ -2,6 +2,9 @@ import Foundation
 import MapKit
 import Combine
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 @MainActor
 class MapViewModel: ObservableObject {
@@ -13,6 +16,12 @@ class MapViewModel: ObservableObject {
     @Published var conqueredTerritories: [TerritoryCell] = []
     // NEW: Added for multiplayer conquest feature
     @Published var otherTerritories: [RemoteTerritory] = []
+    @Published var selectedTerritoryId: String?
+    @Published var selectedTerritoryOwner: String?
+    @Published var selectedTerritoryOwnerId: String?
+    @Published var selectedTerritoryOwnerXP: Int?
+    @Published var selectedTerritoryOwnerTerritories: Int?
+    @Published var selectedTerritoryOwnerAvatarData: Data?
     
     @Published var activities: [ActivitySession] = []
     @Published var isTracking = false
@@ -31,20 +40,31 @@ class MapViewModel: ObservableObject {
     private let territoryService: TerritoryService
     // NEW: Repository for multiplayer
     private let territoryRepository = TerritoryRepository.shared
+    private let configService: GameConfigService
     
     private var timer: Timer?
     private var startTime: Date?
     private var cancellables = Set<AnyCancellable>()
     
-    init(locationService: LocationService, territoryStore: TerritoryStore, activityStore: ActivityStore) {
+    init(
+        locationService: LocationService,
+        territoryStore: TerritoryStore,
+        activityStore: ActivityStore,
+        configService: GameConfigService
+    ) {
         self.locationService = locationService
         self.territoryStore = territoryStore
         self.activityStore = activityStore
         self.territoryService = TerritoryService(territoryStore: territoryStore)
+        self.configService = configService
         
         setupBindings()
         // NEW: Start observing remote territories
         territoryRepository.observeTerritories()
+        
+        Task {
+            await configService.loadConfigIfNeeded()
+        }
         
     }
     
@@ -69,10 +89,13 @@ class MapViewModel: ObservableObject {
         // Combine latest territories with latest visible region
         territoryStore.$conqueredCells
             .combineLatest($region.debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .userInteractive)))
-            .map { (cellsDict, region) -> [TerritoryCell] in
-                // Filter for last 7 days
-                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+            .combineLatest(configService.$config)
+            .map { [weak self] combined, config -> [TerritoryCell] in
+                guard let self = self else { return [] }
                 
+                let (cellsDict, region) = combined
+                let cutoffDate = self.cutoffDate(for: config)
+
                 // 1. LOD Check: If zoomed out too far, don't render individual cells
                 // MODIFIED: Increased threshold from 0.2 to 10.0 to keep boxes visible at large scales
                 if region.span.latitudeDelta > 10.0 || region.span.longitudeDelta > 10.0 {
@@ -82,7 +105,7 @@ class MapViewModel: ObservableObject {
                 
                 let allCells = Array(cellsDict.values)
                 // Filter by date first
-                let recentCells = allCells.filter { $0.lastConqueredAt >= sevenDaysAgo }
+                let recentCells = allCells.filter { $0.lastConqueredAt >= cutoffDate }
                 
                 // Simple bounding box check
                 let minLat = region.center.latitude - region.span.latitudeDelta / 2
@@ -101,7 +124,7 @@ class MapViewModel: ObservableObject {
                            cell.centerLongitude >= minLon && cell.centerLongitude <= maxLon
                 }
                 
-                print("DEBUG: Found \(visible.count) visible territories in region (Last 7 Days).")
+                print("DEBUG: Found \(visible.count) visible territories in region (Filtered by config window).")
                 
                 // 2. Hard Cap: Never return more than 500 polygons to keep UI smooth
                 return Array(visible.prefix(500))
@@ -110,9 +133,11 @@ class MapViewModel: ObservableObject {
             .assign(to: &$visibleTerritories)
         
         territoryStore.$conqueredCells
-            .map { dict -> [TerritoryCell] in
-                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-                return Array(dict.values).filter { $0.lastConqueredAt >= sevenDaysAgo }
+            .combineLatest(configService.$config)
+            .map { [weak self] dict, config -> [TerritoryCell] in
+                guard let self = self else { return [] }
+                let cutoffDate = self.cutoffDate(for: config)
+                return Array(dict.values).filter { $0.lastConqueredAt >= cutoffDate }
             }
             .assign(to: &$conqueredTerritories)
             
@@ -136,11 +161,25 @@ class MapViewModel: ObservableObject {
                 for territory in remote {
                     guard territory.userId != currentUserId, let territoryId = territory.id, let localCell = localById[territoryId] else { continue }
 
-                    let remoteIsNewer = territory.timestamp > localCell.lastConqueredAt ||
-                        (territory.timestamp == localCell.lastConqueredAt && territory.expiresAt > localCell.expiresAt)
+                    let remoteEnd = territory.activityEndAt
+                    let localEnd = localCell.lastConqueredAt
+                    let remoteUploaded = territory.uploadedAt?.dateValue() ?? territory.activityEndAt
+                    let localUploaded = localCell.ownerUploadedAt ?? localCell.lastConqueredAt
+                    let remoteIsNewer: Bool
+                    if localCell.ownerUserId == currentUserId && territory.userId != currentUserId {
+                        // El servidor dice que pertenece a otro usuario: confiar en servidor y soltarla
+                        remoteIsNewer = true
+                    } else if remoteEnd > localEnd {
+                        remoteIsNewer = true
+                    } else if remoteEnd == localEnd {
+                        // Si empatan en hora de entreno, gana quien subió más tarde (o cualquiera si no hay uploadedAt)
+                        remoteIsNewer = remoteUploaded >= localUploaded
+                    } else {
+                        remoteIsNewer = false
+                    }
                     if remoteIsNewer {
                         lostIds.insert(territoryId)
-                        print("[Territories] Marking cell as rival due to newer remote timestamp: \(territoryId)")
+                        print("[Territories] Marking cell as rival due to newer remote activity end time: \(territoryId)")
                     }
                 }
 
@@ -167,8 +206,10 @@ class MapViewModel: ObservableObject {
                             centerLatitude: remoteT.centerLatitude,
                             centerLongitude: remoteT.centerLongitude,
                             boundary: remoteT.boundary,
-                            lastConqueredAt: remoteT.timestamp,
-                            expiresAt: remoteT.expiresAt
+                            lastConqueredAt: remoteT.activityEndAt,
+                            expiresAt: remoteT.expiresAt,
+                            ownerUserId: remoteT.userId,
+                            ownerDisplayName: nil
                         )
                     }
                     // Async update to store - This will trigger the pipeline again, but localIds will be updated next time
@@ -193,9 +234,11 @@ class MapViewModel: ObservableObject {
             .assign(to: &$otherTerritories)
             
         activityStore.$activities
-            .map { activities -> [ActivitySession] in
-                let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-                return activities.filter { $0.startDate >= sevenDaysAgo }
+            .combineLatest(configService.$config)
+            .map { [weak self] activities, config -> [ActivitySession] in
+                guard let self = self else { return [] }
+                let cutoffDate = self.cutoffDate(for: config)
+                return activities.filter { $0.startDate >= cutoffDate }
             }
             .assign(to: &$activities)
         
@@ -204,6 +247,10 @@ class MapViewModel: ObservableObject {
                 self?.calculateDistance(points: points)
             }
             .store(in: &cancellables)
+    }
+    
+    private func cutoffDate(for config: GameConfig) -> Date {
+        Calendar.current.date(byAdding: .day, value: -config.clampedLookbackDays, to: Date()) ?? Date()
     }
     
     func updateVisibleRegion(_ region: MKCoordinateRegion) {
@@ -225,6 +272,46 @@ class MapViewModel: ObservableObject {
         
         self.region = newRegion
         self.shouldRecenter = true
+    }
+    
+    func selectTerritory(id: String?, ownerName: String?, ownerUserId: String?) {
+        let currentUserId = AuthenticationService.shared.userId
+        let finalOwnerId = ownerUserId ?? currentUserId
+        let finalOwnerName: String? = {
+            if let ownerName = ownerName { return ownerName }
+            if let finalOwnerId, finalOwnerId == currentUserId {
+                return AuthenticationService.shared.resolvedUserName()
+            }
+            return nil
+        }()
+        
+        selectedTerritoryId = id
+        selectedTerritoryOwner = finalOwnerName
+        selectedTerritoryOwnerId = finalOwnerId
+        selectedTerritoryOwnerAvatarData = finalOwnerId.flatMap { AvatarCacheManager.shared.data(for: $0) }
+        
+        if let currentUserId,
+           finalOwnerId == currentUserId {
+            selectedTerritoryOwnerXP = GamificationService.shared.currentXP
+            selectedTerritoryOwnerTerritories = territoryStore.conqueredCells.count
+        } else {
+            selectedTerritoryOwnerXP = nil
+            selectedTerritoryOwnerTerritories = nil
+        }
+        
+        // Intentar cargar avatar si no está en caché
+        if let finalOwnerId, selectedTerritoryOwnerAvatarData == nil {
+            Task {
+                await fetchOwnerAvatar(userId: finalOwnerId)
+            }
+        }
+        
+        // Completar datos del dueño si es un rival
+        if let finalOwnerId, finalOwnerId != currentUserId {
+            Task {
+                await fetchOwnerProfile(userId: finalOwnerId)
+            }
+        }
     }
     
     func startActivity(type: ActivityType) {
@@ -284,5 +371,89 @@ class MapViewModel: ObservableObject {
             dist += loc1.distance(from: loc2)
         }
         currentActivityDistance = dist
+    }
+    
+    private func fetchOwnerAvatar(userId: String) async {
+        if let cached = AvatarCacheManager.shared.data(for: userId) {
+            // Ya está en caché, solo refrescar selección
+            if selectedTerritoryOwnerId == userId {
+                selectedTerritoryOwnerAvatarData = cached
+            }
+            return
+        }
+        
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            let doc = try await db.collection("users").document(userId).getDocument()
+            if let urlString = doc.get("avatarURL") as? String,
+               let url = URL(string: urlString) {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                AvatarCacheManager.shared.save(data: data, for: userId)
+                if selectedTerritoryOwnerId == userId {
+                    selectedTerritoryOwnerAvatarData = data
+                }
+            }
+        } catch {
+            print("[Map] Error al obtener avatar de \(userId): \(error)")
+        }
+        #endif
+    }
+    
+    private func fetchOwnerProfile(userId: String) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            let doc = try await db.collection("users").document(userId).getDocument()
+            let displayName = (doc.get("displayName") as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let xpValue = doc.get("xp") as? Int
+            let avatarURLString = doc.get("avatarURL") as? String
+            var territoryCount: Int?
+            
+            // Obtener número de territorios del dueño
+            do {
+                // Agregado server-side si está disponible
+                if #available(iOS 15.0, *) {
+                    let countQuery = db.collection("remote_territories")
+                        .whereField("userId", isEqualTo: userId)
+                        .count
+                    let snapshot = try await countQuery.getAggregation(source: .server)
+                    territoryCount = Int(truncating: snapshot.count)
+                } else {
+                    // Fallback: fetch documents (menos eficiente, pero solo al seleccionar)
+                    let snapshot = try await db.collection("remote_territories")
+                        .whereField("userId", isEqualTo: userId)
+                        .getDocuments()
+                    territoryCount = snapshot.documents.count
+                }
+            } catch {
+                print("[Map] Error obteniendo conteo de territorios para \(userId): \(error)")
+            }
+            
+            if let urlString = avatarURLString,
+               let url = URL(string: urlString),
+               AvatarCacheManager.shared.data(for: userId) == nil {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                AvatarCacheManager.shared.save(data: data, for: userId)
+                if selectedTerritoryOwnerId == userId {
+                    selectedTerritoryOwnerAvatarData = data
+                }
+            }
+            
+            if selectedTerritoryOwnerId == userId {
+                if let name = displayName, !name.isEmpty {
+                    selectedTerritoryOwner = name
+                }
+                if let xpValue {
+                    selectedTerritoryOwnerXP = xpValue
+                }
+                if let territoryCount {
+                    selectedTerritoryOwnerTerritories = territoryCount
+                }
+            }
+        } catch {
+            print("[Map] Error al obtener perfil remoto de \(userId): \(error)")
+        }
+        #endif
     }
 }

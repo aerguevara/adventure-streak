@@ -11,6 +11,7 @@
 		DA45082C2ED2432400D3C493 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = DA45082B2ED2432400D3C493 /* FirebaseAnalytics */; };
 		DA4508382ED2467600D3C493 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = DA4508372ED2467600D3C493 /* FirebaseAuth */; };
 		DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = DA4508392ED2495300D3C493 /* FirebaseCore */; };
+		DA450A482EE5DC1200D3C493 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = DA450A472EE5DC1200D3C493 /* FirebaseStorage */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +63,7 @@
 				DA45082C2ED2432400D3C493 /* FirebaseAnalytics in Frameworks */,
 				DA4508382ED2467600D3C493 /* FirebaseAuth in Frameworks */,
 				DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */,
+				DA450A482EE5DC1200D3C493 /* FirebaseStorage in Frameworks */,
 				DA45082A2ED242EE00D3C493 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -135,6 +137,7 @@
 				DA45082B2ED2432400D3C493 /* FirebaseAnalytics */,
 				DA4508372ED2467600D3C493 /* FirebaseAuth */,
 				DA4508392ED2495300D3C493 /* FirebaseCore */,
+				DA450A472EE5DC1200D3C493 /* FirebaseStorage */,
 			);
 			productName = "Adventure Streak";
 			productReference = DA4507A82ED21A0B00D3C493 /* Adventure Streak.app */;
@@ -421,12 +424,13 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Adventure Streak";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Necesitamos acceder a tus entrenamientos para importar tus rutas y conquistar territorios";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adventure Streak usa tus datos de Salud para registrar y actualizar tus entrenos, rachas de actividad y progreso deportivo dentro de la app.";
@@ -437,11 +441,12 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -457,12 +462,13 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Adventure Streak";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Necesitamos acceder a tus entrenamientos para importar tus rutas y conquistar territorios";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Adventure Streak usa tus datos de Salud para registrar y actualizar tus entrenos, rachas de actividad y progreso deportivo dentro de la app.";
@@ -473,11 +479,12 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -630,6 +637,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCore;
+		};
+		DA450A472EE5DC1200D3C493 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

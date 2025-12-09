@@ -9,14 +9,15 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var routePoints: [RoutePoint] = []
     @Published var isTracking = false
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    private var isMonitoring = false
     
     override init() {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 10 // Update every 10 meters
-        locationManager.allowsBackgroundLocationUpdates = true
-        locationManager.pausesLocationUpdatesAutomatically = false
+        locationManager.allowsBackgroundLocationUpdates = false
+        locationManager.pausesLocationUpdatesAutomatically = true
     }
     
     func requestPermission() {
@@ -25,7 +26,15 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     // NEW: Start getting location updates without recording a route
     func startMonitoring() {
+        guard !isMonitoring, !isTracking else { return }
+        isMonitoring = true
         locationManager.startUpdatingLocation()
+    }
+    
+    func stopMonitoring() {
+        guard !isTracking else { return }
+        isMonitoring = false
+        locationManager.stopUpdatingLocation()
     }
     
     func startTracking() {
@@ -36,10 +45,9 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     func stopTracking() {
         isTracking = false
-        // We might want to keep updating location for the map, but for now let's stop to save battery if not needed.
-        // Actually, if we are on the map screen, we want updates.
-        // But let's leave this as is for "stopping a workout".
-        // locationManager.stopUpdatingLocation() 
+        if !isMonitoring {
+            locationManager.stopUpdatingLocation()
+        }
     }
     
     // MARK: - CLLocationManagerDelegate
