@@ -192,7 +192,8 @@ class TerritoryService {
         }
         
         mutableCell.lastConqueredAt = activity.endDate
-        mutableCell.expiresAt = Calendar.current.date(byAdding: .day, value: TerritoryGrid.daysToExpire, to: activity.endDate)!
+        let expirationDays = GameConfigService.shared.config.territoryExpirationDays
+        mutableCell.expiresAt = Calendar.current.date(byAdding: .day, value: expirationDays, to: activity.endDate)!
         mutableCell.ownerUserId = currentUserId
         mutableCell.ownerDisplayName = currentUserName
         mutableCell.ownerUploadedAt = activity.endDate

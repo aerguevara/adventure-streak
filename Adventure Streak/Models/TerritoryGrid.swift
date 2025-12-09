@@ -6,7 +6,6 @@ struct TerritoryGrid {
     // Use a fixed degree step for stable grid alignment
     // 0.002 degrees is approx 222m at equator, getting smaller as we go north
     static let cellSizeDegrees: Double = 0.002
-    static let daysToExpire: Int = 7
     
     static func cellIndex(for coordinate: CLLocationCoordinate2D) -> (x: Int, y: Int) {
         let xIndex = Int(floor(coordinate.longitude / cellSizeDegrees))
@@ -44,7 +43,7 @@ struct TerritoryGrid {
             centerLongitude: center.longitude,
             boundary: boundary,
             lastConqueredAt: Date(),
-            expiresAt: Calendar.current.date(byAdding: .day, value: daysToExpire, to: Date())!,
+            expiresAt: Calendar.current.date(byAdding: .day, value: GameConfigService.shared.config.territoryExpirationDays, to: Date())!,
             ownerUserId: ownerUserId,
             ownerDisplayName: ownerDisplayName,
             ownerUploadedAt: nil
