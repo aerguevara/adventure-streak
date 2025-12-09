@@ -23,6 +23,8 @@ struct SocialActivityData: Codable, Hashable {
     let durationSeconds: Double
     let xpEarned: Int
     let newZonesCount: Int
+    let defendedZonesCount: Int
+    let recapturedZonesCount: Int
     
     var distanceKm: Double {
         distanceMeters / 1000.0

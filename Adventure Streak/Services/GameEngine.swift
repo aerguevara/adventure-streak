@@ -128,7 +128,9 @@ class GameEngine {
             distanceMeters: activity.distanceMeters,
             durationSeconds: activity.durationSeconds,
             xpEarned: xpBreakdown.total,
-            newZonesCount: territoryStats.newCellsCount
+            newZonesCount: territoryStats.newCellsCount,
+            defendedZonesCount: territoryStats.defendedCellsCount,
+            recapturedZonesCount: territoryStats.recapturedCellsCount
         )
         
         // Single event per activity
@@ -139,18 +141,29 @@ class GameEngine {
         }()
         
         let title: String = primaryMission?.name ?? "Actividad completada"
+        let territoryHighlights: [String] = [
+            territoryStats.newCellsCount > 0 ? "\(territoryStats.newCellsCount) territorios conquistados" : nil,
+            territoryStats.defendedCellsCount > 0 ? "\(territoryStats.defendedCellsCount) territorios defendidos" : nil,
+            territoryStats.recapturedCellsCount > 0 ? "\(territoryStats.recapturedCellsCount) territorios robados" : nil
+        ].compactMap { $0 }
+
         let subtitle: String? = {
+            var components: [String] = []
             if !missionNames.isEmpty {
-                return "Misiones: \(missionNames)"
+                components.append("Misiones: \(missionNames)")
             }
-            if territoryStats.newCellsCount > 0 {
-                return "\(territoryStats.newCellsCount) nuevos territorios conquistados"
+            if !territoryHighlights.isEmpty {
+                components.append(territoryHighlights.joined(separator: " · "))
             }
-            return nil
+            return components.isEmpty ? nil : components.joined(separator: " · ")
         }()
-        
+
         let eventType: FeedEventType
-        if territoryStats.newCellsCount > 0 {
+        if territoryStats.recapturedCellsCount > 0 {
+            eventType = .territoryRecaptured
+        } else if territoryStats.newCellsCount > 0 {
+            eventType = .territoryConquered
+        } else if territoryStats.defendedCellsCount > 0 {
             eventType = .territoryConquered
         } else {
             eventType = .distanceRecord
