@@ -23,7 +23,7 @@ struct TerritoryGrid {
         return "\(x)_\(y)"
     }
     
-    static func getCell(for coordinate: CLLocationCoordinate2D, ownerUserId: String? = nil, ownerDisplayName: String? = nil) -> TerritoryCell {
+    static func getCell(for coordinate: CLLocationCoordinate2D, ownerUserId: String? = nil, ownerDisplayName: String? = nil, expirationDays: Int = 7) -> TerritoryCell {
         let (x, y) = cellIndex(for: coordinate)
         let center = cellCenter(x: x, y: y)
         let id = cellId(x: x, y: y)
@@ -43,7 +43,7 @@ struct TerritoryGrid {
             centerLongitude: center.longitude,
             boundary: boundary,
             lastConqueredAt: Date(),
-            expiresAt: Calendar.current.date(byAdding: .day, value: GameConfigService.shared.config.territoryExpirationDays, to: Date())!,
+            expiresAt: Calendar.current.date(byAdding: .day, value: expirationDays, to: Date())!,
             ownerUserId: ownerUserId,
             ownerDisplayName: ownerDisplayName,
             ownerUploadedAt: nil
@@ -65,7 +65,7 @@ struct TerritoryGrid {
     }
     
     // Interpolate cells between two coordinates to avoid gaps
-    static func cellsBetween(start: CLLocationCoordinate2D, end: CLLocationCoordinate2D) -> [TerritoryCell] {
+    static func cellsBetween(start: CLLocationCoordinate2D, end: CLLocationCoordinate2D, expirationDays: Int = 7) -> [TerritoryCell] {
         var cells: [TerritoryCell] = []
         
         let startLocation = CLLocation(latitude: start.latitude, longitude: start.longitude)
@@ -74,7 +74,7 @@ struct TerritoryGrid {
         
         // If points are very close, just return the cell for the start point
         if distance < 10 { // 10 meters threshold
-            return [getCell(for: start)]
+            return [getCell(for: start, expirationDays: expirationDays)]
         }
         
         // Interpolate points every 20 meters to ensure we hit every cell
@@ -88,7 +88,7 @@ struct TerritoryGrid {
             let lon = start.longitude + (end.longitude - start.longitude) * fraction
             let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
             
-            cells.append(getCell(for: coordinate))
+            cells.append(getCell(for: coordinate, expirationDays: expirationDays))
         }
         
         return cells

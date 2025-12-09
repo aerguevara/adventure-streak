@@ -7,20 +7,27 @@ import FirebaseFirestore
 struct GameConfig: Equatable {
     var loadHistoricalWorkouts: Bool
     var workoutLookbackDays: Int
+    var territoryExpirationDays: Int
     
     static let `default` = GameConfig(
         loadHistoricalWorkouts: true,
-        workoutLookbackDays: 7
+        workoutLookbackDays: 7,
+        territoryExpirationDays: 7
     )
     
     var clampedLookbackDays: Int {
         max(1, min(workoutLookbackDays, 60))
     }
     
+    var clampedTerritoryExpiration: Int {
+        max(1, min(territoryExpirationDays, 60))
+    }
+    
     func sanitized() -> GameConfig {
         GameConfig(
             loadHistoricalWorkouts: loadHistoricalWorkouts,
-            workoutLookbackDays: clampedLookbackDays
+            workoutLookbackDays: clampedLookbackDays,
+            territoryExpirationDays: clampedTerritoryExpiration
         )
     }
 }
@@ -102,9 +109,15 @@ final class GameConfigService: ObservableObject {
                     ?? (lookbackSource as? NSNumber)?.intValue
                     ?? loaded.workoutLookbackDays
                 
+                let expirationSource = data["territoryExpirationDays"]
+                let expiration = (expirationSource as? Int)
+                    ?? (expirationSource as? NSNumber)?.intValue
+                    ?? loaded.territoryExpirationDays
+                
                 loaded = GameConfig(
                     loadHistoricalWorkouts: loadHistorical,
-                    workoutLookbackDays: lookback
+                    workoutLookbackDays: lookback,
+                    territoryExpirationDays: expiration
                 )
             }
         } catch {

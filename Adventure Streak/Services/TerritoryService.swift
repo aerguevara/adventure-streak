@@ -12,7 +12,14 @@ class TerritoryService {
     func processActivity(_ activity: ActivitySession, ownerUserId: String? = nil, ownerDisplayName: String? = nil) async -> (cells: [TerritoryCell], stats: TerritoryStats) {
         // Prefetch dueños remotos de las celdas que se van a tocar para clasificar correctamente (robo vs nuevo)
         let mergedCells = await mergeWithRemoteOwners(for: [activity], existing: territoryStore.conqueredCells)
-        let (newCells, stats) = TerritoryService.calculateTerritories(activities: [activity], existingCells: mergedCells, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
+        let expirationDays = GameConfigService.shared.config.territoryExpirationDays
+        let (newCells, stats) = TerritoryService.calculateTerritories(
+            activities: [activity],
+            existingCells: mergedCells,
+            ownerUserId: ownerUserId,
+            ownerDisplayName: ownerDisplayName,
+            expirationDays: expirationDays
+        )
         
         if !newCells.isEmpty {
             territoryStore.upsertCells(newCells)
@@ -41,10 +48,17 @@ class TerritoryService {
         // 1. Capture existing cells (Main Actor access)
         let existingCells = territoryStore.conqueredCells
         let mergedCells = await mergeWithRemoteOwners(for: activities, existing: existingCells)
+        let expirationDays = GameConfigService.shared.config.territoryExpirationDays
         
         // 2. Perform heavy calculation on background thread
         let result = await Task.detached(priority: .userInitiated) {
-            return TerritoryService.calculateTerritories(activities: activities, existingCells: mergedCells, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
+            return TerritoryService.calculateTerritories(
+                activities: activities,
+                existingCells: mergedCells,
+                ownerUserId: ownerUserId,
+                ownerDisplayName: ownerDisplayName,
+                expirationDays: expirationDays
+            )
         }.value
         
         // 3. Update store ONCE (Main Actor access)
@@ -114,7 +128,7 @@ class TerritoryService {
     }
     
     // Pure logic helper - Non-isolated to run on background thread
-    nonisolated private static func calculateTerritories(activities: [ActivitySession], existingCells: [String: TerritoryCell], ownerUserId: String?, ownerDisplayName: String?) -> (newCells: [TerritoryCell], stats: TerritoryStats) {
+    nonisolated private static func calculateTerritories(activities: [ActivitySession], existingCells: [String: TerritoryCell], ownerUserId: String?, ownerDisplayName: String?, expirationDays: Int) -> (newCells: [TerritoryCell], stats: TerritoryStats) {
         var newConqueredCount = 0
         var defendedCount = 0
         var recapturedCount = 0
@@ -127,8 +141,8 @@ class TerritoryService {
             
             // Add start point cell
             if let first = activity.route.first {
-                let cell = existingCells[TerritoryGrid.cellId(x: TerritoryGrid.cellIndex(for: first.coordinate).x, y: TerritoryGrid.cellIndex(for: first.coordinate).y)] ?? TerritoryGrid.getCell(for: first.coordinate, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName)
-                processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName)
+                let cell = existingCells[TerritoryGrid.cellId(x: TerritoryGrid.cellIndex(for: first.coordinate).x, y: TerritoryGrid.cellIndex(for: first.coordinate).y)] ?? TerritoryGrid.getCell(for: first.coordinate, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName, expirationDays: expirationDays)
+                processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName, expirationDays: expirationDays)
             }
             
             // Process segments
@@ -136,7 +150,7 @@ class TerritoryService {
                 let start = activity.route[i].coordinate
                 let end = activity.route[i+1].coordinate
                 
-                let interpolatedCells = TerritoryGrid.cellsBetween(start: start, end: end)
+                let interpolatedCells = TerritoryGrid.cellsBetween(start: start, end: end, expirationDays: expirationDays)
                 
                 for cellTemplate in interpolatedCells {
                     // Check if already processed in this batch
@@ -145,7 +159,7 @@ class TerritoryService {
                     }
                     
                     let cell = existingCells[cellTemplate.id] ?? cellTemplate
-                    processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName)
+                    processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName, expirationDays: expirationDays)
                 }
             }
         }
@@ -160,7 +174,7 @@ class TerritoryService {
     }
     
     // Helper must be static or non-isolated to be called from detached task without capturing self
-    nonisolated private static func processCell(_ cell: TerritoryCell, existingCells: [String: TerritoryCell], newCells: inout [TerritoryCell], newConqueredCount: inout Int, defendedCount: inout Int, recapturedCount: inout Int, activity: ActivitySession, currentUserId: String?, currentUserName: String?) {
+    nonisolated private static func processCell(_ cell: TerritoryCell, existingCells: [String: TerritoryCell], newCells: inout [TerritoryCell], newConqueredCount: inout Int, defendedCount: inout Int, recapturedCount: inout Int, activity: ActivitySession, currentUserId: String?, currentUserName: String?, expirationDays: Int) {
         var mutableCell = cell
         let existing = existingCells[mutableCell.id]
         
@@ -192,7 +206,6 @@ class TerritoryService {
         }
         
         mutableCell.lastConqueredAt = activity.endDate
-        let expirationDays = GameConfigService.shared.config.territoryExpirationDays
         mutableCell.expiresAt = Calendar.current.date(byAdding: .day, value: expirationDays, to: activity.endDate)!
         mutableCell.ownerUserId = currentUserId
         mutableCell.ownerDisplayName = currentUserName

@@ -199,8 +199,10 @@ class WorkoutsViewModel: ObservableObject {
                 print("Found \(newWorkouts.count) new workouts. Processing in background...")
                 
                 // Process in background to avoid blocking Main Thread
-                self.importTotal = newWorkouts.count
-                self.importProcessed = 0
+                DispatchQueue.main.async {
+                    self.importTotal = newWorkouts.count
+                    self.importProcessed = 0
+                }
                 DispatchQueue.global(qos: .utility).async {
                     var newSessions: [ActivitySession] = []
                     let group = DispatchGroup()
@@ -240,37 +242,44 @@ class WorkoutsViewModel: ObservableObject {
                     group.wait() // Wait for all to finish
                     
                     // Save all at once on Main Thread
-                    DispatchQueue.main.async {
-                        if !newSessions.isEmpty {
-                            // Sort by date ascending to ensure correct historical replay
-                            let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
-                            
-                            print("Saving \(sortedSessions.count) imported activities...")
+                DispatchQueue.main.async {
+                    if !newSessions.isEmpty {
+                        // Sort by date ascending to ensure correct historical replay
+                        let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
+                        
+                        print("Saving \(sortedSessions.count) imported activities...")
                             
                             // 1. Save Activities - REMOVED: GameEngine handles saving individually
                             // self.activityStore.saveActivities(sortedSessions)
                             
-                            // 2. Process through GameEngine (Individually for accuracy)
-                            Task {
-                                let userId = AuthenticationService.shared.userId ?? "unknown_user"
-                                var totalNewCells = 0
-                                
-                                do {
-                                    for session in sortedSessions {
-                                        // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
-                                        // Use GameEngine to process each imported activity
-                                        let stats = try await GameEngine.shared.completeActivity(session, for: userId)
-                                        
-                                        // Track total for summary
-                                        totalNewCells += stats.newCellsCount
-                                        await MainActor.run {
-                                            self.importProcessed += 1
-                                        }
-                                    }
-                                    
-                                } catch {
-                                    print("Error processing import: \(error)")
+                        // 2. Process through GameEngine (Individually for accuracy)
+                        Task {
+                            let userId = AuthenticationService.shared.userId ?? "unknown_user"
+                            var totalNewCells = 0
+                            defer {
+                                // Reset progress when finished (success or failure)
+                                Task { @MainActor in
+                                    self.importTotal = 0
+                                    self.importProcessed = 0
                                 }
+                            }
+                            
+                            do {
+                                for session in sortedSessions {
+                                    // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
+                                    // Use GameEngine to process each imported activity
+                                    let stats = try await GameEngine.shared.completeActivity(session, for: userId)
+                                    
+                                    // Track total for summary
+                                    totalNewCells += stats.newCellsCount
+                                    await MainActor.run {
+                                        self.importProcessed += 1
+                                    }
+                                }
+                                
+                            } catch {
+                                print("Error processing import: \(error)")
+                            }
                                 
                                 // Refresh UI
                                 self.loadWorkouts()
