@@ -135,6 +135,8 @@ class WorkoutsViewModel: ObservableObject {
         
         guard configService.config.loadHistoricalWorkouts else {
             errorMessage = "La importación de entrenos históricos está desactivada en la configuración."
+            importTotal = 0
+            importProcessed = 0
             return
         }
         
@@ -148,9 +150,11 @@ class WorkoutsViewModel: ObservableObject {
             
             if !success {
                 print("HealthKit authorization failed or denied.")
-                DispatchQueue.main.async { 
-                    self.isImporting = false 
+                DispatchQueue.main.async {
+                    self.isImporting = false
                     self.isLoading = false
+                    self.importTotal = 0
+                    self.importProcessed = 0
                 }
                 return
             }
@@ -160,18 +164,22 @@ class WorkoutsViewModel: ObservableObject {
                 
                 if let error = error {
                     print("Error fetching workouts: \(error.localizedDescription)")
-                    DispatchQueue.main.async { 
+                    DispatchQueue.main.async {
                         self.isImporting = false
                         self.isLoading = false
+                        self.importTotal = 0
+                        self.importProcessed = 0
                     }
                     return
                 }
                 
                 guard let workouts = workouts, !workouts.isEmpty else {
                     print("No se encontraron entrenos en HealthKit.")
-                    DispatchQueue.main.async { 
+                    DispatchQueue.main.async {
                         self.isImporting = false
                         self.isLoading = false
+                        self.importTotal = 0
+                        self.importProcessed = 0
                     }
                     return
                 }
@@ -189,9 +197,11 @@ class WorkoutsViewModel: ObservableObject {
                 
                 guard !newWorkouts.isEmpty else {
                     print("No new workouts to import.")
-                    DispatchQueue.main.async { 
+                    DispatchQueue.main.async {
                         self.isImporting = false
                         self.isLoading = false
+                        self.importTotal = 0
+                        self.importProcessed = 0
                     }
                     return
                 }

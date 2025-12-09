@@ -50,7 +50,7 @@ struct WorkoutsView: View {
                 }
                 
                 // Modal de importación
-                if viewModel.importTotal > 0 {
+                if viewModel.isImporting && viewModel.importTotal > 0 {
                     Color.black.opacity(0.6)
                         .ignoresSafeArea()
                     VStack(spacing: 12) {
