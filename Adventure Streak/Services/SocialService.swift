@@ -15,6 +15,7 @@ class SocialService: ObservableObject {
     @Published var posts: [SocialPost] = []
     private var avatarCache: [String: URL] = [:]
     private let avatarDataCache = AvatarCacheManager.shared
+    private var noAvatarIds: Set<String> = []
     
     private let feedRepository = FeedRepository.shared
     private var cancellables = Set<AnyCancellable>()
@@ -95,7 +96,9 @@ class SocialService: ObservableObject {
                 if let cached = avatarCache[userId] {
                     return cached
                 }
-                missingAvatarIds.insert(userId)
+                if !noAvatarIds.contains(userId) {
+                    missingAvatarIds.insert(userId)
+                }
                 return nil
             }()
             
@@ -423,9 +426,12 @@ class SocialService: ObservableObject {
                     // Download and cache data
                     let (data, _) = try await URLSession.shared.data(from: url)
                     avatarDataCache.save(data: data, for: userId)
+                } else {
+                    noAvatarIds.insert(userId) // Marcar para no reintentar
                 }
             } catch {
                 print("Error fetching avatar for \(userId): \(error)")
+                noAvatarIds.insert(userId)
             }
         }
     }
