@@ -51,6 +51,8 @@ class WorkoutsViewModel: ObservableObject {
     @Published var workouts: [WorkoutItemViewData] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
+    @Published var importTotal: Int = 0
+    @Published var importProcessed: Int = 0
     
     private let activityStore: ActivityStore
     private let territoryService: TerritoryService
@@ -197,6 +199,8 @@ class WorkoutsViewModel: ObservableObject {
                 print("Found \(newWorkouts.count) new workouts. Processing in background...")
                 
                 // Process in background to avoid blocking Main Thread
+                self.importTotal = newWorkouts.count
+                self.importProcessed = 0
                 DispatchQueue.global(qos: .utility).async {
                     var newSessions: [ActivitySession] = []
                     let group = DispatchGroup()
@@ -239,7 +243,7 @@ class WorkoutsViewModel: ObservableObject {
                     DispatchQueue.main.async {
                         if !newSessions.isEmpty {
                             // Sort by date ascending to ensure correct historical replay
-                            let sortedSessions = newSessions.sorted { $0.startDate < $1.startDate }
+                            let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
                             
                             print("Saving \(sortedSessions.count) imported activities...")
                             
@@ -259,6 +263,9 @@ class WorkoutsViewModel: ObservableObject {
                                         
                                         // Track total for summary
                                         totalNewCells += stats.newCellsCount
+                                        await MainActor.run {
+                                            self.importProcessed += 1
+                                        }
                                     }
                                     
                                 } catch {
@@ -274,6 +281,8 @@ class WorkoutsViewModel: ObservableObject {
                         } else {
                             self.isImporting = false
                             self.isLoading = false
+                            self.importTotal = 0
+                            self.importProcessed = 0
                         }
                     }
                 }

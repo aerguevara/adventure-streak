@@ -43,6 +43,27 @@ struct WorkoutsView: View {
                     .padding(.top, 20)
                     .padding(.bottom, 40)
                 }
+                .overlay(alignment: .bottom) {
+                    if viewModel.importTotal > 0 {
+                        VStack(spacing: 8) {
+                            ProgressView(
+                                value: Double(viewModel.importProcessed),
+                                total: Double(viewModel.importTotal)
+                            )
+                            .progressViewStyle(.linear)
+                            .tint(Color(hex: "4DA8FF"))
+                            
+                            Text("Importando entrenos: \(viewModel.importProcessed) de \(viewModel.importTotal)")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                        .padding()
+                        .background(Color(hex: "111114").opacity(0.9))
+                        .cornerRadius(12)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                    }
+                }
                 .refreshable {
                     await viewModel.refresh()
                     profileViewModel.fetchProfileData()
