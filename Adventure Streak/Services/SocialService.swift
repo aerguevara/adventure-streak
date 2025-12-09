@@ -85,7 +85,9 @@ class SocialService: ObservableObject {
                 distanceMeters: 0,
                 durationSeconds: 0,
                 xpEarned: event.xpEarned ?? 0,
-                newZonesCount: 0
+                newZonesCount: 0,
+                defendedZonesCount: 0,
+                recapturedZonesCount: 0
             )
             
             let avatarURL: URL? = {
@@ -385,7 +387,9 @@ class SocialService: ObservableObject {
             distanceMeters: activity.distanceMeters,
             durationSeconds: activity.durationSeconds,
             xpEarned: activity.xpBreakdown?.total ?? 0,
-            newZonesCount: activity.territoryStats?.newCellsCount ?? 0
+            newZonesCount: activity.territoryStats?.newCellsCount ?? 0,
+            defendedZonesCount: activity.territoryStats?.defendedCellsCount ?? 0,
+            recapturedZonesCount: activity.territoryStats?.recapturedCellsCount ?? 0
         )
         
         // Create FeedEvent
