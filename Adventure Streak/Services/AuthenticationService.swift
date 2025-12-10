@@ -24,6 +24,13 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userEmail = user.email
             self.userName = AuthenticationService.resolveDisplayName(for: user)
             loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
+            
+            // Sincronizar actividades remotas si ya hay sesión persistida
+            Task {
+                await MainActor.run { self.isSyncingData = true }
+                await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                await MainActor.run { self.isSyncingData = false }
+            }
         }
     }
     
@@ -49,19 +56,24 @@ class AuthenticationService: NSObject, ObservableObject {
                 return
             }
             
-            if let user = authResult?.user {
-                self.isAuthenticated = true
-                self.userId = user.uid
-                self.userEmail = nil
-                self.userName = "Guest Adventurer"
-                
-                // Sync Guest User to Firestore
-                UserRepository.shared.syncUser(user: user, name: "Guest Adventurer")
-                completion(true, nil)
-            } else {
-                completion(false, nil)
+        if let user = authResult?.user {
+            self.isAuthenticated = true
+            self.userId = user.uid
+            self.userEmail = nil
+            self.userName = "Guest Adventurer"
+            
+            // Sync Guest User to Firestore
+            UserRepository.shared.syncUser(user: user, name: "Guest Adventurer")
+            Task {
+                await MainActor.run { self.isSyncingData = true }
+                await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                await MainActor.run { self.isSyncingData = false }
             }
+            completion(true, nil)
+        } else {
+            completion(false, nil)
         }
+    }
     }
     
     func signInWithGoogle(completion: @escaping (Bool, Error?) -> Void) {
