@@ -65,6 +65,7 @@ class SocialService: ObservableObject {
             }
             return set
         }()
+        let allowAll = allowedIds.isEmpty
         
         var missingAvatarIds: Set<String> = []
         
@@ -75,7 +76,7 @@ class SocialService: ObservableObject {
             }
 
             // Solo mostrar posts de seguidos (y el propio)
-            if !allowedIds.contains(userId) {
+            if !allowAll && !allowedIds.contains(userId) {
                 return nil
             }
             
