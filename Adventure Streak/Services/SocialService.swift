@@ -65,7 +65,8 @@ class SocialService: ObservableObject {
             }
             return set
         }()
-        let allowAll = allowedIds.isEmpty
+        // Mostrar todo si aún no tenemos lista de seguidos (evita feed vacío en primer arranque)
+        let allowAll = followingIds.isEmpty
         
         var missingAvatarIds: Set<String> = []
         
