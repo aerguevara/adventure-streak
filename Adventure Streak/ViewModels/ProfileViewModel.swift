@@ -186,7 +186,16 @@ class ProfileViewModel: ObservableObject {
         self.territoriesCount = territoryStore.conqueredCells.values.filter { $0.lastConqueredAt >= cutoffDate }.count
         
         // Total Cells Owned (Historical/Current Total)
-        self.totalCellsConquered = territoryStore.conqueredCells.count 
+        self.totalCellsConquered = territoryStore.conqueredCells.count
+        
+        // Guardar agregados en Firestore (user document)
+        if let userId = authService.userId {
+            userRepository.updateTerritoryStats(
+                userId: userId,
+                totalOwned: totalCellsConquered,
+                recentWindow: territoriesCount
+            )
+        }
     }
     
     private func updateWithUser(_ user: User) {

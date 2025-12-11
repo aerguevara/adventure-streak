@@ -77,6 +77,14 @@ class WorkoutsViewModel: ObservableObject {
             }
             await fixMissingXP()
         }
+
+        // Recargar cuando el store de actividades cambie (ej. tras volver a iniciar sesión y sincronizar desde remoto)
+        self.activityStore.$activities
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.loadWorkouts()
+            }
+            .store(in: &cancellables)
         
         configService.$config
             .receive(on: RunLoop.main)
@@ -127,14 +135,29 @@ class WorkoutsViewModel: ObservableObject {
     }
     
     func refresh() async {
+        print("Pull-to-refresh -> refresh()")
         importFromHealthKit()
     }
     
     func importFromHealthKit() {
-        guard !isImporting else { return }
+        // Recuperación: si quedó marcado importando pero sin progreso, reiniciar flags
+        if isImporting && importTotal == 0 && importProcessed == 0 {
+            print("Import HK -> recuperando estado (importing=true pero sin progreso), reseteando flags")
+            isImporting = false
+            isLoading = false
+        }
+        
+        print("Import HK -> isImporting:\(isImporting) loadHistorical:\(configService.config.loadHistoricalWorkouts) lookback:\(configService.config.workoutLookbackDays)")
+        guard !isImporting else {
+            print("Import HK -> aborted, already importing")
+            return
+        }
         
         guard configService.config.loadHistoricalWorkouts else {
+            print("Import HK -> disabled by config")
             errorMessage = "La importación de entrenos históricos está desactivada en la configuración."
+            isImporting = false
+            isLoading = false
             importTotal = 0
             importProcessed = 0
             return
@@ -143,6 +166,16 @@ class WorkoutsViewModel: ObservableObject {
         isImporting = true
         isLoading = true
         print("Starting automatic HealthKit import...")
+
+        // Watchdog: si en 12s no hubo progreso, resetea flags para permitir reintento
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
+            guard let self = self else { return }
+            if self.isImporting && self.importProcessed == 0 && self.importTotal == 0 {
+                print("Import HK -> watchdog sin progreso, reseteando flags")
+                self.isImporting = false
+                self.isLoading = false
+            }
+        }
         
         // Request permissions first
         HealthKitManager.shared.requestPermissions { [weak self] success, error in
@@ -158,6 +191,8 @@ class WorkoutsViewModel: ObservableObject {
                 }
                 return
             }
+            
+            print("HK import -> permisos OK, solicitando workouts...")
             
             HealthKitManager.shared.fetchWorkouts { [weak self] workouts, error in
                 guard let self = self else { return }
@@ -184,16 +219,29 @@ class WorkoutsViewModel: ObservableObject {
                     return
                 }
                 
-                // Filter out duplicates AND restrict to configured window
+                // Log de entrada: cantidad y rango de fechas recibidas
+                let sortedByDate = workouts.sorted { $0.endDate < $1.endDate }
+                if let first = sortedByDate.first, let last = sortedByDate.last {
+                    print("HK import — recibidos \(workouts.count) entrenos. Rango endDate: \(self.formatDateTime(first.endDate)) -> \(self.formatDateTime(last.endDate))")
+                } else {
+                    print("HK import — recibidos \(workouts.count) entrenos. (sin fechas)")
+                }
+                
+                // Filtrar duplicados y respetar ventana de lookback (usando endDate y UUID estable del HKWorkout)
                 let cutoffDate = self.configService.cutoffDate()
+                let existingIds = Set(self.activityStore.activities.map { $0.id })
                 
                 let newWorkouts = workouts.filter { workout in
-                    // 1. Date Check: Must be within configured window
-                    guard workout.startDate >= cutoffDate else { return false }
+                    // 1. Dentro de la ventana (usar endDate por seguridad)
+                    guard workout.endDate >= cutoffDate else { return false }
                     
-                    // 2. Duplicate Check: Must not already exist
-                    return !self.activityStore.activities.contains(where: { $0.startDate == workout.startDate })
+                    // 2. Duplicados por id (UUID estable de HealthKit)
+                    if existingIds.contains(workout.uuid) { return false }
+                    
+                    return true
                 }
+                
+                print("HK import — total:\(workouts.count) nuevos:\(newWorkouts.count) cutoff endDate>=\(self.formatDateTime(cutoffDate))")
                 
                 guard !newWorkouts.isEmpty else {
                     print("No new workouts to import.")

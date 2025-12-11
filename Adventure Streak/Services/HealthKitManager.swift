@@ -15,9 +15,22 @@ class HealthKitManager: ObservableObject {
     private let userDefaults = UserDefaults.standard
     
     func requestPermissions(completion: @escaping (Bool, Error?) -> Void) {
+        print("HK requestPermissions — solicitando permisos")
         guard HKHealthStore.isHealthDataAvailable() else {
             completion(false, NSError(domain: "com.adventurestreak", code: 1, userInfo: [NSLocalizedDescriptionKey: "HealthKit not available"]))
             return
+        }
+
+        // Si ya está autorizado para workouts, evitar pedir de nuevo y continuar
+        let workoutType = HKObjectType.workoutType()
+        let currentStatus = healthStore.authorizationStatus(for: workoutType)
+        if currentStatus == .sharingAuthorized {
+            print("HK requestPermissions — ya autorizado (status: \(currentStatus.rawValue)), continuando sin prompt")
+            self.isAuthorized = true
+            completion(true, nil)
+            return
+        } else {
+            print("HK requestPermissions — estado actual: \(currentStatus.rawValue), solicitando autorización...")
         }
         
         let typesToRead: Set<HKObjectType> = [
@@ -26,9 +39,22 @@ class HealthKitManager: ObservableObject {
         ]
         
         healthStore.requestAuthorization(toShare: [], read: typesToRead) { success, error in
+            if let error {
+                print("HK requestPermissions — error: \(error.localizedDescription)")
+            } else {
+                print("HK requestPermissions — success:\(success)")
+            }
             DispatchQueue.main.async {
                 self.isAuthorized = success
                 completion(success, error)
+            }
+        }
+
+        // Watchdog: si en 5s no recibimos callback, avisa en consola
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            guard let self else { return }
+            if self.isAuthorized == false {
+                print("HK requestPermissions — sin respuesta tras 5s, revisa permisos en Ajustes > Salud > Apps > Adventure Streak")
             }
         }
     }
@@ -83,12 +109,15 @@ class HealthKitManager: ObservableObject {
         
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
         
+        print("HK fetchWorkouts — lanzando consulta a HealthKit...")
         let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: 100, sortDescriptors: [sortDescriptor]) { _, samples, error in
             guard let workouts = samples as? [HKWorkout], error == nil else {
+                if let error { print("HK fetchWorkouts — error: \(error.localizedDescription)") }
                 completion(nil, error)
                 return
             }
-                        
+            
+            print("HK fetchWorkouts — recibidos \(workouts.count) workouts")
             completion(workouts, nil)
         }
         

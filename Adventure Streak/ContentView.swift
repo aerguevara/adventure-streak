@@ -86,10 +86,15 @@ struct ContentView: View {
         }
         .task {
             await configService.loadConfigIfNeeded()
-            // Arranca observadores de HealthKit y programa BGTask para detectar entrenos nuevos
-            HealthKitManager.shared.startBackgroundObservers()
-            BackgroundTaskService.shared.scheduleRefresh()
-            NotificationService.shared.requestPermissions()
+            // Arranca observadores solo si el onboarding ya terminó
+            if onboardingViewModel.hasCompletedOnboarding {
+                startBackgroundServices()
+            }
+        }
+        .onChange(of: onboardingViewModel.hasCompletedOnboarding) { _, completed in
+            if completed {
+                startBackgroundServices()
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
@@ -100,5 +105,11 @@ struct ContentView: View {
                 break
             }
         }
+    }
+    
+    private func startBackgroundServices() {
+        HealthKitManager.shared.startBackgroundObservers()
+        BackgroundTaskService.shared.scheduleRefresh()
+        NotificationService.shared.requestPermissions()
     }
 }

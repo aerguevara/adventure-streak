@@ -4,12 +4,15 @@ import UserNotifications
 class NotificationService {
     static let shared = NotificationService()
     
-    func requestPermissions() {
+    func requestPermissions(completion: ((Bool) -> Void)? = nil) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if granted {
                 print("Notification permissions granted")
             } else if let error = error {
                 print("Notification permissions error: \(error)")
+            }
+            DispatchQueue.main.async {
+                completion?(granted)
             }
         }
     }

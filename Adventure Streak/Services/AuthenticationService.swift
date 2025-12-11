@@ -92,6 +92,12 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userId = nil
             self.userName = nil
             self.userEmail = nil
+            Task { @MainActor in
+                ActivityStore.shared.clear()
+                TerritoryStore.shared.clear()
+                SocialService.shared.clear()
+                GamificationService.shared.syncState(xp: 0, level: 1)
+            }
         } catch {
             print("Error signing out: \(error)")
         }

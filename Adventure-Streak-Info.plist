@@ -12,5 +12,9 @@
 		<string>fetch</string>
 		<string>processing</string>
 	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Usamos tus entrenos y rutas de la app Salud para calcular XP, territorios y mostrar tu progreso.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Usamos tus entrenos y rutas de la app Salud para calcular XP, territorios y mostrar tu progreso.</string>
 </dict>
 </plist>

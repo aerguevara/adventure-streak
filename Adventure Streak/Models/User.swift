@@ -21,4 +21,8 @@ struct User: Identifiable, Codable {
     var avatarURL: String?
     var xp: Int = 0
     var level: Int = 1
+    
+    // Aggregated territory stats (propagados desde la app)
+    var totalCellsOwned: Int?
+    var recentTerritories: Int?
 }
