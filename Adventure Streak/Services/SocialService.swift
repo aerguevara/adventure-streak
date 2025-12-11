@@ -122,6 +122,7 @@ class SocialService: ObservableObject {
                 userId: userId,
                 user: user,
                 date: event.date,
+                activityId: event.activityId,
                 activityData: finalActivityData
             )
         }
@@ -461,6 +462,7 @@ class SocialService: ObservableObject {
                     userId: post.userId,
                     user: updatedUser,
                     date: post.date,
+                    activityId: post.activityId,
                     activityData: post.activityData
                 )
             }

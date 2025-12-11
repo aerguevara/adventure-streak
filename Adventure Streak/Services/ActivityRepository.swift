@@ -264,7 +264,7 @@ final class ActivityRepository {
         #endif
     }
     
-    private func fetchTerritoryChunks(activityId: String, expectedCount: Int?) async -> [TerritoryCell] {
+    func fetchTerritoryChunks(activityId: String, expectedCount: Int?) async -> [TerritoryCell] {
         #if canImport(FirebaseFirestore)
         let territoriesRef = db.collection("activities").document(activityId).collection("territories")
         var cells: [TerritoryCell] = []
@@ -428,6 +428,11 @@ final class ActivityRepository {
         #else
         return nil
         #endif
+    }
+
+    /// Fetch territory cells associated to a specific activity.
+    func fetchTerritoriesForActivity(activityId: UUID, expectedCount: Int? = nil) async -> [TerritoryCell] {
+        await fetchTerritoryChunks(activityId: activityId.uuidString, expectedCount: expectedCount)
     }
     
     #if canImport(FirebaseFirestore)
