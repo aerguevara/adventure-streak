@@ -6,6 +6,8 @@ import UIKit
 struct RankingView: View {
     @StateObject var viewModel = RankingViewModel()
     @State private var showSearch = false
+    @State private var activeObjective: NextObjective?
+    @StateObject private var suggestionsViewModel = NextObjectiveSuggestionsViewModel()
     
     var body: some View {
         ZStack {
@@ -31,12 +33,27 @@ struct RankingView: View {
                             // Podium
                             PodiumView(entries: Array(viewModel.entries.prefix(3)))
                                 .padding(.top, 10)
-                            
+
+                            if let objective = viewModel.nextObjective, objective.user.position <= 3 {
+                                NextObjectiveCard(objective: objective) {
+                                    present(objective: objective)
+                                }
+                                .padding(.horizontal)
+                            }
+
                             // List
                             LazyVStack(spacing: 12) {
                                 ForEach(viewModel.entries.dropFirst(3)) { entry in
-                                    RankingCard(entry: entry) {
-                                        viewModel.toggleFollow(for: entry)
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        RankingCard(entry: entry) {
+                                            viewModel.toggleFollow(for: entry)
+                                        }
+
+                                        if entry.isCurrentUser, let objective = viewModel.nextObjective {
+                                            NextObjectiveCard(objective: objective) {
+                                                present(objective: objective)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -52,6 +69,11 @@ struct RankingView: View {
         }
         .sheet(isPresented: $showSearch) {
             UserSearchView()
+        }
+        .sheet(item: $activeObjective) { objective in
+            NextObjectiveSheet(objective: objective, viewModel: suggestionsViewModel)
+                .presentationDetents([.medium, .large])
+                .presentationBackground(.ultraThinMaterial)
         }
         .onAppear {
             viewModel.fetchRanking()
@@ -125,6 +147,14 @@ struct RankingView: View {
             .buttonStyle(.bordered)
         }
         .padding(.top, 40)
+    }
+
+    private func present(objective: NextObjective) {
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+        suggestionsViewModel.loadSuggestions(userEntry: objective.user, rivalEntry: objective.rival)
+        activeObjective = objective
     }
 }
 
@@ -388,6 +418,143 @@ struct RankingCard: View {
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                 )
+        }
+    }
+}
+
+struct NextObjectiveCard: View {
+    let objective: NextObjective
+    var onTap: () -> Void
+
+    var body: some View {
+        Button(action: {
+            onTap()
+        }) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("⬆ Próximo objetivo")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+
+                        Text("Supera a \(objective.rival.displayName)")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.gray)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+
+                HStack {
+                    Text("Faltan: \(objective.deltaXP) XP")
+                        .font(.headline)
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Text("\(Int(objective.progress * 100))%")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+
+                ProgressView(value: objective.progress)
+                    .accentColor(Color(hex: "4C6FFF"))
+                    .progressViewStyle(LinearProgressViewStyle())
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .background(.ultraThinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.4), radius: 12, x: 0, y: 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct NextObjectiveSheet: View {
+    let objective: NextObjective
+    @ObservedObject var viewModel: NextObjectiveSuggestionsViewModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Capsule()
+                    .fill(Color.white.opacity(0.3))
+                    .frame(width: 48, height: 4)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+
+                Text("Cómo ganar los \(objective.deltaXP) XP que te faltan")
+                    .font(.headline)
+                    .foregroundColor(.white)
+
+                if viewModel.isLoading {
+                    HStack {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        Text("Calculando con tus reglas de juego...")
+                            .foregroundColor(.gray)
+                            .font(.subheadline)
+                    }
+                } else if let error = viewModel.errorMessage {
+                    Text(error)
+                        .foregroundColor(.orange)
+                        .font(.subheadline)
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(viewModel.suggestions) { suggestion in
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(suggestion.title)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.white)
+
+                                    Spacer()
+
+                                    Text(suggestion.xpLabel)
+                                        .font(.subheadline)
+                                        .foregroundColor(Color(hex: "A259FF"))
+                                }
+
+                                Text(suggestion.coverageLabel)
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+
+                                if let microcopy = suggestion.microcopy {
+                                    Text(microcopy)
+                                        .font(.caption2)
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(hex: "1C1C1E"))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+        .background(Color.black.opacity(0.9))
+        .onAppear {
+            viewModel.loadSuggestions(userEntry: objective.user, rivalEntry: objective.rival)
         }
     }
 }
