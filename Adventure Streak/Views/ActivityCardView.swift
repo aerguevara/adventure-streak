@@ -407,7 +407,8 @@ struct ActivityCardView: View {
             parts.append("y has conquistado \(newZones) nueva\(newZones == 1 ? "" : "s")")
         }
         if defended > 0 {
-            parts.append("defendiste \(defended) vez\(defended == 1 ? "" : "es")")
+            let defendedWord = defended == 1 ? "vez" : "veces"
+            parts.append("defendiste \(defended) \(defendedWord)")
         }
 
         let sentence = parts.joined(separator: " ")
@@ -438,87 +439,19 @@ private struct MissionChipsView: View {
     let missions: [String]
 
     var body: some View {
-        FlexibleChipsLayout(items: missions) { mission in
-            Text(mission)
-                .font(.caption.bold())
-                .foregroundColor(.white)
-                .padding(.vertical, 6)
-                .padding(.horizontal, 10)
-                .background(Color.white.opacity(0.08))
-                .cornerRadius(10)
-        }
-    }
-}
-
-private struct FlexibleChipsLayout<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
-    let items: Data
-    let content: (Data.Element) -> Content
-
-    init(items: Data, @ViewBuilder content: @escaping (Data.Element) -> Content) {
-        self.items = items
-        self.content = content
-    }
-
-    var body: some View {
-        FlowLayout(items: items, content: content)
-    }
-}
-
-private struct FlowLayout<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
-    let items: Data
-    let content: (Data.Element) -> Content
-
-    @State private var totalHeight: CGFloat = .zero
-    private let spacing: CGFloat = 8
-
-    var body: some View {
-        VStack {
-            GeometryReader { geometry in
-                generateContent(in: geometry)
+        let columns = [GridItem(.adaptive(minimum: 96), spacing: 6, alignment: .leading)]
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
+            ForEach(missions, id: \.self) { mission in
+                Text(mission)
+                    .font(.caption.bold())
+                    .foregroundColor(.white)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .frame(height: totalHeight)
-    }
-
-    private func generateContent(in geometry: GeometryProxy) -> some View {
-        var width = CGFloat.zero
-        var height = CGFloat.zero
-
-        return ZStack(alignment: .topLeading) {
-            ForEach(Array(items), id: \.self) { item in
-                content(item)
-                    .alignmentGuide(.leading) { dimension in
-                        if width + dimension.width > geometry.size.width {
-                            width = 0
-                            height -= dimension.height + spacing
-                        }
-                        let result = width
-                        width += dimension.width + spacing
-                        return result
-                    }
-                    .alignmentGuide(.top) { _ in
-                        height
-                    }
-            }
-        }
-        .background(heightReader($totalHeight))
-    }
-
-    private func heightReader(_ binding: Binding<CGFloat>) -> some View {
-        GeometryReader { geometry in
-            Color.clear
-                .preference(key: SizePreferenceKey.self, value: geometry.size.height)
-        }
-        .onPreferenceChange(SizePreferenceKey.self) { value in
-            binding.wrappedValue = value
-        }
-    }
-}
-
-private struct SizePreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 
