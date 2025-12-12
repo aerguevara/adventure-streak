@@ -62,6 +62,15 @@ class SocialViewModel: ObservableObject {
         if state.currentUserReaction == nil {
             state.currentUserReaction = post.activityData.currentUserReaction
         }
+        // Ensure the user's own reaction shows a count even if remote stats haven't synced yet.
+        if state.fireCount == 0 && state.trophyCount == 0 && state.devilCount == 0,
+           let selfReaction = state.currentUserReaction {
+            switch selfReaction {
+            case .fire: state.fireCount = 1
+            case .trophy: state.trophyCount = 1
+            case .devil: state.devilCount = 1
+            }
+        }
         return state
     }
 
