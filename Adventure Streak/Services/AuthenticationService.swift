@@ -176,6 +176,10 @@ class AuthenticationService: NSObject, ObservableObject {
         if let name = userName, !name.isEmpty {
             return name
         }
+        if let authDisplay = Auth.auth().currentUser?.displayName,
+           !authDisplay.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return authDisplay.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         if let email = userEmail,
            let prefix = email.split(separator: "@").first,
            !prefix.isEmpty {
