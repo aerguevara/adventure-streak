@@ -439,8 +439,8 @@ private struct MissionChipsView: View {
     let missions: [String]
 
     var body: some View {
-        let columns = [GridItem(.adaptive(minimum: 96), spacing: 6, alignment: .leading)]
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
+        let columns = [GridItem(.adaptive(minimum: 72), spacing: 8, alignment: .leading)]
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
             ForEach(missions, id: \.self) { mission in
                 Text(mission)
                     .font(.caption.bold())
@@ -449,7 +449,6 @@ private struct MissionChipsView: View {
                     .padding(.horizontal, 10)
                     .background(Color.white.opacity(0.08))
                     .cornerRadius(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
