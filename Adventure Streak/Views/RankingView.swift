@@ -6,6 +6,11 @@ import UIKit
 struct RankingView: View {
     @StateObject var viewModel = RankingViewModel()
     @State private var showSearch = false
+    @State private var showNextGoalSheet = false
+    @State private var nextGoalSuggestions: [NextGoalSuggestion] = []
+    @State private var nextGoalXPNeeded: Int = 0
+    @State private var nextGoalTargetName: String = ""
+    @State private var isLoadingSuggestions = false
     
     var body: some View {
         ZStack {
@@ -32,11 +37,32 @@ struct RankingView: View {
                             PodiumView(entries: Array(viewModel.entries.prefix(3)))
                                 .padding(.top, 10)
                             
+                            if let goal = nextGoalInfo, goal.current.position <= 3 {
+                                NextGoalCardView(
+                                    xpUser: goal.current.weeklyXP,
+                                    xpTarget: goal.target.weeklyXP,
+                                    targetName: goal.target.displayName
+                                ) {
+                                    handleNextGoalTap(goal: goal)
+                                }
+                                .padding(.horizontal)
+                            }
+                            
                             // List
                             LazyVStack(spacing: 12) {
                                 ForEach(viewModel.entries.dropFirst(3)) { entry in
                                     RankingCard(entry: entry) {
                                         viewModel.toggleFollow(for: entry)
+                                    }
+                                    
+                                    if let goal = nextGoalInfo, goal.current.userId == entry.userId {
+                                        NextGoalCardView(
+                                            xpUser: goal.current.weeklyXP,
+                                            xpTarget: goal.target.weeklyXP,
+                                            targetName: goal.target.displayName
+                                        ) {
+                                            handleNextGoalTap(goal: goal)
+                                        }
                                     }
                                 }
                             }
@@ -53,9 +79,31 @@ struct RankingView: View {
         .sheet(isPresented: $showSearch) {
             UserSearchView()
         }
+        .sheet(isPresented: $showNextGoalSheet) {
+            NextGoalSuggestionsSheet(
+                xpNeeded: nextGoalXPNeeded,
+                targetName: nextGoalTargetName,
+                suggestions: nextGoalSuggestions,
+                isLoading: isLoadingSuggestions
+            ) {
+                isLoadingSuggestions = true
+                nextGoalSuggestions = []
+                Task { await loadSuggestions(for: nextGoalXPNeeded) }
+            }
+            .presentationDetents([.medium, .large])
+        }
         .onAppear {
             viewModel.fetchRanking()
         }
+    }
+    
+    private var nextGoalInfo: NextGoalContext? {
+        guard let currentIndex = viewModel.entries.firstIndex(where: { $0.isCurrentUser }),
+              currentIndex > 0 else { return nil }
+        let current = viewModel.entries[currentIndex]
+        let target = viewModel.entries[currentIndex - 1]
+        guard target.weeklyXP > current.weeklyXP else { return nil }
+        return NextGoalContext(current: current, target: target)
     }
     
     private var headerView: some View {
@@ -125,6 +173,52 @@ struct RankingView: View {
             .buttonStyle(.bordered)
         }
         .padding(.top, 40)
+    }
+    
+    private func handleNextGoalTap(goal: NextGoalContext) {
+        let delta = goal.current.xpDelta(to: goal.target)
+        guard delta > 0 else { return }
+        
+        nextGoalXPNeeded = delta
+        nextGoalTargetName = goal.target.displayName
+        isLoadingSuggestions = true
+        nextGoalSuggestions = []
+        
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+        
+        showNextGoalSheet = true
+        
+        Task {
+            await loadSuggestions(for: delta)
+        }
+    }
+    
+    private func loadSuggestions(for missingXP: Int) async {
+        guard missingXP > 0 else {
+            await MainActor.run { isLoadingSuggestions = false }
+            return
+        }
+        guard let userId = AuthenticationService.shared.userId else {
+            await MainActor.run { isLoadingSuggestions = false }
+            return
+        }
+        
+        do {
+            let context = try await GamificationRepository.shared.buildXPContext(for: userId)
+            let suggestions = try await NextGoalSuggestionBuilder.suggestions(for: missingXP, context: context)
+            await MainActor.run {
+                self.nextGoalSuggestions = suggestions
+                self.isLoadingSuggestions = false
+            }
+        } catch {
+            await MainActor.run {
+                self.nextGoalSuggestions = []
+                self.isLoadingSuggestions = false
+            }
+            print("Error loading XP suggestions: \(error)")
+        }
     }
 }
 
@@ -389,5 +483,306 @@ struct RankingCard: View {
                         .foregroundColor(.white)
                 )
         }
+    }
+}
+
+struct NextGoalCardView: View {
+    let xpUser: Int
+    let xpTarget: Int
+    let targetName: String
+    let onTap: () -> Void
+    
+    private var progress: Double {
+        guard xpTarget > 0 else { return 0 }
+        return min(Double(xpUser) / Double(xpTarget), 1.0)
+    }
+    
+    private var missingXP: Int {
+        max(xpTarget - xpUser, 0)
+    }
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("⬆ Próximo objetivo")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.75))
+                    
+                    Text("Supera a \(targetName)")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    Text("Faltan: \(missingXP) XP")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(Color(hex: "FFD60A"))
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.08))
+                                    .frame(height: 6)
+                                
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")]),
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: geometry.size.width * progress, height: 6)
+                            }
+                        }
+                        .frame(height: 6)
+                        
+                        Text("\(Int(progress * 100))%")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+            .padding(16)
+            .background(Color(hex: "1F1F24"))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.4), radius: 12, x: 0, y: 8)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct NextGoalSuggestionsSheet: View {
+    let xpNeeded: Int
+    let targetName: String
+    let suggestions: [NextGoalSuggestion]
+    let isLoading: Bool
+    var onRetry: (() -> Void)?
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Cómo ganar los \(xpNeeded) XP que te faltan")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .padding(.top, 8)
+                
+                Text("Objetivo: superar a \(targetName)")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.7))
+                
+                if isLoading {
+                    HStack {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        Text("Calculando con el motor de XP...")
+                            .foregroundColor(.white.opacity(0.8))
+                            .font(.subheadline)
+                    }
+                    .padding(.top, 8)
+                } else if suggestions.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("No pudimos generar sugerencias ahora.")
+                            .foregroundColor(.white)
+                            .font(.subheadline)
+                        if let onRetry {
+                            Button("Reintentar") {
+                                onRetry()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                        Text("Conecta aquí tu motor de reglas real si ya devuelve acciones específicas.")
+                            .foregroundColor(.white.opacity(0.6))
+                            .font(.caption)
+                    }
+                    .padding(.vertical, 8)
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(suggestions) { suggestion in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("\(suggestion.activityLabel) → ~\(suggestion.xp) XP")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundColor(.white)
+                                    
+                                    Text(suggestion.detailLabel)
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                                Spacer()
+                            }
+                            .padding()
+                            .background(Color(hex: "18181C"))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 16)
+        }
+        .background(Color.black.edgesIgnoringSafeArea(.all))
+    }
+}
+
+struct NextGoalSuggestion: Identifiable {
+    let id = UUID()
+    let activityType: ActivityType
+    let distanceKm: Double
+    let durationMinutes: Double
+    let xp: Int
+    
+    var activityLabel: String {
+        let distanceText = String(format: "%.1f km", distanceKm)
+        if activityType == .indoor {
+            return "\(activityType.displayName) (\(distanceText))"
+        }
+        return "\(activityType.displayName) outdoor (\(distanceText))"
+    }
+    
+    var detailLabel: String {
+        let durationText: String = durationMinutes >= 1
+            ? "\(Int(durationMinutes.rounded())) min"
+            : "Sesión corta"
+        return "Tiempo estimado: \(durationText)"
+    }
+}
+
+struct NextGoalContext {
+    let current: RankingEntry
+    let target: RankingEntry
+}
+
+private enum NextGoalSuggestionBuilder {
+    static func suggestions(for missingXP: Int, context: XPContext) async throws -> [NextGoalSuggestion] {
+        let candidates = buildCandidates(missingXP: missingXP)
+        let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+        
+        var evaluated: [NextGoalSuggestion] = []
+        for session in candidates {
+            // Uses the real XP engine; swap this call if you have a dedicated recommendation service.
+            let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
+            let suggestion = NextGoalSuggestion(
+                activityType: session.activityType,
+                distanceKm: session.distanceMeters / 1000.0,
+                durationMinutes: session.durationSeconds / 60.0,
+                xp: breakdown.total
+            )
+            evaluated.append(suggestion)
+        }
+        
+        let sorted = evaluated
+            .filter { $0.xp > 0 }
+            .sorted {
+                let lhsDelta = abs($0.xp - missingXP)
+                let rhsDelta = abs($1.xp - missingXP)
+                if lhsDelta == rhsDelta { return $0.xp > $1.xp }
+                return lhsDelta < rhsDelta
+            }
+        
+        return Array(sorted.prefix(5))
+    }
+    
+    private static func buildCandidates(missingXP: Int) -> [ActivitySession] {
+        let now = Date()
+        var sessions: [ActivitySession] = []
+        let activityTypes: [ActivityType] = [.run, .walk, .bike, .indoor]
+        
+        for type in activityTypes {
+            let baseDistance = estimatedDistance(for: type, missingXP: missingXP)
+            for distance in distanceVariants(baseDistance) {
+                let sanitizedDistance = sanitize(distanceKm: distance)
+                let duration = max(estimatedDuration(for: type, distanceKm: sanitizedDistance), XPConfig.minDurationSeconds)
+                
+                let session = ActivitySession(
+                    startDate: now,
+                    endDate: now.addingTimeInterval(duration),
+                    activityType: type,
+                    distanceMeters: sanitizedDistance * 1000.0,
+                    durationSeconds: duration,
+                    workoutName: nil,
+                    route: []
+                )
+                sessions.append(session)
+            }
+        }
+        
+        var unique: [String: ActivitySession] = [:]
+        for session in sessions {
+            let key = "\(session.activityType.rawValue)_\(String(format: "%.2f", session.distanceMeters))"
+            unique[key] = session
+        }
+        return Array(unique.values)
+    }
+    
+    private static func estimatedDistance(for type: ActivityType, missingXP: Int) -> Double {
+        switch type {
+        case .indoor:
+            let minutes = max(Double(missingXP) / XPConfig.indoorXPPerMinute, XPConfig.minDurationSeconds / 60.0)
+            return minutes / 8.0
+        default:
+            let perKm = XPConfig.baseFactorPerKm * factor(for: type)
+            guard perKm > 0 else { return XPConfig.minDistanceKm }
+            let raw = Double(missingXP) / perKm
+            return max(raw, XPConfig.minDistanceKm)
+        }
+    }
+    
+    private static func distanceVariants(_ base: Double) -> [Double] {
+        [base * 0.75, base, base * 1.15].map { max($0, XPConfig.minDistanceKm) }
+    }
+    
+    private static func sanitize(distanceKm: Double) -> Double {
+        max(XPConfig.minDistanceKm, min(distanceKm, 15.0))
+    }
+    
+    private static func estimatedDuration(for type: ActivityType, distanceKm: Double) -> Double {
+        let pace = estimatedPace(for: type)
+        return distanceKm * pace
+    }
+    
+    private static func estimatedPace(for type: ActivityType) -> Double {
+        switch type {
+        case .run: return 360 // 6 min/km
+        case .walk: return 720 // 12 min/km
+        case .bike: return 180 // 3 min/km
+        case .hike: return 900
+        case .otherOutdoor: return 600
+        case .indoor: return 480 // Equivalent for display; indoor XP uses minutes
+        }
+    }
+    
+    private static func factor(for type: ActivityType) -> Double {
+        switch type {
+        case .run: return XPConfig.factorRun
+        case .walk, .hike: return XPConfig.factorWalk
+        case .bike: return XPConfig.factorBike
+        case .otherOutdoor: return XPConfig.factorOther
+        case .indoor: return XPConfig.factorIndoor
+        }
+    }
+}
+
+private extension RankingEntry {
+    func xpDelta(to target: RankingEntry) -> Int {
+        max(target.weeklyXP - weeklyXP, 0)
     }
 }
