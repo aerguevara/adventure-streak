@@ -107,7 +107,7 @@ struct SocialPostCard: View {
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.35), radius: 12, y: 8)
         .padding(.horizontal, 12)
-        .onChange(of: reactionState.currentUserReaction) { _ in
+        .onChangeCompat(of: reactionState.currentUserReaction) {
             pendingReaction = nil
         }
     }
@@ -407,6 +407,17 @@ struct SocialPostCard: View {
             return ImpactBanner(icon: "🔥", title: "Impacto alto en XP", background: Color(hex: "4C6FFF"))
         }
         return nil
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func onChangeCompat<V: Equatable>(of value: V, action: @escaping () -> Void) -> some View {
+        if #available(iOS 17, *) {
+            onChange(of: value) { _, _ in action() }
+        } else {
+            onChange(of: value) { _ in action() }
+        }
     }
 }
 

@@ -81,7 +81,7 @@ final class ReactionRepository: ObservableObject {
         let userRef = db.collection("activity_reactions").document("\(activityId.uuidString)_\(currentUserId)")
 
         do {
-            try await db.runTransaction { transaction, _ in
+            _ = try await db.runTransaction { transaction, _ in
                 if let existing = try? transaction.getDocument(userRef), existing.exists {
                     return nil
                 }

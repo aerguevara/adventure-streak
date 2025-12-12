@@ -17,14 +17,6 @@ class RankingViewModel: ObservableObject {
     var hasEntries: Bool {
         !entries.isEmpty
     }
-
-    var nextObjective: NextObjective? {
-        guard let userEntry = currentUserEntry, userEntry.position > 1 else { return nil }
-        guard let rival = entries.first(where: { $0.position == userEntry.position - 1 }) else { return nil }
-        let delta = rival.weeklyXP - userEntry.weeklyXP
-        guard delta > 0 else { return nil }
-        return NextObjective(user: userEntry, rival: rival, deltaXP: delta)
-    }
     
     // MARK: - Dependencies
     private let repository: GamificationRepository

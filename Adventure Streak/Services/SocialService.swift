@@ -475,7 +475,11 @@ class SocialService: ObservableObject {
                     user: updatedUser,
                     date: post.date,
                     activityId: post.activityId,
-                    activityData: post.activityData
+                    activityData: post.activityData,
+                    eventType: post.eventType,
+                    eventTitle: post.eventTitle,
+                    eventSubtitle: post.eventSubtitle,
+                    rarity: post.rarity
                 )
             }
             return post
