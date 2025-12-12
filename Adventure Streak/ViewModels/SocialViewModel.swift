@@ -79,7 +79,19 @@ class SocialViewModel: ObservableObject {
 
         var state = reactionState(for: post)
         let previous = state.currentUserReaction
-        if previous == reaction { return }
+        if previous == reaction {
+            switch reaction {
+            case .fire: state.fireCount = max(0, state.fireCount - 1)
+            case .trophy: state.trophyCount = max(0, state.trophyCount - 1)
+            case .devil: state.devilCount = max(0, state.devilCount - 1)
+            }
+            state.currentUserReaction = nil
+            reactionRepository.updateLocalState(for: activityId, state: state)
+            Task {
+                await reactionRepository.removeReaction(for: activityId, authorId: post.userId)
+            }
+            return
+        }
 
         if let previous {
             switch previous {

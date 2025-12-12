@@ -114,11 +114,63 @@ final class ReactionRepository: ObservableObject {
         }
         #else
         let record = ActivityReactionRecord(activityId: activityId, reactedUserId: currentUserId, reactionType: type)
-        guard !localRecords.contains(record) else { return }
+        if let existingIndex = localRecords.firstIndex(where: { $0.id == record.id }) {
+            // Replace previous reaction locally so UI counts stay consistent offline
+            localRecords.remove(at: existingIndex)
+        }
         localRecords.append(record)
         persistLocal()
         rebuildStatesFromLocal()
         #endif
+    }
+
+    func removeReaction(for activityId: UUID, authorId: String) async {
+        guard let currentUserId = AuthenticationService.shared.userId else { return }
+
+        #if canImport(FirebaseFirestore)
+        guard let db else { return }
+        let statsRef = db.collection("activity_reaction_stats").document(activityId.uuidString)
+        let userRef = db.collection("activity_reactions").document("\(activityId.uuidString)_\(currentUserId)")
+
+        do {
+            _ = try await db.runTransaction { transaction, _ in
+                guard let existing = try? transaction.getDocument(userRef),
+                      existing.exists,
+                      let reactionString = existing.get("reactionType") as? String,
+                      let reaction = ReactionType(rawValue: reactionString) else {
+                    return nil
+                }
+
+                var fields: [String: Any] = [:]
+                switch reaction {
+                case .fire:
+                    fields["fireCount"] = FieldValue.increment(Int64(-1))
+                case .trophy:
+                    fields["trophyCount"] = FieldValue.increment(Int64(-1))
+                case .devil:
+                    fields["devilCount"] = FieldValue.increment(Int64(-1))
+                }
+
+                transaction.updateData(fields, forDocument: statsRef)
+                transaction.deleteDocument(userRef)
+                return nil
+            }
+        } catch {
+            print("[Reactions] Failed to remove reaction: \(error)")
+        }
+        #else
+        if let index = localRecords.firstIndex(where: { $0.activityId == activityId && $0.reactedUserId == currentUserId }) {
+            localRecords.remove(at: index)
+            persistLocal()
+            rebuildStatesFromLocal()
+        }
+        #endif
+    }
+
+    func updateLocalState(for activityId: UUID, state: ActivityReactionState) {
+        DispatchQueue.main.async {
+            self.reactionStates[activityId] = state
+        }
     }
 
     private func cleanObsoleteListeners(keeping ids: Set<UUID>) {
