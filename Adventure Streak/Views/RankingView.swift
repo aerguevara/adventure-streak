@@ -6,6 +6,7 @@ import UIKit
 struct RankingView: View {
     @StateObject var viewModel = RankingViewModel()
     @State private var showSearch = false
+    @State private var selectedObjective: NextObjectiveInfo?
     
     var body: some View {
         ZStack {
@@ -31,12 +32,29 @@ struct RankingView: View {
                             // Podium
                             PodiumView(entries: Array(viewModel.entries.prefix(3)))
                                 .padding(.top, 10)
-                            
+
+                            if let topObjective = topPodiumObjective {
+                                NextObjectiveCard(info: topObjective) {
+                                    triggerHaptic()
+                                    selectedObjective = topObjective
+                                }
+                                .padding(.horizontal)
+                            }
+
                             // List
                             LazyVStack(spacing: 12) {
                                 ForEach(viewModel.entries.dropFirst(3)) { entry in
-                                    RankingCard(entry: entry) {
-                                        viewModel.toggleFollow(for: entry)
+                                    VStack(spacing: 10) {
+                                        RankingCard(entry: entry) {
+                                            viewModel.toggleFollow(for: entry)
+                                        }
+
+                                        if entry.isCurrentUser, let objective = nextObjective(for: entry) {
+                                            NextObjectiveCard(info: objective) {
+                                                triggerHaptic()
+                                                selectedObjective = objective
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -52,6 +70,10 @@ struct RankingView: View {
         }
         .sheet(isPresented: $showSearch) {
             UserSearchView()
+        }
+        .sheet(item: $selectedObjective) { info in
+            NextObjectiveSheet(info: info)
+                .presentationDetents([.medium])
         }
         .onAppear {
             viewModel.fetchRanking()
@@ -125,6 +147,35 @@ struct RankingView: View {
             .buttonStyle(.bordered)
         }
         .padding(.top, 40)
+    }
+}
+
+private extension RankingView {
+    var topPodiumObjective: NextObjectiveInfo? {
+        guard let current = viewModel.currentUserEntry else { return nil }
+        guard current.position <= 3 else { return nil }
+        return nextObjective(for: current)
+    }
+
+    func nextObjective(for entry: RankingEntry) -> NextObjectiveInfo? {
+        guard entry.position > 1 else { return nil }
+        guard let target = viewModel.entries.first(where: { $0.position == entry.position - 1 }) else { return nil }
+
+        let gap = max(target.weeklyXP - entry.weeklyXP, 0)
+        let progress = min(Double(entry.weeklyXP) / Double(max(target.weeklyXP, 1)), 1.0)
+
+        return NextObjectiveInfo(id: entry.id,
+                                 currentEntry: entry,
+                                 targetEntry: target,
+                                 gapXP: gap,
+                                 progress: progress)
+    }
+
+    func triggerHaptic() {
+        #if canImport(UIKit)
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+        #endif
     }
 }
 
@@ -389,5 +440,130 @@ struct RankingCard: View {
                         .foregroundColor(.white)
                 )
         }
+    }
+}
+
+struct NextObjectiveInfo: Identifiable {
+    let id: UUID
+    let currentEntry: RankingEntry
+    let targetEntry: RankingEntry
+    let gapXP: Int
+    let progress: Double
+}
+
+struct NextObjectiveCard: View {
+    let info: NextObjectiveInfo
+    var onTap: (() -> Void)?
+
+    var body: some View {
+        Button(action: {
+            onTap?()
+        }) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("⬆ Próximo objetivo")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("Supera a \(info.targetEntry.displayName)")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(.gray)
+
+                    Text("Faltan: \(info.gapXP) XP")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Color(hex: "A259FF"))
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.08))
+
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")]),
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: geometry.size.width * info.progress)
+                            }
+                        }
+                        .frame(height: 8)
+
+                        Text("\(Int(info.progress * 100))%")
+                            .font(.caption2)
+                            .foregroundColor(.white)
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.gray)
+            }
+            .padding(16)
+            .background(
+                Color(hex: "1C1C1E")
+                    .shadow(color: Color.black.opacity(0.4), radius: 10, x: 0, y: 8)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+            .cornerRadius(18)
+        }
+        .buttonStyle(NextObjectiveButtonStyle())
+    }
+}
+
+struct NextObjectiveSheet: View {
+    let info: NextObjectiveInfo
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.3))
+                .frame(width: 36, height: 4)
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity)
+
+            Text("Cómo ganar \(info.gapXP) XP esta semana")
+                .font(.title3.weight(.bold))
+                .foregroundColor(.white)
+
+            VStack(alignment: .leading, spacing: 12) {
+                sheetRow(text: "Run outdoor (5 km)", xp: 120)
+                sheetRow(text: "Walk (30 min)", xp: 60)
+                sheetRow(text: "Conquista 1 zona nueva", xp: 140)
+            }
+
+            Spacer()
+        }
+        .padding(20)
+        .background(Color.black)
+    }
+
+    @ViewBuilder
+    private func sheetRow(text: String, xp: Int) -> some View {
+        HStack {
+            Text(text)
+                .foregroundColor(.white)
+            Spacer()
+            Text("~\(xp) XP")
+                .foregroundColor(Color(hex: "A259FF"))
+                .fontWeight(.semibold)
+        }
+    }
+}
+
+struct NextObjectiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.9 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
     }
 }
