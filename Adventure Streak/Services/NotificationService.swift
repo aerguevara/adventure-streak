@@ -1,5 +1,11 @@
 import Foundation
 import UserNotifications
+#if canImport(FirebaseMessaging)
+import FirebaseMessaging
+#endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 class NotificationService {
     static let shared = NotificationService()
@@ -42,5 +48,32 @@ class NotificationService {
     func scheduleExpirationWarning(daysRemaining: Int) {
         // Stub for MVP
         // In a real app, we would schedule a local notification for when the nearest territory expires
+    }
+    
+    /// Re-genera y sube un nuevo token FCM cuando el backend marca `needsTokenRefresh`.
+    func refreshFCMTokenIfNeeded(for userId: String) {
+        #if canImport(FirebaseFirestore)
+        guard let db = Firestore.firestore() as Firestore? else { return }
+        let userRef = db.collection("users").document(userId)
+        
+        userRef.getDocument { snapshot, _ in
+            guard let data = snapshot?.data(),
+                  (data["needsTokenRefresh"] as? Bool) == true else { return }
+            
+            #if canImport(FirebaseMessaging)
+            Messaging.messaging().deleteToken { _ in
+                Messaging.messaging().token { token, error in
+                    guard let token = token, error == nil else { return }
+                    
+                    userRef.updateData([
+                        "fcmTokens": FieldValue.arrayUnion([token]),
+                        "needsTokenRefresh": false,
+                        "needsTokenRefreshAt": FieldValue.delete()
+                    ])
+                }
+            }
+            #endif
+        }
+        #endif
     }
 }

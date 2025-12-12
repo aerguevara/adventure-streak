@@ -24,6 +24,7 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userEmail = user.email
             self.userName = AuthenticationService.resolveDisplayName(for: user)
             loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
+            NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
             
             // Sincronizar actividades remotas si ya hay sesión persistida
             Task {
@@ -61,6 +62,7 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userId = user.uid
             self.userEmail = nil
             self.userName = "Guest Adventurer"
+            NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
             
             // Sync Guest User to Firestore
             UserRepository.shared.syncUser(user: user, name: "Guest Adventurer")
@@ -233,28 +235,29 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                     
                     // Set an early value to avoid nil in UI while fetching remote
                     self.userName = appleName ?? resolvedFallback
-                    
-                    UserRepository.shared.fetchUser(userId: user.uid) { [weak self] remoteUser in
-                        guard let self = self else { return }
-                        let remoteName = remoteUser?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let chosenName = (remoteName?.isEmpty == false) ? remoteName! : (appleName ?? resolvedFallback)
-                        
-                        DispatchQueue.main.async {
-                        self.userName = chosenName
-                    }
-                    
-                    // Sync without clobbering: use chosenName (remote preferred) so displayName stays consistent, and update lastLogin.
-                    UserRepository.shared.syncUser(user: user, name: chosenName)
-                    
-                    // Backfill + parity check so remote list matches local feed/events
-                    Task {
-                        await MainActor.run { self.isSyncingData = true }
-                        await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
-                        await MainActor.run { self.isSyncingData = false }
-                    }
-                }
+            
+            UserRepository.shared.fetchUser(userId: user.uid) { [weak self] remoteUser in
+                guard let self = self else { return }
+                let remoteName = remoteUser?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let chosenName = (remoteName?.isEmpty == false) ? remoteName! : (appleName ?? resolvedFallback)
+                
+                DispatchQueue.main.async {
+                self.userName = chosenName
+            }
+            
+            // Sync without clobbering: use chosenName (remote preferred) so displayName stays consistent, and update lastLogin.
+            UserRepository.shared.syncUser(user: user, name: chosenName)
+            NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+            
+            // Backfill + parity check so remote list matches local feed/events
+            Task {
+                await MainActor.run { self.isSyncingData = true }
+                await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                await MainActor.run { self.isSyncingData = false }
             }
         }
+    }
+}
     }
     }
     
