@@ -89,7 +89,11 @@ class SocialService: ObservableObject {
                 xpEarned: event.xpEarned ?? 0,
                 newZonesCount: 0,
                 defendedZonesCount: 0,
-                recapturedZonesCount: 0
+                recapturedZonesCount: 0,
+                fireCount: 0,
+                trophyCount: 0,
+                devilCount: 0,
+                currentUserReaction: nil
             )
             
             let avatarURL: URL? = {
@@ -123,7 +127,11 @@ class SocialService: ObservableObject {
                 user: user,
                 date: event.date,
                 activityId: event.activityId,
-                activityData: finalActivityData
+                activityData: finalActivityData,
+                eventType: event.type,
+                eventTitle: event.title,
+                eventSubtitle: event.subtitle,
+                rarity: event.rarity
             )
         }
         .sorted(by: { $0.date > $1.date })
@@ -392,7 +400,11 @@ class SocialService: ObservableObject {
             xpEarned: activity.xpBreakdown?.total ?? 0,
             newZonesCount: activity.territoryStats?.newCellsCount ?? 0,
             defendedZonesCount: activity.territoryStats?.defendedCellsCount ?? 0,
-            recapturedZonesCount: activity.territoryStats?.recapturedCellsCount ?? 0
+            recapturedZonesCount: activity.territoryStats?.recapturedCellsCount ?? 0,
+            fireCount: 0,
+            trophyCount: 0,
+            devilCount: 0,
+            currentUserReaction: nil
         )
         
         // Create FeedEvent

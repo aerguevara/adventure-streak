@@ -20,11 +20,16 @@ struct SocialFeedView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 20) {
-                            ForEach(viewModel.posts) { post in
+                            ForEach(viewModel.displayPosts) { post in
                                 NavigationLink {
                                     SocialPostDetailView(post: post)
                                 } label: {
-                                    SocialPostCard(post: post)
+                                    let reactionState = post.activityId.flatMap { viewModel.reactionStates[$0] } ?? .empty
+                                    SocialPostCard(
+                                        post: post,
+                                        reactionState: reactionState,
+                                        onReaction: { viewModel.sendReaction(for: post, reaction: $0) }
+                                    )
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -60,38 +65,76 @@ struct SocialFeedView: View {
 
 struct SocialPostCard: View {
     let post: SocialPost
-    @State private var selectedReaction: String? = nil
+    let reactionState: ActivityReactionState
+    let onReaction: (ReactionType) -> Void
 
-    // Reuse title to simplify body for the compiler
+    @State private var pendingReaction: ReactionType? = nil
+
     private var title: String {
         let typeName = post.activityData.activityType.rawValue.capitalized
-        return "\(typeName) completada · +\(post.activityData.xpEarned) XP"
+        return "\(typeName) · +\(post.activityData.xpEarned) XP"
     }
-    
+
+    private var userReaction: ReactionType? {
+        reactionState.currentUserReaction ?? pendingReaction
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let style = impactStyle
+
+        VStack(alignment: .leading, spacing: style.verticalSpacing) {
+            if let banner = style.banner {
+                impactBanner(for: banner)
+            }
+
             header
-            
-            // Métricas compactas
+                .padding(.top, style.headerTopPadding)
+
             metricsSection
-            
-            // Badge de zonas nuevas
+
             zonesBadge
-            
-            // Reacciones rápidas
+
             reactionsRow
         }
-        .padding(14)
-        .background(Color(hex: "18181C"))
+        .padding(.vertical, style.verticalPadding)
+        .padding(.horizontal, 14)
+        .background(style.background)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(style.borderColor, lineWidth: style.borderWidth)
+                .shadow(color: style.glowColor, radius: style.glowRadius)
+        )
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.35), radius: 12, y: 8)
         .padding(.horizontal, 12)
+        .onChange(of: reactionState.currentUserReaction) { _ in
+            pendingReaction = nil
+        }
+    }
+
+    private func impactBanner(for banner: ImpactBanner) -> some View {
+        HStack(spacing: 10) {
+            Text(banner.icon)
+                .font(.headline)
+            Text(banner.title)
+                .font(.subheadline.bold())
+                .foregroundColor(.white)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(banner.background.opacity(0.25))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(banner.background.opacity(0.6), lineWidth: 1)
+        )
+        .cornerRadius(12)
     }
 
     private var header: some View {
         HStack(alignment: .top, spacing: 10) {
             avatar
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(post.user.displayName)
@@ -99,16 +142,24 @@ struct SocialPostCard: View {
                         .foregroundColor(.white)
                     levelBadge
                 }
-                
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.9)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.9)
+                    if let subtitle = post.eventSubtitle, post.impactLevel == .high {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.75))
+                            .lineLimit(2)
+                    }
+                }
             }
-            
+
             Spacer()
-            
+
             VStack(alignment: .trailing, spacing: 2) {
                 Text(timeAgo(from: post.date))
                     .font(.caption)
@@ -119,7 +170,7 @@ struct SocialPostCard: View {
             }
         }
     }
-    
+
     private var metricsSection: some View {
         HStack(spacing: 12) {
             metric(icon: "figure.run", label: "Distancia", value: String(format: "%.1f km", post.activityData.distanceKm))
@@ -130,7 +181,7 @@ struct SocialPostCard: View {
         .background(Color(hex: "2C2C2E").opacity(0.6))
         .cornerRadius(12)
     }
-    
+
     private var zonesBadge: some View {
         Group {
             if post.activityData.newZonesCount > 0 {
@@ -148,36 +199,78 @@ struct SocialPostCard: View {
             }
         }
     }
-    
+
     private var reactionsRow: some View {
-        let emojis = ["🔥","👍","🏆","😈"]
-        return HStack(spacing: 10) {
-            ForEach(emojis, id: \.self) { emoji in
-                reactionButton(for: emoji)
+        HStack(spacing: 10) {
+            ForEach(ReactionType.allCases, id: \.self) { reaction in
+                reactionButton(for: reaction)
             }
             Spacer()
         }
+        .padding(.top, 2)
     }
-    
-    private func reactionButton(for emoji: String) -> some View {
-        let isSelected = selectedReaction == emoji
-        let bg = isSelected ? Color(hex: "4C6FFF").opacity(0.35) : Color.white.opacity(0.08)
-        let stroke = isSelected ? Color(hex: "4C6FFF") : Color.white.opacity(0.08)
-        
-        return Text(emoji)
-            .font(.headline)
-            .frame(width: 38, height: 32)
-            .background(bg)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(stroke, lineWidth: 1)
-            )
-            .cornerRadius(8)
-            .onTapGesture {
-                selectedReaction = isSelected ? nil : emoji
+
+    private func reactionButton(for reaction: ReactionType) -> some View {
+        let isSelected = userReaction == reaction
+        let disabled = userReaction != nil || post.activityId == nil
+        let count = reactionCount(for: reaction)
+
+        return Button {
+            guard !disabled else { return }
+            handleReaction(reaction)
+        } label: {
+            HStack(spacing: 6) {
+                Text(reaction.emoji)
+                    .font(.headline)
+                Text("\(count)")
+                    .font(.caption.bold())
+                    .foregroundColor(.white.opacity(0.8))
             }
+            .frame(height: 34)
+            .padding(.horizontal, 10)
+            .background(buttonBackground(isSelected: isSelected))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(buttonStroke(isSelected: isSelected), lineWidth: 1)
+            )
+            .cornerRadius(10)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
     }
-    
+
+    private func handleReaction(_ reaction: ReactionType) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+            pendingReaction = reaction
+        }
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+        onReaction(reaction)
+    }
+
+    private func buttonBackground(isSelected: Bool) -> Color {
+        isSelected ? Color(hex: "4C6FFF").opacity(0.35) : Color.white.opacity(0.08)
+    }
+
+    private func buttonStroke(isSelected: Bool) -> Color {
+        isSelected ? Color(hex: "4C6FFF") : Color.white.opacity(0.12)
+    }
+
+    private func reactionCount(for reaction: ReactionType) -> Int {
+        var base: Int
+        switch reaction {
+        case .fire: base = reactionState.fireCount
+        case .trophy: base = reactionState.trophyCount
+        case .devil: base = reactionState.devilCount
+        }
+
+        if pendingReaction == reaction && reactionState.currentUserReaction == nil {
+            base += 1
+        }
+        return base
+    }
+
     private var avatar: some View {
         Group {
             if let data = post.user.avatarData, let uiImage = UIImage(data: data) {
@@ -203,7 +296,7 @@ struct SocialPostCard: View {
         .frame(width: 44, height: 44)
         .clipShape(Circle())
     }
-    
+
     private var levelBadge: some View {
         Text("Lv \(post.user.level)")
             .font(.caption.bold())
@@ -213,7 +306,7 @@ struct SocialPostCard: View {
             .background(Color(hex: "4C6FFF").opacity(0.8))
             .cornerRadius(8)
     }
-    
+
     private func metric(icon: String, label: String, value: String, valueColor: Color = .white) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
@@ -230,7 +323,7 @@ struct SocialPostCard: View {
         }
         .frame(maxWidth: .infinity)
     }
-    
+
     private func formatDuration(_ seconds: Double) -> String {
         let minutes = Int(seconds) / 60
         if minutes < 60 {
@@ -241,13 +334,13 @@ struct SocialPostCard: View {
             return "\(hours)h \(mins)m"
         }
     }
-    
+
     private func timeAgo(from date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
     }
-    
+
     private func formatAbsoluteDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "es_ES")
@@ -255,6 +348,84 @@ struct SocialPostCard: View {
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+
+    private var impactStyle: ImpactStyle {
+        switch post.impactLevel {
+        case .high:
+            return ImpactStyle(
+                background: Color(hex: "18181C"),
+                borderColor: Color(hex: "4C6FFF").opacity(0.8),
+                borderWidth: 1.2,
+                glowColor: Color(hex: "4C6FFF").opacity(0.35),
+                glowRadius: 10,
+                verticalPadding: 16,
+                verticalSpacing: 12,
+                headerTopPadding: 4,
+                banner: impactBannerContent
+            )
+        case .medium:
+            return ImpactStyle(
+                background: Color(hex: "18181C"),
+                borderColor: Color.white.opacity(0.06),
+                borderWidth: 1,
+                glowColor: Color.clear,
+                glowRadius: 0,
+                verticalPadding: 14,
+                verticalSpacing: 10,
+                headerTopPadding: 2,
+                banner: nil
+            )
+        case .low:
+            return ImpactStyle(
+                background: Color(hex: "0F0F10"),
+                borderColor: Color.white.opacity(0.04),
+                borderWidth: 1,
+                glowColor: Color.clear,
+                glowRadius: 0,
+                verticalPadding: 10,
+                verticalSpacing: 8,
+                headerTopPadding: 0,
+                banner: nil
+            )
+        }
+    }
+
+    private var impactBannerContent: ImpactBanner? {
+        if post.hasTerritoryImpact {
+            if post.activityData.recapturedZonesCount > 0 || post.activityData.defendedZonesCount > 0 {
+                return ImpactBanner(icon: "🔥", title: "Defensa de territorio completada", background: Color(hex: "FF9F0A"))
+            }
+            return ImpactBanner(icon: "🗺", title: "Nueva zona conquistada", background: Color(hex: "32D74B"))
+        }
+        if post.eventType == .distanceRecord {
+            return ImpactBanner(icon: "🏆", title: "Récord personal", background: Color(hex: "FFD60A"))
+        }
+        if let title = post.eventTitle, !title.isEmpty {
+            return ImpactBanner(icon: "🏆", title: title, background: Color(hex: "4C6FFF"))
+        }
+        if post.hasSignificantXP {
+            return ImpactBanner(icon: "🔥", title: "Impacto alto en XP", background: Color(hex: "4C6FFF"))
+        }
+        return nil
+    }
+}
+
+private struct ImpactStyle {
+    let background: Color
+    let borderColor: Color
+    let borderWidth: CGFloat
+    let glowColor: Color
+    let glowRadius: CGFloat
+    let verticalPadding: CGFloat
+    let verticalSpacing: CGFloat
+    let headerTopPadding: CGFloat
+    let banner: ImpactBanner?
+}
+
+private struct ImpactBanner {
+    let icon: String
+    let title: String
+    let background: Color
 }
 
 struct SocialPostDetailView: View {
