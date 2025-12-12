@@ -88,10 +88,21 @@ class UserRepository: ObservableObject {
         ], merge: true)
         #endif
     }
+    
+    func updateFCMToken(userId: String, token: String) {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        let userRef = db.collection("users").document(userId)
+        userRef.setData([
+            "fcmTokens": FieldValue.arrayUnion([token])
+        ], merge: true)
+        #endif
+    }
     #else
     // Fallback signature if FirebaseAuth missing
     func syncUser(user: Any, name: String?) {}
     func updateTerritoryStats(userId: String, totalOwned: Int, recentWindow: Int) {}
+    func updateFCMToken(userId: String, token: String) {}
     #endif
     #if canImport(FirebaseAuth)
     func fetchUser(userId: String, completion: @escaping (User?) -> Void) {
