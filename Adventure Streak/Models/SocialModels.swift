@@ -93,21 +93,31 @@ struct SocialActivityData: Codable, Hashable {
     }
 }
 
-enum FeedImpactLevel {
+enum ActivityImpactLevel {
     case high
     case medium
     case low
 }
 
 extension SocialPost {
-    var impactLevel: FeedImpactLevel {
-        if hasTerritoryImpact || hasSignificantXP || hasSystemEvent { return .high }
-        if activityData.xpEarned > 0 { return .medium }
+    var impactLevel: ActivityImpactLevel {
+        if hasTerritoryImpact || hasMissionImpact || hasSystemEvent || hasSignificantXP {
+            return .high
+        }
+        if activityData.xpEarned > 0 {
+            return .medium
+        }
         return .low
     }
 
     var hasTerritoryImpact: Bool {
         activityData.newZonesCount > 0 || activityData.defendedZonesCount > 0 || activityData.recapturedZonesCount > 0
+    }
+
+    // Missions are optional; treat any non-common rarity as impactful
+    var hasMissionImpact: Bool {
+        guard let rarity else { return false }
+        return rarity != .common
     }
 
     var hasSystemEvent: Bool {

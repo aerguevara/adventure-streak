@@ -24,11 +24,10 @@ struct SocialFeedView: View {
                                 NavigationLink {
                                     SocialPostDetailView(post: post)
                                 } label: {
-                                    let reactionState = post.activityId.flatMap { viewModel.reactionStates[$0] } ?? .empty
-                                    SocialPostCard(
-                                        post: post,
-                                        reactionState: reactionState,
-                                        onReaction: { viewModel.sendReaction(for: post, reaction: $0) }
+                                    ActivityCardView(
+                                        activity: post,
+                                        reactionState: viewModel.reactionState(for: post),
+                                        onReaction: { viewModel.react(to: post, with: $0) }
                                     )
                                 }
                                 .buttonStyle(.plain)
