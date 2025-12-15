@@ -1,6 +1,6 @@
 import Foundation
 
-final class PendingRouteStore: ObservableObject {
+final class PendingRouteStore: ObservableObject, @unchecked Sendable {
     static let shared = PendingRouteStore()
     
     private let store = JSONStore<PendingRouteImport>(filename: "pending_routes.json")
