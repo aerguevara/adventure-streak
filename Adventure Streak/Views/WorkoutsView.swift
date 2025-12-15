@@ -100,7 +100,7 @@ struct WorkoutsView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onChange(of: viewModel.errorMessage) { newValue in
+        .onChange(of: viewModel.errorMessage) { _, newValue in
             showImportAlert = newValue != nil
         }
         .alert("No pudimos importar tu entreno", isPresented: $showImportAlert, presenting: viewModel.errorMessage) { _ in
