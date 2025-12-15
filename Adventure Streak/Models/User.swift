@@ -25,4 +25,7 @@ struct User: Identifiable, Codable {
     // Aggregated territory stats (propagados desde la app)
     var totalCellsOwned: Int?
     var recentTerritories: Int?
+    
+    // Remote logout control
+    var forceLogoutVersion: Int?
 }

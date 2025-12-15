@@ -3,6 +3,9 @@ import AuthenticationServices
 import CryptoKit
 import FirebaseCore
 import FirebaseAuth
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 class AuthenticationService: NSObject, ObservableObject {
     static let shared = AuthenticationService()
@@ -12,6 +15,10 @@ class AuthenticationService: NSObject, ObservableObject {
     @Published var userEmail: String?
     @Published var userName: String?
     @Published var isSyncingData = false
+    
+    private let userDefaults = UserDefaults.standard
+    private let forceLogoutKey = "forceLogoutVersion_seen"
+    private var userListener: ListenerRegistration?
     
     // Helper for nonce
     fileprivate var currentNonce: String?
@@ -25,6 +32,7 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userName = AuthenticationService.resolveDisplayName(for: user)
             loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
             NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+            observeForceLogout(for: user.uid)
             
             // Sincronizar actividades remotas si ya hay sesión persistida
             Task {
@@ -63,6 +71,7 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userEmail = nil
             self.userName = "Guest Adventurer"
             NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+            observeForceLogout(for: user.uid)
             
             // Sync Guest User to Firestore
             UserRepository.shared.syncUser(user: user, name: "Guest Adventurer")
@@ -94,6 +103,8 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userId = nil
             self.userName = nil
             self.userEmail = nil
+            userListener?.remove()
+            userListener = nil
             Task { @MainActor in
                 ActivityStore.shared.clear()
                 TerritoryStore.shared.clear()
@@ -188,6 +199,28 @@ class AuthenticationService: NSObject, ObservableObject {
             return String(prefix)
         }
         return defaultName
+    }
+    
+    // MARK: - Remote logout
+    private func observeForceLogout(for userId: String) {
+        userListener?.remove()
+        #if canImport(FirebaseFirestore)
+        userListener = UserRepository.shared.observeUser(userId: userId) { [weak self] user in
+            guard let self, let user else { return }
+            guard let remoteVersion = user.forceLogoutVersion else { return }
+            
+            let lastSeen = self.userDefaults.integer(forKey: self.forceLogoutKey)
+            if remoteVersion > lastSeen {
+                print("Force logout triggered: remoteVersion \(remoteVersion) > lastSeen \(lastSeen)")
+                self.userDefaults.set(remoteVersion, forKey: self.forceLogoutKey)
+                self.signOut()
+            } else if remoteVersion > 0 && lastSeen < remoteVersion {
+                self.userDefaults.set(remoteVersion, forKey: self.forceLogoutKey)
+            } else if lastSeen < remoteVersion {
+                self.userDefaults.set(remoteVersion, forKey: self.forceLogoutKey)
+            }
+        }
+        #endif
     }
 }
 
