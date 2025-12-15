@@ -142,6 +142,233 @@ class WorkoutsViewModel: ObservableObject {
         importFromHealthKit()
     }
     
+    func retryPendingImports() {
+        let pendingIds = Set(pendingRouteStore.pending.map { $0.id })
+        guard !pendingIds.isEmpty else {
+            print("Retry pending -> no pending route imports")
+            return
+        }
+        
+        isImporting = true
+        isLoading = true
+        errorMessage = nil
+        
+        HealthKitManager.shared.requestPermissions { [weak self] success, _ in
+            guard let self else { return }
+            guard success else {
+                DispatchQueue.main.async {
+                    self.isImporting = false
+                    self.isLoading = false
+                }
+                return
+            }
+            
+            HealthKitManager.shared.fetchWorkouts { [weak self] workouts, error in
+                guard let self else { return }
+                
+                if let error {
+                    print("Retry pending -> fetch error: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        self.isImporting = false
+                        self.isLoading = false
+                    }
+                    return
+                }
+                
+                guard let workouts, !workouts.isEmpty else {
+                    print("Retry pending -> no workouts in HK")
+                    DispatchQueue.main.async {
+                        self.isImporting = false
+                        self.isLoading = false
+                    }
+                    return
+                }
+                
+                let target = workouts.filter { pendingIds.contains($0.uuid) }
+                guard !target.isEmpty else {
+                    print("Retry pending -> none of the pending workouts found in HK")
+                    DispatchQueue.main.async {
+                        self.isImporting = false
+                        self.isLoading = false
+                    }
+                    return
+                }
+                
+                DispatchQueue.main.async {
+                    self.importTotal = target.count
+                    self.importProcessed = 0
+                }
+                
+                let config = self.configService.config
+                let pendingStore = self.pendingRouteStore
+                
+                DispatchQueue.global(qos: .utility).async {
+                    var newSessions: [ActivitySession] = []
+                    let group = DispatchGroup()
+                    let semaphore = DispatchSemaphore(value: 1)
+                    
+                    for workout in target {
+                        semaphore.wait()
+                        group.enter()
+                        
+                        let bundleId = workout.sourceRevision.source.bundleIdentifier
+                        let sourceName = workout.sourceRevision.source.name
+                        let requiresRoute = config.requiresRoute(for: bundleId)
+                        
+                        HealthKitManager.shared.fetchRoute(for: workout) { result in
+                            defer {
+                                group.leave()
+                                semaphore.signal()
+                            }
+                            
+                            let type = self.activityType(for: workout)
+                            let distanceMeters = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
+                            let durationSeconds = workout.duration
+                            let name = self.workoutName(for: workout)
+                            
+                            switch result {
+                            case .success(let routePoints):
+                                if requiresRoute && routePoints.isEmpty {
+                                    Task { @MainActor in
+                                        self.handlePendingRoute(
+                                            workout: workout,
+                                            type: type,
+                                            workoutName: name,
+                                            sourceBundleId: bundleId,
+                                            sourceName: sourceName,
+                                            status: .missingRoute,
+                                            errorDescription: nil
+                                        )
+                                    }
+                                    return
+                                }
+                                
+                                pendingStore.remove(workoutId: workout.uuid)
+                                
+                                let session = ActivitySession(
+                                    id: workout.uuid,
+                                    startDate: workout.startDate,
+                                    endDate: workout.endDate,
+                                    activityType: type,
+                                    distanceMeters: distanceMeters,
+                                    durationSeconds: durationSeconds,
+                                    workoutName: name,
+                                    route: routePoints
+                                )
+                                
+                                DispatchQueue.global(qos: .utility).sync {
+                                    newSessions.append(session)
+                                }
+                            case .emptySeries:
+                                if requiresRoute {
+                                    Task { @MainActor in
+                                        self.handlePendingRoute(
+                                            workout: workout,
+                                            type: type,
+                                            workoutName: name,
+                                            sourceBundleId: bundleId,
+                                            sourceName: sourceName,
+                                            status: .missingRoute,
+                                            errorDescription: nil
+                                        )
+                                    }
+                                    return
+                                }
+                                
+                                let session = ActivitySession(
+                                    id: workout.uuid,
+                                    startDate: workout.startDate,
+                                    endDate: workout.endDate,
+                                    activityType: type,
+                                    distanceMeters: distanceMeters,
+                                    durationSeconds: durationSeconds,
+                                    workoutName: name,
+                                    route: []
+                                )
+                                
+                                DispatchQueue.global(qos: .utility).sync {
+                                    newSessions.append(session)
+                                }
+                            case .error(let error):
+                                if requiresRoute {
+                                    Task { @MainActor in
+                                        self.handlePendingRoute(
+                                            workout: workout,
+                                            type: type,
+                                            workoutName: name,
+                                            sourceBundleId: bundleId,
+                                            sourceName: sourceName,
+                                            status: .fetchError,
+                                            errorDescription: error.localizedDescription
+                                        )
+                                    }
+                                    return
+                                }
+                                
+                                print("⚠️ Route fetch error for optional source \(bundleId): \(error.localizedDescription)")
+                                
+                                let session = ActivitySession(
+                                    id: workout.uuid,
+                                    startDate: workout.startDate,
+                                    endDate: workout.endDate,
+                                    activityType: type,
+                                    distanceMeters: distanceMeters,
+                                    durationSeconds: durationSeconds,
+                                    workoutName: name,
+                                    route: []
+                                )
+                                
+                                DispatchQueue.global(qos: .utility).sync {
+                                    newSessions.append(session)
+                                }
+                            }
+                        }
+                    }
+                    
+                    group.wait()
+                    
+                    DispatchQueue.main.async {
+                        if !newSessions.isEmpty {
+                            let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
+                            Task {
+                                let userId = AuthenticationService.shared.userId ?? "unknown_user"
+                                defer {
+                                    Task { @MainActor in
+                                        self.importTotal = 0
+                                        self.importProcessed = 0
+                                        self.isImporting = false
+                                        self.isLoading = false
+                                    }
+                                }
+                                do {
+                                    for session in sortedSessions {
+                                        let stats = try await GameEngine.shared.completeActivity(session, for: userId)
+                                        await MainActor.run {
+                                            self.importProcessed += 1
+                                        }
+                                        print("Retry pending -> processed stats \(stats)")
+                                    }
+                                } catch {
+                                    print("Retry pending -> processing error: \(error)")
+                                }
+                                await MainActor.run {
+                                    self.loadWorkouts()
+                                    self.isImporting = false
+                                    self.isLoading = false
+                                }
+                            }
+                        } else {
+                            self.importTotal = 0
+                            self.importProcessed = 0
+                            self.isImporting = false
+                            self.isLoading = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     func importFromHealthKit() {
         // Recuperación: si quedó marcado importando pero sin progreso, reiniciar flags
         if isImporting && importTotal == 0 && importProcessed == 0 {

@@ -7,6 +7,7 @@ struct WorkoutsView: View {
     
     @State private var showProfileDetail = false
     @State private var showMissionGuide = false
+    @State private var showImportAlert = false
     
     // Init with dependency injection
     init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel) {
@@ -99,6 +100,17 @@ struct WorkoutsView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onChange(of: viewModel.errorMessage) { newValue in
+            showImportAlert = newValue != nil
+        }
+        .alert("No pudimos importar tu entreno", isPresented: $showImportAlert, presenting: viewModel.errorMessage) { _ in
+            Button("Reintentar") {
+                viewModel.retryPendingImports()
+            }
+            Button("Cerrar", role: .cancel) { }
+        } message: { message in
+            Text(message)
+        }
     }
     
     // MARK: - A) Header
