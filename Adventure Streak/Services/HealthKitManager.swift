@@ -124,12 +124,16 @@ class HealthKitManager: ObservableObject {
         healthStore.execute(query)
     }
     
-    func fetchRoute(for workout: HKWorkout, completion: @escaping ([RoutePoint]?, Error?) -> Void) {
+    func fetchRoute(for workout: HKWorkout, completion: @escaping (RouteFetchResult) -> Void) {
         let runningObjectQuery = HKQuery.predicateForObjects(from: workout)
         let routeQuery = HKAnchoredObjectQuery(type: HKSeriesType.workoutRoute(), predicate: runningObjectQuery, anchor: nil, limit: HKObjectQueryNoLimit) { (query, samples, deletedObjects, newAnchor, error) in
             
             guard let routes = samples as? [HKWorkoutRoute], let route = routes.first else {
-                completion(nil, error)
+                if let error {
+                    completion(.error(error))
+                } else {
+                    completion(.emptySeries)
+                }
                 return
             }
             
@@ -137,7 +141,7 @@ class HealthKitManager: ObservableObject {
             
             let query = HKWorkoutRouteQuery(route: route) { (query, locationsOrNil, done, errorOrNil) in
                 if let error = errorOrNil {
-                    completion(nil, error)
+                    completion(.error(error))
                     return
                 }
                 
@@ -147,7 +151,11 @@ class HealthKitManager: ObservableObject {
                 
                 if done {
                     let routePoints = allLocations.map { RoutePoint(location: $0) }
-                    completion(routePoints, nil)
+                    if routePoints.isEmpty {
+                        completion(.emptySeries)
+                    } else {
+                        completion(.success(routePoints))
+                    }
                 }
             }
             

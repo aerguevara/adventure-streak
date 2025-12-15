@@ -8,12 +8,20 @@ struct GameConfig: Equatable {
     var loadHistoricalWorkouts: Bool
     var workoutLookbackDays: Int
     var territoryExpirationDays: Int
+    var routeExpectedBundles: [String]
+    var routeOptionalBundles: [String]
     
-    static let `default` = GameConfig(
-        loadHistoricalWorkouts: true,
-        workoutLookbackDays: 7,
-        territoryExpirationDays: 7
-    )
+    static let `default`: GameConfig = {
+        let mainId = Bundle.main.bundleIdentifier ?? "com.adventurestreak"
+        let watchId = "\(mainId).watchkitapp.watchkitextension"
+        return GameConfig(
+            loadHistoricalWorkouts: true,
+            workoutLookbackDays: 7,
+            territoryExpirationDays: 7,
+            routeExpectedBundles: ["com.apple.", mainId, watchId],
+            routeOptionalBundles: []
+        )
+    }()
     
     var clampedLookbackDays: Int {
         max(1, min(workoutLookbackDays, 60))
@@ -27,8 +35,18 @@ struct GameConfig: Equatable {
         GameConfig(
             loadHistoricalWorkouts: loadHistoricalWorkouts,
             workoutLookbackDays: clampedLookbackDays,
-            territoryExpirationDays: clampedTerritoryExpiration
+            territoryExpirationDays: clampedTerritoryExpiration,
+            routeExpectedBundles: routeExpectedBundles,
+            routeOptionalBundles: routeOptionalBundles
         )
+    }
+    
+    func requiresRoute(for bundleId: String) -> Bool {
+        routeExpectedBundles.contains(where: { bundleId == $0 || bundleId.hasPrefix($0) })
+    }
+    
+    func isOptionalRouteSource(_ bundleId: String) -> Bool {
+        routeOptionalBundles.contains(where: { bundleId == $0 || bundleId.hasPrefix($0) })
     }
 }
 
@@ -114,10 +132,17 @@ final class GameConfigService: ObservableObject {
                     ?? (expirationSource as? NSNumber)?.intValue
                     ?? loaded.territoryExpirationDays
                 
+                let expectedBundles = data["routeExpectedBundles"] as? [String]
+                    ?? loaded.routeExpectedBundles
+                let optionalBundles = data["routeOptionalBundles"] as? [String]
+                    ?? loaded.routeOptionalBundles
+                
                 loaded = GameConfig(
                     loadHistoricalWorkouts: loadHistorical,
                     workoutLookbackDays: lookback,
-                    territoryExpirationDays: expiration
+                    territoryExpirationDays: expiration,
+                    routeExpectedBundles: expectedBundles,
+                    routeOptionalBundles: optionalBundles
                 )
             }
         } catch {

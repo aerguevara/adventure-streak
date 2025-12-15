@@ -57,6 +57,7 @@ class WorkoutsViewModel: ObservableObject {
     private let activityStore: ActivityStore
     private let territoryService: TerritoryService
     private let configService: GameConfigService
+    private let pendingRouteStore: PendingRouteStore
     private var cancellables = Set<AnyCancellable>()
     
     @Published var isImporting = false
@@ -64,11 +65,13 @@ class WorkoutsViewModel: ObservableObject {
     init(
         activityStore: ActivityStore? = nil,
         territoryService: TerritoryService? = nil,
-        configService: GameConfigService
+        configService: GameConfigService,
+        pendingRouteStore: PendingRouteStore = PendingRouteStore.shared
     ) {
         self.activityStore = activityStore ?? ActivityStore.shared
         self.territoryService = territoryService ?? TerritoryService(territoryStore: TerritoryStore.shared)
         self.configService = configService
+        self.pendingRouteStore = pendingRouteStore
         
         Task {
             await configService.loadConfigIfNeeded()
@@ -270,29 +273,110 @@ class WorkoutsViewModel: ObservableObject {
                         semaphore.wait() // Wait for slot
                         group.enter()
                         
-                        HealthKitManager.shared.fetchRoute(for: workout) { routePoints, error in
+                        let bundleId = workout.sourceRevision.source.bundleIdentifier ?? ""
+                        let sourceName = workout.sourceRevision.source.name
+                        let requiresRoute = self.requiresRoute(for: bundleId)
+                        
+                        HealthKitManager.shared.fetchRoute(for: workout) { result in
                             defer { 
                                 group.leave()
                                 semaphore.signal() // Release slot
                             }
 
-                            // Clasificamos indoor/outdoor y permitimos que sesiones indoor no tengan ruta
                             let type = self.activityType(for: workout)
-                            let points = routePoints ?? []
+                            let distanceMeters = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
+                            let durationSeconds = workout.duration
+                            let name = self.workoutName(for: workout)
                             
-                            let session = ActivitySession(
-                                id: workout.uuid, // use stable HKWorkout id to avoid duplicates
-                                startDate: workout.startDate,
-                                endDate: workout.endDate,
-                                activityType: type,
-                                distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
-                                durationSeconds: workout.duration,
-                                workoutName: self.workoutName(for: workout),
-                                route: points
-                            )
-                            
-                            DispatchQueue.global(qos: .utility).sync {
-                                newSessions.append(session)
+                            switch result {
+                            case .success(let routePoints):
+                                if requiresRoute && routePoints.isEmpty {
+                                    self.handlePendingRoute(
+                                        workout: workout,
+                                        type: type,
+                                        workoutName: name,
+                                        sourceBundleId: bundleId,
+                                        sourceName: sourceName,
+                                        status: .missingRoute,
+                                        errorDescription: nil
+                                    )
+                                    return
+                                }
+                                
+                                self.pendingRouteStore.remove(workoutId: workout.uuid)
+                                
+                                let session = ActivitySession(
+                                    id: workout.uuid, // use stable HKWorkout id to avoid duplicates
+                                    startDate: workout.startDate,
+                                    endDate: workout.endDate,
+                                    activityType: type,
+                                    distanceMeters: distanceMeters,
+                                    durationSeconds: durationSeconds,
+                                    workoutName: name,
+                                    route: routePoints
+                                )
+                                
+                                DispatchQueue.global(qos: .utility).sync {
+                                    newSessions.append(session)
+                                }
+                            case .emptySeries:
+                                if requiresRoute {
+                                    self.handlePendingRoute(
+                                        workout: workout,
+                                        type: type,
+                                        workoutName: name,
+                                        sourceBundleId: bundleId,
+                                        sourceName: sourceName,
+                                        status: .missingRoute,
+                                        errorDescription: nil
+                                    )
+                                    return
+                                }
+                                
+                                let session = ActivitySession(
+                                    id: workout.uuid,
+                                    startDate: workout.startDate,
+                                    endDate: workout.endDate,
+                                    activityType: type,
+                                    distanceMeters: distanceMeters,
+                                    durationSeconds: durationSeconds,
+                                    workoutName: name,
+                                    route: []
+                                )
+                                
+                                DispatchQueue.global(qos: .utility).sync {
+                                    newSessions.append(session)
+                                }
+                            case .error(let error):
+                                if requiresRoute {
+                                    self.handlePendingRoute(
+                                        workout: workout,
+                                        type: type,
+                                        workoutName: name,
+                                        sourceBundleId: bundleId,
+                                        sourceName: sourceName,
+                                        status: .fetchError,
+                                        errorDescription: error.localizedDescription
+                                    )
+                                    return
+                                }
+                                
+                                print("⚠️ Route fetch error for optional source \(bundleId): \(error.localizedDescription)")
+                                
+                                let session = ActivitySession(
+                                    id: workout.uuid,
+                                    startDate: workout.startDate,
+                                    endDate: workout.endDate,
+                                    activityType: type,
+                                    distanceMeters: distanceMeters,
+                                    durationSeconds: durationSeconds,
+                                    workoutName: name,
+                                    route: []
+                                )
+                                
+                                DispatchQueue.global(qos: .utility).sync {
+                                    newSessions.append(session)
+                                }
                             }
                         }
                     }
@@ -388,6 +472,46 @@ class WorkoutsViewModel: ObservableObject {
             
         } catch {
             print("Error fixing XP: \(error)")
+        }
+    }
+    
+    private func requiresRoute(for bundleId: String) -> Bool {
+        configService.config.requiresRoute(for: bundleId)
+    }
+    
+    private func handlePendingRoute(
+        workout: HKWorkout,
+        type: ActivityType,
+        workoutName: String?,
+        sourceBundleId: String,
+        sourceName: String,
+        status: PendingRouteStatus,
+        errorDescription: String?
+    ) {
+        let existing = pendingRouteStore.find(workoutId: workout.uuid)
+        let retryCount = (existing?.retryCount ?? 0) + 1
+        let pending = PendingRouteImport(
+            id: workout.uuid,
+            startDate: workout.startDate,
+            endDate: workout.endDate,
+            activityType: type,
+            distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
+            durationSeconds: workout.duration,
+            workoutName: workoutName,
+            sourceBundleId: sourceBundleId,
+            sourceName: sourceName,
+            status: status,
+            lastErrorDescription: errorDescription,
+            retryCount: retryCount,
+            lastAttemptAt: Date()
+        )
+        
+        pendingRouteStore.upsert(pending)
+        
+        DispatchQueue.main.async {
+            let dateText = self.formatDate(workout.startDate)
+            let reason = status == .fetchError ? "por un error al leer la ruta" : "porque la ruta aún no está disponible"
+            self.errorMessage = "Tu actividad del \(dateText) no se cargó \(reason). Reintentaremos automáticamente."
         }
     }
     
