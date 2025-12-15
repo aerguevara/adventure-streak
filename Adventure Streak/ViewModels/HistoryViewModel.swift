@@ -92,6 +92,8 @@ class HistoryViewModel: ObservableObject {
                 
                 // Process in background to avoid blocking Main Thread
                 // Use .utility QoS to avoid priority inversion warnings (waiting on slower I/O)
+                let config = self.configService.config
+                let pendingStore = self.pendingRouteStore
                 DispatchQueue.global(qos: .utility).async {
                     var newSessions: [ActivitySession] = []
                     let group = DispatchGroup()
@@ -101,9 +103,9 @@ class HistoryViewModel: ObservableObject {
                         semaphore.wait() // Wait for slot
                         group.enter()
                         
-                        let bundleId = workout.sourceRevision.source.bundleIdentifier ?? ""
+                        let bundleId = workout.sourceRevision.source.bundleIdentifier
                         let sourceName = workout.sourceRevision.source.name
-                        let requiresRoute = self.requiresRoute(for: bundleId)
+                        let requiresRoute = config.requiresRoute(for: bundleId)
                         
                         HealthKitManager.shared.fetchRoute(for: workout) { result in
                             defer { 
@@ -119,19 +121,21 @@ class HistoryViewModel: ObservableObject {
                             switch result {
                             case .success(let routePoints):
                                 if requiresRoute && routePoints.isEmpty {
-                                    self.handlePendingRoute(
-                                        workout: workout,
-                                        type: type,
-                                        workoutName: name,
-                                        sourceBundleId: bundleId,
-                                        sourceName: sourceName,
-                                        status: .missingRoute,
-                                        errorDescription: nil
-                                    )
+                                    Task { @MainActor in
+                                        self.handlePendingRoute(
+                                            workout: workout,
+                                            type: type,
+                                            workoutName: name,
+                                            sourceBundleId: bundleId,
+                                            sourceName: sourceName,
+                                            status: .missingRoute,
+                                            errorDescription: nil
+                                        )
+                                    }
                                     return
                                 }
                                 
-                                self.pendingRouteStore.remove(workoutId: workout.uuid)
+                                pendingStore.remove(workoutId: workout.uuid)
                                 
                                 let session = ActivitySession(
                                     id: workout.uuid, // stable id from HKWorkout to prevent duplicates
@@ -150,15 +154,17 @@ class HistoryViewModel: ObservableObject {
                                 }
                             case .emptySeries:
                                 if requiresRoute {
-                                    self.handlePendingRoute(
-                                        workout: workout,
-                                        type: type,
-                                        workoutName: name,
-                                        sourceBundleId: bundleId,
-                                        sourceName: sourceName,
-                                        status: .missingRoute,
-                                        errorDescription: nil
-                                    )
+                                    Task { @MainActor in
+                                        self.handlePendingRoute(
+                                            workout: workout,
+                                            type: type,
+                                            workoutName: name,
+                                            sourceBundleId: bundleId,
+                                            sourceName: sourceName,
+                                            status: .missingRoute,
+                                            errorDescription: nil
+                                        )
+                                    }
                                     return
                                 }
                                 
@@ -178,15 +184,17 @@ class HistoryViewModel: ObservableObject {
                                 }
                             case .error(let error):
                                 if requiresRoute {
-                                    self.handlePendingRoute(
-                                        workout: workout,
-                                        type: type,
-                                        workoutName: name,
-                                        sourceBundleId: bundleId,
-                                        sourceName: sourceName,
-                                        status: .fetchError,
-                                        errorDescription: error.localizedDescription
-                                    )
+                                    Task { @MainActor in
+                                        self.handlePendingRoute(
+                                            workout: workout,
+                                            type: type,
+                                            workoutName: name,
+                                            sourceBundleId: bundleId,
+                                            sourceName: sourceName,
+                                            status: .fetchError,
+                                            errorDescription: error.localizedDescription
+                                        )
+                                    }
                                     return
                                 }
                                 
@@ -311,10 +319,6 @@ class HistoryViewModel: ObservableObject {
                 }
             }
         }
-    }
-    
-    private func requiresRoute(for bundleId: String) -> Bool {
-        configService.config.requiresRoute(for: bundleId)
     }
     
     private func handlePendingRoute(

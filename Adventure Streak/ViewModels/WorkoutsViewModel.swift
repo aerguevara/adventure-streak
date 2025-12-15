@@ -264,6 +264,8 @@ class WorkoutsViewModel: ObservableObject {
                     self.importTotal = newWorkouts.count
                     self.importProcessed = 0
                 }
+                let config = self.configService.config
+                let pendingStore = self.pendingRouteStore
                 DispatchQueue.global(qos: .utility).async {
                     var newSessions: [ActivitySession] = []
                     let group = DispatchGroup()
@@ -273,9 +275,9 @@ class WorkoutsViewModel: ObservableObject {
                         semaphore.wait() // Wait for slot
                         group.enter()
                         
-                        let bundleId = workout.sourceRevision.source.bundleIdentifier ?? ""
+                        let bundleId = workout.sourceRevision.source.bundleIdentifier
                         let sourceName = workout.sourceRevision.source.name
-                        let requiresRoute = self.requiresRoute(for: bundleId)
+                        let requiresRoute = config.requiresRoute(for: bundleId)
                         
                         HealthKitManager.shared.fetchRoute(for: workout) { result in
                             defer { 
@@ -291,19 +293,21 @@ class WorkoutsViewModel: ObservableObject {
                             switch result {
                             case .success(let routePoints):
                                 if requiresRoute && routePoints.isEmpty {
-                                    self.handlePendingRoute(
-                                        workout: workout,
-                                        type: type,
-                                        workoutName: name,
-                                        sourceBundleId: bundleId,
-                                        sourceName: sourceName,
-                                        status: .missingRoute,
-                                        errorDescription: nil
-                                    )
+                                    Task { @MainActor in
+                                        self.handlePendingRoute(
+                                            workout: workout,
+                                            type: type,
+                                            workoutName: name,
+                                            sourceBundleId: bundleId,
+                                            sourceName: sourceName,
+                                            status: .missingRoute,
+                                            errorDescription: nil
+                                        )
+                                    }
                                     return
                                 }
                                 
-                                self.pendingRouteStore.remove(workoutId: workout.uuid)
+                                pendingStore.remove(workoutId: workout.uuid)
                                 
                                 let session = ActivitySession(
                                     id: workout.uuid, // use stable HKWorkout id to avoid duplicates
@@ -321,15 +325,17 @@ class WorkoutsViewModel: ObservableObject {
                                 }
                             case .emptySeries:
                                 if requiresRoute {
-                                    self.handlePendingRoute(
-                                        workout: workout,
-                                        type: type,
-                                        workoutName: name,
-                                        sourceBundleId: bundleId,
-                                        sourceName: sourceName,
-                                        status: .missingRoute,
-                                        errorDescription: nil
-                                    )
+                                    Task { @MainActor in
+                                        self.handlePendingRoute(
+                                            workout: workout,
+                                            type: type,
+                                            workoutName: name,
+                                            sourceBundleId: bundleId,
+                                            sourceName: sourceName,
+                                            status: .missingRoute,
+                                            errorDescription: nil
+                                        )
+                                    }
                                     return
                                 }
                                 
@@ -349,15 +355,17 @@ class WorkoutsViewModel: ObservableObject {
                                 }
                             case .error(let error):
                                 if requiresRoute {
-                                    self.handlePendingRoute(
-                                        workout: workout,
-                                        type: type,
-                                        workoutName: name,
-                                        sourceBundleId: bundleId,
-                                        sourceName: sourceName,
-                                        status: .fetchError,
-                                        errorDescription: error.localizedDescription
-                                    )
+                                    Task { @MainActor in
+                                        self.handlePendingRoute(
+                                            workout: workout,
+                                            type: type,
+                                            workoutName: name,
+                                            sourceBundleId: bundleId,
+                                            sourceName: sourceName,
+                                            status: .fetchError,
+                                            errorDescription: error.localizedDescription
+                                        )
+                                    }
                                     return
                                 }
                                 
@@ -473,10 +481,6 @@ class WorkoutsViewModel: ObservableObject {
         } catch {
             print("Error fixing XP: \(error)")
         }
-    }
-    
-    private func requiresRoute(for bundleId: String) -> Bool {
-        configService.config.requiresRoute(for: bundleId)
     }
     
     private func handlePendingRoute(
