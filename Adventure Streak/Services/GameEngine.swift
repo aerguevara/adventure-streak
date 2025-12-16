@@ -67,8 +67,14 @@ class GameEngine {
         }
         
         // 2. Get XP context
-        let context = try await GamificationRepository.shared.buildXPContext(for: userId)
-        print("✅ XP Context loaded")
+        let context: XPContext
+        do {
+            context = try await GamificationRepository.shared.buildXPContext(for: userId)
+            print("✅ XP Context loaded")
+        } catch {
+            print("⚠️ XP Context error (\(error)). Using default context.")
+            context = defaultXPContext(for: userId)
+        }
         
         // 3. Calculate territorial delta
         let territoryResult: (cells: [TerritoryCell], stats: TerritoryStats)
@@ -93,12 +99,18 @@ class GameEngine {
         }
         
         // 5. Calculate XP for the activity
-        let xpBreakdown = try await gamificationService.computeXP(
-            for: activity,
-            territoryStats: territoryStats,
-            context: context
-        )
-        print("✅ XP calculated: \(xpBreakdown.total) total")
+        let xpBreakdown: XPBreakdown
+        do {
+            xpBreakdown = try await gamificationService.computeXP(
+                for: activity,
+                territoryStats: territoryStats,
+                context: context
+            )
+            print("✅ XP calculated: \(xpBreakdown.total) total")
+        } catch {
+            print("❌ XP calculation failed: \(error). Skipping XP for this activity.")
+            return territoryStats
+        }
         
         // 6. Update activity with results
         var updatedActivity = activity
@@ -117,8 +129,12 @@ class GameEngine {
         }
         
         // 7. Apply XP to user
-        try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)
-        print("✅ XP applied to user")
+        do {
+            try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)
+            print("✅ XP applied to user")
+        } catch {
+            print("❌ Failed to apply XP: \(error)")
+        }
         
         // 8. Create feed events
         try await createFeedEvents(
@@ -215,5 +231,16 @@ class GameEngine {
         )
         
         feedRepository.postEvent(event)
+    }
+    
+    private func defaultXPContext(for userId: String) -> XPContext {
+        XPContext(
+            userId: userId,
+            currentWeekDistanceKm: 0,
+            bestWeeklyDistanceKm: nil,
+            currentStreakWeeks: 0,
+            todayBaseXPEarned: 0,
+            gamificationState: GamificationState(totalXP: 0, level: 1, currentStreakWeeks: 0)
+        )
     }
 }
