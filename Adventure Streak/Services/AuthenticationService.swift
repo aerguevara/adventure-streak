@@ -108,6 +108,7 @@ class AuthenticationService: NSObject, ObservableObject {
                 ActivityStore.shared.clear()
                 TerritoryStore.shared.clear()
                 SocialService.shared.clear()
+                PendingRouteStore.shared.clear()
                 GamificationService.shared.syncState(xp: 0, level: 1)
             }
         } catch {

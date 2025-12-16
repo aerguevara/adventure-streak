@@ -43,4 +43,11 @@ final class PendingRouteStore: ObservableObject, @unchecked Sendable {
             print("Failed to save pending routes: \(error)")
         }
     }
+    
+    func clear() {
+        queue.sync {
+            pending = []
+            persistLocked()
+        }
+    }
 }
