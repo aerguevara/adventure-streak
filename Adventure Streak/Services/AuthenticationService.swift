@@ -32,7 +32,7 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userName = AuthenticationService.resolveDisplayName(for: user)
             loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
             NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
-            observeForceLogout(for: user.uid)
+            self.observeForceLogout(for: user.uid)
             
             // Sincronizar actividades remotas si ya hay sesión persistida
             Task {
@@ -71,7 +71,7 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userEmail = nil
             self.userName = "Guest Adventurer"
             NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
-            observeForceLogout(for: user.uid)
+            self.observeForceLogout(for: user.uid)
             
             // Sync Guest User to Firestore
             UserRepository.shared.syncUser(user: user, name: "Guest Adventurer")
