@@ -207,7 +207,8 @@ class AuthenticationService: NSObject, ObservableObject {
         #if canImport(FirebaseFirestore)
         userListener = UserRepository.shared.observeUser(userId: userId) { [weak self] user in
             guard let self, let user else { return }
-            guard let remoteVersion = user.forceLogoutVersion else { return }
+            // Treat missing as 0 so a server-side set to 0 forces logout once
+            let remoteVersion = user.forceLogoutVersion ?? 0
             
             // Default to -1 so that a remoteVersion of 0 triggers once for everyone after an update
             let lastSeen = self.userDefaults.object(forKey: self.forceLogoutKey) as? Int ?? -1
