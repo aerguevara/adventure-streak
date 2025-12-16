@@ -34,47 +34,16 @@ class GameEngine {
         // 1b. Check remote to avoid double-processing (XP/feed/territories) if already processed
         let alreadyProcessed = await activityRepository.activityExists(activityId: activity.id, userId: userId)
         if alreadyProcessed {
+            print("⚠️ Activity \(activity.id) already exists in Firestore. Skipping XP and feed application. Refreshing local copy from remote.")
             if let remoteActivity = await activityRepository.fetchActivity(activityId: activity.id, userId: userId) {
-                if let existingXP = remoteActivity.xpBreakdown {
-                    print("⚠️ Activity \(activity.id) already exists with XP (\(existingXP.total)). Skipping reapply. Refreshing local copy.")
-                    activityStore.updateActivity(remoteActivity)
-                    return remoteActivity.territoryStats ?? TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
-                } else {
-                    print("⚠️ Activity \(activity.id) exists remotely but without XP. Recomputing XP to avoid zero rewards.")
-                    // Recompute XP (territory stats may be missing; default to zero)
-                    let context = try await GamificationRepository.shared.buildXPContext(for: userId)
-                    let territoryStats = remoteActivity.territoryStats ?? TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
-                    let xpBreakdown = try await gamificationService.computeXP(
-                        for: remoteActivity,
-                        territoryStats: territoryStats,
-                        context: context
-                    )
-                    
-                    var updated = remoteActivity
-                    updated.xpBreakdown = xpBreakdown
-                    activityStore.updateActivity(updated)
-                    
-                    // Persist updated activity and apply XP once (safe because previous XP was nil)
-                    Task {
-                        await self.activityRepository.saveActivity(updated, territories: [], userId: userId)
-                    }
-                    try await gamificationService.applyXP(xpBreakdown, to: userId, at: updated.endDate)
-                    print("✅ XP recomputed and applied for pre-existing activity \(activity.id)")
-                    return territoryStats
-                }
+                activityStore.updateActivity(remoteActivity)
             }
             return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
         }
         
         // 2. Get XP context
-        let context: XPContext
-        do {
-            context = try await GamificationRepository.shared.buildXPContext(for: userId)
-            print("✅ XP Context loaded")
-        } catch {
-            print("⚠️ XP Context error (\(error)). Using default context.")
-            context = defaultXPContext(for: userId)
-        }
+        let context = try await GamificationRepository.shared.buildXPContext(for: userId)
+        print("✅ XP Context loaded")
         
         // 3. Calculate territorial delta
         let territoryResult: (cells: [TerritoryCell], stats: TerritoryStats)
@@ -99,18 +68,12 @@ class GameEngine {
         }
         
         // 5. Calculate XP for the activity
-        let xpBreakdown: XPBreakdown
-        do {
-            xpBreakdown = try await gamificationService.computeXP(
-                for: activity,
-                territoryStats: territoryStats,
-                context: context
-            )
-            print("✅ XP calculated: \(xpBreakdown.total) total")
-        } catch {
-            print("❌ XP calculation failed: \(error). Skipping XP for this activity.")
-            return territoryStats
-        }
+        let xpBreakdown = try await gamificationService.computeXP(
+            for: activity,
+            territoryStats: territoryStats,
+            context: context
+        )
+        print("✅ XP calculated: \(xpBreakdown.total) total")
         
         // 6. Update activity with results
         var updatedActivity = activity
@@ -129,12 +92,8 @@ class GameEngine {
         }
         
         // 7. Apply XP to user
-        do {
-            try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)
-            print("✅ XP applied to user")
-        } catch {
-            print("❌ Failed to apply XP: \(error)")
-        }
+        try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)
+        print("✅ XP applied to user")
         
         // 8. Create feed events
         try await createFeedEvents(
@@ -231,16 +190,5 @@ class GameEngine {
         )
         
         feedRepository.postEvent(event)
-    }
-    
-    private func defaultXPContext(for userId: String) -> XPContext {
-        XPContext(
-            userId: userId,
-            currentWeekDistanceKm: 0,
-            bestWeeklyDistanceKm: nil,
-            currentStreakWeeks: 0,
-            todayBaseXPEarned: 0,
-            gamificationState: GamificationState(totalXP: 0, level: 1, currentStreakWeeks: 0)
-        )
     }
 }

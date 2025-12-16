@@ -370,6 +370,11 @@ class WorkoutsViewModel: ObservableObject {
     }
     
     func importFromHealthKit() {
+        // Require authenticated user to avoid importing under "unknown_user"
+        guard let _ = AuthenticationService.shared.userId else {
+            print("Import HK -> aborted: no authenticated user")
+            return
+        }
         // Recuperación: si quedó marcado importando pero sin progreso, reiniciar flags
         if isImporting && importTotal == 0 && importProcessed == 0 {
             print("Import HK -> recuperando estado (importing=true pero sin progreso), reseteando flags")

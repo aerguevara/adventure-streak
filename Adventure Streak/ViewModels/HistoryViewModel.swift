@@ -8,6 +8,7 @@ class HistoryViewModel: ObservableObject {
     private let activityStore: ActivityStore
     private let territoryService: TerritoryService
     private let configService: GameConfigService
+    private let authService: AuthenticationService
     private let pendingRouteStore: PendingRouteStore
     
     @Published var isImporting = false
@@ -18,12 +19,14 @@ class HistoryViewModel: ObservableObject {
         activityStore: ActivityStore,
         territoryService: TerritoryService,
         configService: GameConfigService,
-        pendingRouteStore: PendingRouteStore = PendingRouteStore.shared
+        pendingRouteStore: PendingRouteStore = PendingRouteStore.shared,
+        authService: AuthenticationService = .shared
     ) {
         self.activityStore = activityStore
         self.territoryService = territoryService
         self.configService = configService
         self.pendingRouteStore = pendingRouteStore
+        self.authService = authService
         loadActivities()
         Task {
             await configService.loadConfigIfNeeded()
@@ -41,6 +44,10 @@ class HistoryViewModel: ObservableObject {
     }
     
     func importFromHealthKit() {
+        guard authService.userId != nil else {
+            print("History import -> aborted: no authenticated user")
+            return
+        }
         guard configService.config.loadHistoricalWorkouts else {
             print("Historical import disabled by config")
             return
