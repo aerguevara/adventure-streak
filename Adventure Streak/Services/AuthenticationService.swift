@@ -209,15 +209,12 @@ class AuthenticationService: NSObject, ObservableObject {
             guard let self, let user else { return }
             guard let remoteVersion = user.forceLogoutVersion else { return }
             
-            let lastSeen = self.userDefaults.integer(forKey: self.forceLogoutKey)
+            // Default to -1 so that a remoteVersion of 0 triggers once for everyone after an update
+            let lastSeen = self.userDefaults.object(forKey: self.forceLogoutKey) as? Int ?? -1
             if remoteVersion > lastSeen {
                 print("Force logout triggered: remoteVersion \(remoteVersion) > lastSeen \(lastSeen)")
                 self.userDefaults.set(remoteVersion, forKey: self.forceLogoutKey)
                 self.signOut()
-            } else if remoteVersion > 0 && lastSeen < remoteVersion {
-                self.userDefaults.set(remoteVersion, forKey: self.forceLogoutKey)
-            } else if lastSeen < remoteVersion {
-                self.userDefaults.set(remoteVersion, forKey: self.forceLogoutKey)
             }
         }
         #endif
