@@ -103,9 +103,10 @@ class HistoryViewModel: ObservableObject {
                         semaphore.wait() // Wait for slot
                         group.enter()
                         
+                        let type = self.activityType(for: workout)
                         let bundleId = workout.sourceRevision.source.bundleIdentifier
                         let sourceName = workout.sourceRevision.source.name
-                        let requiresRoute = config.requiresRoute(for: bundleId)
+                        let requiresRoute = config.requiresRoute(for: bundleId) && type.isOutdoor
                         
                         HealthKitManager.shared.fetchRoute(for: workout) { result in
                             defer { 
@@ -113,7 +114,6 @@ class HistoryViewModel: ObservableObject {
                                 semaphore.signal() // Release slot
                             }
                             
-                            let type = self.activityType(for: workout)
                             let distanceMeters = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
                             let durationSeconds = workout.duration
                             let name = self.workoutName(for: workout)
