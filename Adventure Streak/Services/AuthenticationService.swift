@@ -17,7 +17,6 @@ class AuthenticationService: NSObject, ObservableObject {
     @Published var isSyncingData = false
     
     private let userDefaults = UserDefaults.standard
-    private let forceLogoutKey = "forceLogoutVersion_seen"
     private var userListener: ListenerRegistration?
     
     // Helper for nonce
@@ -211,14 +210,21 @@ class AuthenticationService: NSObject, ObservableObject {
             let remoteVersion = user.forceLogoutVersion ?? 0
             
             // Default to -1 so that a remoteVersion of 0 triggers once for everyone after an update
-            let lastSeen = self.userDefaults.object(forKey: self.forceLogoutKey) as? Int ?? -1
+            let key = self.forceLogoutKey(for: userId)
+            let lastSeen = self.userDefaults.object(forKey: key) as? Int ?? -1
             if remoteVersion > lastSeen {
-                print("Force logout triggered: remoteVersion \(remoteVersion) > lastSeen \(lastSeen)")
-                self.userDefaults.set(remoteVersion, forKey: self.forceLogoutKey)
+                print("Force logout triggered for user \(userId): remoteVersion \(remoteVersion) > lastSeen \(lastSeen)")
+                self.userDefaults.set(remoteVersion, forKey: key)
                 self.signOut()
+            } else {
+                print("Force logout check for user \(userId): remoteVersion \(remoteVersion), lastSeen \(lastSeen) -> no action")
             }
         }
         #endif
+    }
+    
+    private func forceLogoutKey(for userId: String) -> String {
+        "forceLogoutVersion_seen_\(userId)"
     }
 }
 
