@@ -21,6 +21,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
     #if canImport(FirebaseCore)
     FirebaseApp.configure()
+    #if DEBUG
+    print("[Firebase] App configured (Debug)")
+    #endif
     #endif
     
     UNUserNotificationCenter.current().delegate = self

@@ -2,6 +2,9 @@ import Foundation
 import Combine
 import SwiftUI
 import HealthKit
+#if canImport(FirebaseCrashlytics)
+import FirebaseCrashlytics
+#endif
 
 struct WorkoutItemViewData: Identifiable {
     let id: UUID
@@ -745,6 +748,17 @@ class WorkoutsViewModel: ObservableObject {
         )
         
         pendingRouteStore.upsert(pending)
+#if canImport(FirebaseCrashlytics)
+        recordRouteNonFatal(
+            workout: workout,
+            type: type,
+            sourceBundleId: sourceBundleId,
+            sourceName: sourceName,
+            status: status,
+            errorDescription: errorDescription,
+            retryCount: retryCount
+        )
+#endif
         
         DispatchQueue.main.async {
             let dateText = self.formatDate(workout.startDate)
@@ -755,6 +769,45 @@ class WorkoutsViewModel: ObservableObject {
             print("⏸️ Pending route [import]. id:\(id) type:\(type) bundle:\(sourceBundleId) source:\(sourceName) status:\(status.rawValue) err:\(errText) distance:\(distanceText) retry:\(retryCount)")
         }
     }
+    
+#if canImport(FirebaseCrashlytics)
+    private func recordRouteNonFatal(
+        workout: HKWorkout,
+        type: ActivityType,
+        sourceBundleId: String,
+        sourceName: String,
+        status: PendingRouteStatus,
+        errorDescription: String?,
+        retryCount: Int
+    ) {
+        let crashlytics = Crashlytics.crashlytics()
+        let userId = AuthenticationService.shared.userId ?? "unknown_user"
+        crashlytics.log("Route import issue: status=\(status.rawValue) bundle=\(sourceBundleId) retry=\(retryCount)")
+        crashlytics.setCustomValue(workout.uuid.uuidString, forKey: "route_workout_uuid")
+        crashlytics.setCustomValue(type.rawValue, forKey: "route_activity_type")
+        crashlytics.setCustomValue(sourceBundleId, forKey: "route_source_bundle")
+        crashlytics.setCustomValue(sourceName, forKey: "route_source_name")
+        crashlytics.setCustomValue(true, forKey: "route_required")
+        crashlytics.setCustomValue(retryCount, forKey: "route_retry_count")
+        crashlytics.setCustomValue(errorDescription ?? "", forKey: "route_error_description")
+        crashlytics.setCustomValue(userId, forKey: "route_user_id")
+        let distanceKm = (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000.0
+        crashlytics.setCustomValue(String(format: "%.2f", distanceKm), forKey: "route_distance_km")
+        crashlytics.setCustomValue(workout.duration, forKey: "route_duration_seconds")
+        
+        let nsError = NSError(
+            domain: "com.adventurestreak.route",
+            code: status == .fetchError ? 2 : 1,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Route import \(status.rawValue) for \(sourceBundleId)",
+                "sourceName": sourceName,
+                "requiresRoute": true,
+                "retryCount": retryCount
+            ]
+        )
+        crashlytics.record(error: nsError)
+    }
+#endif
     
     // MARK: - Formatting Helpers
     

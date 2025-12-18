@@ -1,7 +1,4 @@
 import SwiftUI
-#if canImport(FirebaseCrashlytics)
-import FirebaseCrashlytics
-#endif
 
 struct WorkoutsView: View {
     @ObservedObject var viewModel: WorkoutsViewModel
@@ -11,9 +8,6 @@ struct WorkoutsView: View {
     @State private var showProfileDetail = false
     @State private var showMissionGuide = false
     @State private var showImportAlert = false
-    #if DEBUG
-    @State private var showCrashConfirm = false
-    #endif
     
     // Init with dependency injection
     init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel) {
@@ -117,29 +111,6 @@ struct WorkoutsView: View {
         } message: { message in
             Text(message)
         }
-        #if DEBUG
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showCrashConfirm = true
-                } label: {
-                    Image(systemName: "ant.fill")
-                }
-                .accessibilityLabel("Forzar crash (Debug)")
-            }
-        }
-        .alert("Forzar crash de prueba", isPresented: $showCrashConfirm) {
-            Button("Crash", role: .destructive) {
-                #if canImport(FirebaseCrashlytics)
-                Crashlytics.crashlytics().log("Manual test crash from debug toolbar")
-                #endif
-                fatalError("Manual Crashlytics test crash")
-            }
-            Button("Cancelar", role: .cancel) { }
-        } message: {
-            Text("Solo para pruebas de Crashlytics. La app se cerrará inmediatamente.")
-        }
-        #endif
     }
     
     // MARK: - A) Header
