@@ -10,6 +10,9 @@ import SwiftUI
 import FirebaseCore
 #endif
 import FirebaseMessaging
+#if canImport(FirebaseCrashlytics)
+import FirebaseCrashlytics
+#endif
 import BackgroundTasks
 import UserNotifications
 
@@ -31,6 +34,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     // Registrar tareas en background (HealthKit refresh)
     BackgroundTaskService.shared.registerTasks()
+    
+    #if DEBUG
+    if ProcessInfo.processInfo.arguments.contains("CRASHLYTICS_TEST_CRASH") {
+        #if canImport(FirebaseCrashlytics)
+        Crashlytics.crashlytics().log("Triggering test crash via launch argument")
+        #endif
+        fatalError("Test Crashlytics crash")
+    }
+    #endif
     return true
   }
   
