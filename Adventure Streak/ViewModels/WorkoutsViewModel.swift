@@ -724,6 +724,8 @@ class WorkoutsViewModel: ObservableObject {
         status: PendingRouteStatus,
         errorDescription: String?
     ) {
+        let id = workout.uuid
+        let distanceMeters = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
         let existing = pendingRouteStore.find(workoutId: workout.uuid)
         let retryCount = (existing?.retryCount ?? 0) + 1
         let pending = PendingRouteImport(
@@ -748,6 +750,9 @@ class WorkoutsViewModel: ObservableObject {
             let dateText = self.formatDate(workout.startDate)
             let reason = status == .fetchError ? "por un error al leer la ruta" : "porque la ruta aún no está disponible"
             self.errorMessage = "Tu actividad del \(dateText) no se cargó \(reason). Reintentaremos automáticamente."
+            let distanceText = String(format: "%.1fkm", distanceMeters / 1000)
+            let errText = errorDescription ?? "-"
+            print("⏸️ Pending route [import]. id:\(id) type:\(type) bundle:\(sourceBundleId) source:\(sourceName) status:\(status.rawValue) err:\(errText) distance:\(distanceText) retry:\(retryCount)")
         }
     }
     
