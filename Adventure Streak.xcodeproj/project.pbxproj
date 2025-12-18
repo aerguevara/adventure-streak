@@ -13,6 +13,7 @@
 		DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = DA4508392ED2495300D3C493 /* FirebaseCore */; };
 		DA450A482EE5DC1200D3C493 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = DA450A472EE5DC1200D3C493 /* FirebaseStorage */; };
 		DA450CC12EEB674E00D3C493 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = DA450CC02EEB674E00D3C493 /* FirebaseMessaging */; };
+		DAF00C002F00000100000001 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = DAF00BFF2F00000100000001 /* FirebaseCrashlytics */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +67,7 @@
 				DA4508382ED2467600D3C493 /* FirebaseAuth in Frameworks */,
 				DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */,
 				DA450A482EE5DC1200D3C493 /* FirebaseStorage in Frameworks */,
+				DAF00C002F00000100000001 /* FirebaseCrashlytics in Frameworks */,
 				DA45082A2ED242EE00D3C493 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -85,6 +87,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		DAF00C102F00000100000001 /* Crashlytics */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = Crashlytics;
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\" -gsp \"${PROJECT_DIR}/GoogleService-Info.plist\" -dsym \"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}\"";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXGroup section */
 		DA45079F2ED21A0B00D3C493 = {
@@ -125,6 +148,7 @@
 				DA4507A42ED21A0B00D3C493 /* Sources */,
 				DA4507A52ED21A0B00D3C493 /* Frameworks */,
 				DA4507A62ED21A0B00D3C493 /* Resources */,
+				DAF00C102F00000100000001 /* Crashlytics */,
 			);
 			buildRules = (
 			);
@@ -141,6 +165,7 @@
 				DA4508392ED2495300D3C493 /* FirebaseCore */,
 				DA450A472EE5DC1200D3C493 /* FirebaseStorage */,
 				DA450CC02EEB674E00D3C493 /* FirebaseMessaging */,
+				DAF00BFF2F00000100000001 /* FirebaseCrashlytics */,
 			);
 			productName = "Adventure Streak";
 			productReference = DA4507A82ED21A0B00D3C493 /* Adventure Streak.app */;
@@ -427,7 +452,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
@@ -448,7 +473,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.12;
+				MARKETING_VERSION = 1.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -465,7 +490,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure StreakRelease.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_PREVIEWS = YES;
@@ -486,7 +511,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.12;
+				MARKETING_VERSION = 1.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -650,6 +675,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		DAF00BFF2F00000100000001 /* FirebaseCrashlytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCrashlytics;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
