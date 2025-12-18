@@ -126,42 +126,73 @@ class HealthKitManager: ObservableObject {
     
     func fetchRoute(for workout: HKWorkout, completion: @escaping (RouteFetchResult) -> Void) {
         let runningObjectQuery = HKQuery.predicateForObjects(from: workout)
-        let routeQuery = HKAnchoredObjectQuery(type: HKSeriesType.workoutRoute(), predicate: runningObjectQuery, anchor: nil, limit: HKObjectQueryNoLimit) { (query, samples, deletedObjects, newAnchor, error) in
-            
-            guard let routes = samples as? [HKWorkoutRoute], let route = routes.first else {
-                if let error {
-                    completion(.error(error))
-                } else {
-                    completion(.emptySeries)
-                }
+        let routeQuery = HKAnchoredObjectQuery(
+            type: HKSeriesType.workoutRoute(),
+            predicate: runningObjectQuery,
+            anchor: nil,
+            limit: HKObjectQueryNoLimit
+        ) { (_, samples, _, _, error) in
+
+            if let error {
+                print("HK fetchRoute — error for \(workout.uuid): \(error.localizedDescription) source:\(workout.sourceRevision.source.bundleIdentifier ?? \"-\") type:\(workout.workoutActivityType.rawValue)")
+                completion(.error(error))
                 return
             }
-            
+
+            guard let routes = samples as? [HKWorkoutRoute], !routes.isEmpty else {
+                print("HK fetchRoute — empty series for \(workout.uuid) source:\(workout.sourceRevision.source.bundleIdentifier ?? \"-\") type:\(workout.workoutActivityType.rawValue)")
+                completion(.emptySeries)
+                return
+            }
+
+            // Unir todas las series asociadas al workout (algunos entrenos vienen segmentados)
+            let group = DispatchGroup()
+            let lockQueue = DispatchQueue(label: "com.adventurestreak.routecollector")
             var allLocations: [CLLocation] = []
-            
-            let query = HKWorkoutRouteQuery(route: route) { (query, locationsOrNil, done, errorOrNil) in
-                if let error = errorOrNil {
+            var firstError: Error?
+
+            for route in routes {
+                group.enter()
+                let query = HKWorkoutRouteQuery(route: route) { (_, locationsOrNil, done, errorOrNil) in
+                    if let errorOrNil {
+                        print("HK fetchRoute — route segment error for \(workout.uuid): \(errorOrNil.localizedDescription)")
+                        lockQueue.sync {
+                            if firstError == nil { firstError = errorOrNil }
+                        }
+                    }
+
+                    if let locations = locationsOrNil {
+                        lockQueue.sync { allLocations.append(contentsOf: locations) }
+                    }
+
+                    // Algunos errores no marcan `done`; evitamos deadlocks dejando el grupo en ambos casos
+                    if done {
+                        group.leave()
+                    } else if errorOrNil != nil {
+                        group.leave()
+                    }
+                }
+
+                self.healthStore.execute(query)
+            }
+
+            group.notify(queue: .main) {
+                if let error = firstError {
+                    print("HK fetchRoute — final error for \(workout.uuid): \(error.localizedDescription) points:\(allLocations.count)")
                     completion(.error(error))
                     return
                 }
-                
-                if let locations = locationsOrNil {
-                    allLocations.append(contentsOf: locations)
-                }
-                
-                if done {
-                    let routePoints = allLocations.map { RoutePoint(location: $0) }
-                    if routePoints.isEmpty {
-                        completion(.emptySeries)
-                    } else {
-                        completion(.success(routePoints))
-                    }
+
+                let routePoints = allLocations.map { RoutePoint(location: $0) }
+                print("HK fetchRoute — completed \(workout.uuid) points:\(routePoints.count) source:\(workout.sourceRevision.source.bundleIdentifier ?? \"-\") type:\(workout.workoutActivityType.rawValue)")
+                if routePoints.isEmpty {
+                    completion(.emptySeries)
+                } else {
+                    completion(.success(routePoints))
                 }
             }
-            
-            self.healthStore.execute(query)
         }
-        
+
         healthStore.execute(routeQuery)
     }
     
