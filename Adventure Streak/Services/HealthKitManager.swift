@@ -134,14 +134,14 @@ class HealthKitManager: ObservableObject {
         ) { (_, samples, _, _, error) in
 
             if let error {
-                let bundle = workout.sourceRevision.source.bundleIdentifier ?? "-"
+                let bundle = workout.sourceRevision.source.bundleIdentifier
                 print("HK fetchRoute — error for \(workout.uuid): \(error.localizedDescription) source:\(bundle) type:\(workout.workoutActivityType.rawValue)")
                 completion(.error(error))
                 return
             }
 
             guard let routes = samples as? [HKWorkoutRoute], !routes.isEmpty else {
-                let bundle = workout.sourceRevision.source.bundleIdentifier ?? "-"
+                let bundle = workout.sourceRevision.source.bundleIdentifier
                 print("HK fetchRoute — empty series for \(workout.uuid) source:\(bundle) type:\(workout.workoutActivityType.rawValue)")
                 completion(.emptySeries)
                 return
@@ -186,7 +186,7 @@ class HealthKitManager: ObservableObject {
                 }
 
                 let routePoints = allLocations.map { RoutePoint(location: $0) }
-                let bundle = workout.sourceRevision.source.bundleIdentifier ?? "-"
+                let bundle = workout.sourceRevision.source.bundleIdentifier
                 print("HK fetchRoute — completed \(workout.uuid) points:\(routePoints.count) source:\(bundle) type:\(workout.workoutActivityType.rawValue)")
                 if routePoints.isEmpty {
                     completion(.emptySeries)
