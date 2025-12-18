@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(FirebaseCrashlytics)
+import FirebaseCrashlytics
+#endif
 
 struct WorkoutsView: View {
     @ObservedObject var viewModel: WorkoutsViewModel
