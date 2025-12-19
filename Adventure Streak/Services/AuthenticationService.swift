@@ -182,7 +182,8 @@ class AuthenticationService: NSObject, ObservableObject {
         
         UserRepository.shared.fetchUser(userId: userId) { [weak self] user in
             guard let self = self else { return }
-            if let remoteName = user?.displayName, !remoteName.isEmpty {
+            let remoteName = user?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let remoteName = remoteName, !remoteName.isEmpty {
                 DispatchQueue.main.async {
                     self.userName = remoteName
                 }
@@ -192,15 +193,15 @@ class AuthenticationService: NSObject, ObservableObject {
     
     /// Nombre a usar en el feed/UI con fallback a email o genérico.
     func resolvedUserName(default defaultName: String = "Aventurero") -> String {
-        if let name = userName, !name.isEmpty {
+        if let name = userName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             return name
         }
-        if let authDisplay = Auth.auth().currentUser?.displayName,
-           !authDisplay.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return authDisplay.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let authDisplay = Auth.auth().currentUser?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !authDisplay.isEmpty {
+            return authDisplay
         }
-        if let email = userEmail,
-           let prefix = email.split(separator: "@").first,
+        if let email = userEmail?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let prefix = email.split(separator: "@").first?.trimmingCharacters(in: .whitespacesAndNewlines),
            !prefix.isEmpty {
             return String(prefix)
         }

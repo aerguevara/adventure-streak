@@ -128,7 +128,21 @@ class GameEngine {
         userId: String,
         providedUserName: String? = nil
     ) async throws {
-        let userName = providedUserName ?? AuthenticationService.shared.resolvedUserName()
+        var userName = providedUserName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? AuthenticationService.shared.resolvedUserName()
+        
+        // Saneamiento adicional: si el nombre es genérico o vacío, intentar descarga directa de Firestore
+        if userName.isEmpty || userName == "Aventurero" || userName == "Guest Adventurer" {
+            let userDoc = await withCheckedContinuation { continuation in
+                UserRepository.shared.fetchUser(userId: userId) { user in
+                    continuation.resume(returning: user)
+                }
+            }
+            if let remoteName = userDoc?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !remoteName.isEmpty {
+                userName = remoteName
+                print("🔄 [GameEngine] Nome recuperado de Firestore para el feed: \(userName)")
+            }
+        }
+
         let userLevel = GamificationService.shared.currentLevel
         
         // Create activity data for the feed
