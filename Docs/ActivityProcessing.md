@@ -162,7 +162,7 @@ Para cada celda tocada por la ruta:
 - Si una actividad ya existe en remoto, no se recalcula XP ni se reaplica al usuario.
 
 ## 13. Notificaciones (opcional)
-- FCM token se guarda en `users/{id}.fcmTokens`.
+- FCM token se guarda en `users/{id}.fcmTokens` (string único).
 - Backend (Cloud Function) puede escuchar `feed` o `activities` y enviar notificación usando esos tokens.
 
 ## 14. Resumen de colecciones en Firestore
@@ -170,7 +170,7 @@ Para cada celda tocada por la ruta:
 - `activities/{activityId}` + subcolecciones `routes` y `territories`.
 - `remote_territories/{cellId}` : estado global de cada celda.
 - `feed/{eventId}` : eventos del feed social vinculados a `activityId`.
-- `users/{userId}` : perfil, XP/level, agregados de territorio, `fcmTokens`.
+- `users/{userId}` : perfil, XP/level, agregados de territorio, `fcmTokens` (string).
 
 ## 15. Estructuras de colecciones (ejemplos JSON)
 
@@ -300,6 +300,6 @@ Subcolección `activities/{activityId}/territories` (chunks):
   "level": 8,
   "totalCellsOwned": 47,
   "recentTerritories": 5,
-  "fcmTokens": ["fcm_token_1", "fcm_token_2"]
+  "fcmTokens": "fcm_token_1"
 }
 ```

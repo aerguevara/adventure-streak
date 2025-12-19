@@ -334,7 +334,16 @@ class WorkoutsViewModel: ObservableObject {
                         if !newSessions.isEmpty {
                             let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
                             Task {
-                                let userId = AuthenticationService.shared.userId ?? "unknown_user"
+                                guard let userId = AuthenticationService.shared.userId else {
+                                    print("Retry pending -> aborted: user logged out during fetch")
+                                    Task { @MainActor in
+                                        self.isImporting = false
+                                        self.isLoading = false
+                                    }
+                                    return
+                                }
+                                let userName = AuthenticationService.shared.userName
+                                
                                 defer {
                                     Task { @MainActor in
                                         self.importTotal = 0
@@ -345,7 +354,7 @@ class WorkoutsViewModel: ObservableObject {
                                 }
                                 do {
                                     for session in sortedSessions {
-                                        let stats = try await GameEngine.shared.completeActivity(session, for: userId)
+                                        let stats = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
                                         await MainActor.run {
                                             self.importProcessed += 1
                                         }
@@ -639,7 +648,16 @@ class WorkoutsViewModel: ObservableObject {
                             
                         // 2. Process through GameEngine (Individually for accuracy)
                         Task {
-                            let userId = AuthenticationService.shared.userId ?? "unknown_user"
+                            guard let userId = AuthenticationService.shared.userId else {
+                                print("HK import -> aborted: user logged out during processing")
+                                Task { @MainActor in
+                                    self.isImporting = false
+                                    self.isLoading = false
+                                }
+                                return
+                            }
+                            let userName = AuthenticationService.shared.userName
+                            
                             var totalNewCells = 0
                             defer {
                                 // Reset progress when finished (success or failure)
@@ -653,7 +671,7 @@ class WorkoutsViewModel: ObservableObject {
                                 for session in sortedSessions {
                                     // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
                                     // Use GameEngine to process each imported activity
-                                    let stats = try await GameEngine.shared.completeActivity(session, for: userId)
+                                    let stats = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
                                     
                                     // Track total for summary
                                     totalNewCells += stats.newCellsCount
@@ -691,7 +709,10 @@ class WorkoutsViewModel: ObservableObject {
         guard !missingXP.isEmpty else { return }
         print("Fixing XP for \(missingXP.count) activities...")
         
-        let userId = AuthenticationService.shared.userId ?? "unknown_user"
+        guard let userId = AuthenticationService.shared.userId else {
+            print("Fix missing XP -> aborted: no authenticated user")
+            return
+        }
         
         do {
             let context = try await GamificationRepository.shared.buildXPContext(for: userId)
@@ -781,7 +802,7 @@ class WorkoutsViewModel: ObservableObject {
         retryCount: Int
     ) {
         let crashlytics = Crashlytics.crashlytics()
-        let userId = AuthenticationService.shared.userId ?? "unknown_user"
+        let userId = AuthenticationService.shared.userId ?? "unauthenticated"
         crashlytics.log("Route import issue: status=\(status.rawValue) bundle=\(sourceBundleId) retry=\(retryCount)")
         crashlytics.setCustomValue(workout.uuid.uuidString, forKey: "route_workout_uuid")
         crashlytics.setCustomValue(type.rawValue, forKey: "route_activity_type")

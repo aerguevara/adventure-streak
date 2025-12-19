@@ -19,7 +19,13 @@ class GameEngine {
     /// Main orchestrator: processes a completed activity through the entire game system
     /// Returns the territory stats for tracking purposes
     @discardableResult
-    func completeActivity(_ activity: ActivitySession, for userId: String) async throws -> TerritoryStats {
+    func completeActivity(_ activity: ActivitySession, for userId: String, userName: String? = nil) async throws -> TerritoryStats {
+        // GUARD: Never process activity for "unknown_user"
+        guard userId != "unknown_user" && !userId.isEmpty else {
+            print("⚠️ [GameEngine] Aborting completeActivity: Invalid userId '\(userId)'")
+            return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+        }
+        
         print("🎮 GameEngine: Processing activity \(activity.id)")
         
         // Asegurar que ya tenemos foto de territorios remotos antes de calcular conquistas
@@ -48,7 +54,8 @@ class GameEngine {
         // 3. Calculate territorial delta
         let territoryResult: (cells: [TerritoryCell], stats: TerritoryStats)
         if activity.activityType.isOutdoor {
-            territoryResult = await territoryService.processActivity(activity, ownerUserId: AuthenticationService.shared.userId, ownerDisplayName: AuthenticationService.shared.userName)
+            // Use the passed userId and userName for territory processing
+            territoryResult = await territoryService.processActivity(activity, ownerUserId: userId, ownerDisplayName: userName)
             print("✅ Territory processed: \(territoryResult.stats.newCellsCount) new, \(territoryResult.stats.defendedCellsCount) defended")
         } else {
             territoryResult = ([], TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0))
@@ -101,7 +108,8 @@ class GameEngine {
             activity: updatedActivity,
             territoryStats: territoryStats,
             xpBreakdown: xpBreakdown,
-            userId: userId
+            userId: userId,
+            providedUserName: userName
         )
         print("✅ Feed events created")
         
@@ -117,9 +125,10 @@ class GameEngine {
         activity: ActivitySession,
         territoryStats: TerritorialDelta,
         xpBreakdown: XPBreakdown,
-        userId: String
+        userId: String,
+        providedUserName: String? = nil
     ) async throws {
-        let userName = AuthenticationService.shared.resolvedUserName()
+        let userName = providedUserName ?? AuthenticationService.shared.resolvedUserName()
         let userLevel = GamificationService.shared.currentLevel
         
         // Create activity data for the feed

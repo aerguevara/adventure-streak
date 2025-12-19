@@ -30,6 +30,7 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userEmail = user.email
             self.userName = AuthenticationService.resolveDisplayName(for: user)
             loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
+            NotificationService.shared.syncCachedFCMToken(for: user.uid)
             NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
             self.observeForceLogout(for: user.uid)
             
@@ -69,6 +70,7 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userId = user.uid
             self.userEmail = nil
             self.userName = "Guest Adventurer"
+            NotificationService.shared.syncCachedFCMToken(for: user.uid)
             NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
             self.observeForceLogout(for: user.uid)
             
@@ -96,8 +98,12 @@ class AuthenticationService: NSObject, ObservableObject {
     }
     
     func signOut() {
+        let currentUserId = self.userId
         do {
             try Auth.auth().signOut()
+            if let currentUserId {
+                NotificationService.shared.removeActiveToken(for: currentUserId)
+            }
             self.isAuthenticated = false
             self.userId = nil
             self.userName = nil
@@ -273,6 +279,8 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                     
                     // Set an early value to avoid nil in UI while fetching remote
                     self.userName = appleName ?? resolvedFallback
+                    NotificationService.shared.syncCachedFCMToken(for: user.uid)
+                    NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
             
             UserRepository.shared.fetchUser(userId: user.uid) { [weak self] remoteUser in
                 guard let self = self else { return }
@@ -285,7 +293,6 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
             
             // Sync without clobbering: use chosenName (remote preferred) so displayName stays consistent, and update lastLogin.
             UserRepository.shared.syncUser(user: user, name: chosenName)
-            NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
             
             // Backfill + parity check so remote list matches local feed/events
             Task {

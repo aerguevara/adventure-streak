@@ -9,6 +9,8 @@ import FirebaseFirestore
 
 class NotificationService {
     static let shared = NotificationService()
+    private let userDefaults = UserDefaults.standard
+    private let cachedTokenKey = "fcm_cached_token"
     
     func requestPermissions(completion: ((Bool) -> Void)? = nil) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
@@ -50,23 +52,69 @@ class NotificationService {
         // In a real app, we would schedule a local notification for when the nearest territory expires
     }
     
-    /// Re-genera y sube un nuevo token FCM cuando el backend marca `needsTokenRefresh`.
+    // Cache local para cuando el token llega antes del login
+    func cacheFCMToken(_ token: String) {
+        userDefaults.set(token, forKey: cachedTokenKey)
+    }
+    
+    private var cachedToken: String? {
+        userDefaults.string(forKey: cachedTokenKey)
+    }
+    
+    /// Se llama desde el delegate de Messaging cuando llega un token nuevo.
+    func handleNewFCMToken(_ token: String, userId: String?) {
+        cacheFCMToken(token)
+        guard let userId else { return }
+        uploadActiveToken(token, for: userId)
+    }
+    
+    /// Sube el token cacheado (o lo solicita) cuando ya tenemos userId.
+    func syncCachedFCMToken(for userId: String) {
+        if let token = cachedToken {
+            uploadActiveToken(token, for: userId)
+            return
+        }
+        
+        #if canImport(FirebaseMessaging)
+        Messaging.messaging().token { [weak self] token, error in
+            guard let self = self, let token = token, error == nil else { return }
+            self.cacheFCMToken(token)
+            self.uploadActiveToken(token, for: userId)
+        }
+        #endif
+    }
+    
+    /// Limpia el token activo de este dispositivo del usuario (para sign-out o cambio de cuenta).
+    func removeActiveToken(for userId: String) {
+        guard let token = cachedToken else { return }
+        UserRepository.shared.removeFCMToken(userId: userId, token: token)
+    }
+    
+    /// Re-genera y sube un nuevo token FCM cuando el backend marca `needsTokenRefresh` o no hay tokens.
     func refreshFCMTokenIfNeeded(for userId: String) {
         #if canImport(FirebaseFirestore)
-        guard let db = Firestore.firestore() as Firestore? else { return }
-        let userRef = db.collection("users").document(userId)
+        let userRef = Firestore.firestore().collection("users").document(userId)
         
-        userRef.getDocument { snapshot, _ in
-            guard let data = snapshot?.data(),
-                  (data["needsTokenRefresh"] as? Bool) == true else { return }
+        userRef.getDocument { [weak self] snapshot, _ in
+            guard let self else { return }
+            let data = snapshot?.data() ?? [:]
+            let needsRefresh = (data["needsTokenRefresh"] as? Bool) == true
+            let existingToken: String = {
+                if let str = data["fcmTokens"] as? String, !str.isEmpty { return str }
+                if let arr = data["fcmTokens"] as? [String], let first = arr.first, !first.isEmpty { return first }
+                return ""
+            }()
+            let missingTokens = existingToken.isEmpty
+            
+            guard needsRefresh || missingTokens else { return }
             
             #if canImport(FirebaseMessaging)
             Messaging.messaging().deleteToken { _ in
-                Messaging.messaging().token { token, error in
-                    guard let token = token, error == nil else { return }
-                    
+                Messaging.messaging().token { [weak self] token, error in
+                    guard let self = self, let token = token, error == nil else { return }
+                    self.cacheFCMToken(token)
+                    self.uploadActiveToken(token, for: userId)
                     userRef.updateData([
-                        "fcmTokens": FieldValue.arrayUnion([token]),
                         "needsTokenRefresh": false,
                         "needsTokenRefreshAt": FieldValue.delete()
                     ])
@@ -75,5 +123,9 @@ class NotificationService {
             #endif
         }
         #endif
+    }
+    
+    private func uploadActiveToken(_ token: String, for userId: String) {
+        UserRepository.shared.updateFCMToken(userId: userId, token: token)
     }
 }

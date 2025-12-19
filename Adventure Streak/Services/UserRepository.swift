@@ -94,8 +94,24 @@ class UserRepository: ObservableObject {
         guard let db = db as? Firestore else { return }
         let userRef = db.collection("users").document(userId)
         userRef.setData([
-            "fcmTokens": FieldValue.arrayUnion([token])
+            // Mantener solo el token activo de este dispositivo (campo string)
+            "fcmTokens": token,
+            "fcmTokenUpdatedAt": FieldValue.serverTimestamp(),
+            // Resetear flags de refresh al subir token
+            "needsTokenRefresh": false,
+            "needsTokenRefreshAt": FieldValue.delete()
         ], merge: true)
+        #endif
+    }
+    
+    func removeFCMToken(userId: String, token: String) {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        let userRef = db.collection("users").document(userId)
+        // Se elimina el campo completo porque ahora es un string (el parámetro se ignora)
+        userRef.updateData([
+            "fcmTokens": FieldValue.delete()
+        ])
         #endif
     }
     #else
@@ -103,6 +119,7 @@ class UserRepository: ObservableObject {
     func syncUser(user: Any, name: String?) {}
     func updateTerritoryStats(userId: String, totalOwned: Int, recentWindow: Int) {}
     func updateFCMToken(userId: String, token: String) {}
+    func removeFCMToken(userId: String, token: String) {}
     #endif
     #if canImport(FirebaseAuth)
     func fetchUser(userId: String, completion: @escaping (User?) -> Void) {

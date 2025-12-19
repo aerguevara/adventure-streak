@@ -30,9 +30,10 @@ private struct FirestoreActivity: Codable {
     let routeChunkCount: Int?
     let territoryPointsCount: Int?
     let territoryChunkCount: Int?
+    let processingStatus: String?
     let lastUpdatedAt: Date
     
-    init(activity: ActivitySession, userId: String, routeChunkCount: Int, territoryChunkCount: Int) {
+    init(activity: ActivitySession, userId: String, routeChunkCount: Int, territoryChunkCount: Int, includeProcessingStatus: Bool) {
         self.id = activity.id.uuidString
         self.userId = userId
         self.startDate = activity.startDate
@@ -49,6 +50,7 @@ private struct FirestoreActivity: Codable {
         self.routeChunkCount = routeChunkCount
         self.territoryPointsCount = nil
         self.territoryChunkCount = territoryChunkCount
+        self.processingStatus = includeProcessingStatus ? "pending" : nil
         self.lastUpdatedAt = Date()
     }
 }
@@ -94,17 +96,35 @@ final class ActivityRepository {
     func saveActivity(_ activity: ActivitySession, territories: [TerritoryCell]? = nil, userId: String) async {
         #if canImport(FirebaseFirestore)
         let docId = activity.id.uuidString
+        let docRef = db.collection("activities").document(docId)
         
         let chunkSize = 500
         let chunks = chunkRoute(activity.route, size: chunkSize)
         let territoryChunks = chunkTerritories(territories ?? [], size: 200)
+
+        // Solo setear processingStatus="pending" si el doc no existe o no tiene processingStatus.
+        var includeProcessingStatus = true
+        do {
+            let existing = try await docRef.getDocument()
+            if existing.exists,
+               let status = existing.data()?["processingStatus"] as? String,
+               !status.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                includeProcessingStatus = false
+            }
+        } catch {
+            print("[Activities] Failed to check processingStatus for \(docId): \(error.localizedDescription)")
+        }
         
         // 1) Save metadata doc (without route)
-        let meta = FirestoreActivity(activity: activity, userId: userId, routeChunkCount: chunks.count, territoryChunkCount: territoryChunks.count)
+        let meta = FirestoreActivity(
+            activity: activity,
+            userId: userId,
+            routeChunkCount: chunks.count,
+            territoryChunkCount: territoryChunks.count,
+            includeProcessingStatus: includeProcessingStatus
+        )
         do {
-            try db.collection("activities")
-                .document(docId)
-                .setData(from: meta, merge: true)
+            try docRef.setData(from: meta, merge: true)
             print("[Activities] Saved metadata for \(docId) with \(chunks.count) route chunks (\(activity.route.count) pts) and \(territoryChunks.count) territory chunks")
         } catch {
             print("[Activities] Failed to save metadata for \(docId): \(error.localizedDescription)")

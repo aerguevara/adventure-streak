@@ -55,9 +55,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
   
   func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
       print("FCM token: \(fcmToken ?? "nil")")
-      guard let token = fcmToken,
-            let userId = AuthenticationService.shared.userId else { return }
-      UserRepository.shared.updateFCMToken(userId: userId, token: token)
+      guard let token = fcmToken else { return }
+      let userId = AuthenticationService.shared.userId
+      NotificationService.shared.handleNewFCMToken(token, userId: userId)
   }
   
   // Mostrar notificaciones en foreground

@@ -339,7 +339,11 @@ class MapViewModel: ObservableObject {
         let end = Date()
         
         Task {
-            let userId = AuthenticationService.shared.userId ?? "unknown_user"
+            guard let userId = AuthenticationService.shared.userId else {
+                print("Stop activity -> aborted: no authenticated user")
+                return
+            }
+            let userName = AuthenticationService.shared.userName
             
             // Create activity session
             let session = ActivitySession(
@@ -354,7 +358,7 @@ class MapViewModel: ObservableObject {
             // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
             // Use GameEngine to process the complete activity through the game system
             do {
-                try await GameEngine.shared.completeActivity(session, for: userId)
+                try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
                 print("✅ Activity processed successfully through GameEngine")
             } catch {
                 print("❌ Error processing activity: \(error)")

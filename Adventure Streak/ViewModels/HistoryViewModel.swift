@@ -247,7 +247,10 @@ class HistoryViewModel: ObservableObject {
                             
                             // 2. Process Territories (BATCHED)
                             Task {
-                                let userId = AuthenticationService.shared.userId ?? "unknown_user"
+                                guard let userId = AuthenticationService.shared.userId else {
+                                    print("Batch Import (History) -> aborted: no authenticated user")
+                                    return
+                                }
                                 
                                 // A. Batch Process Territories (Updates Store ONCE)
                                 let userName = AuthenticationService.shared.userName
@@ -398,7 +401,7 @@ class HistoryViewModel: ObservableObject {
         retryCount: Int
     ) {
         let crashlytics = Crashlytics.crashlytics()
-        let userId = AuthenticationService.shared.userId ?? "unknown_user"
+        let userId = AuthenticationService.shared.userId ?? "unauthenticated"
         crashlytics.log("Route import issue (history): status=\(status.rawValue) bundle=\(sourceBundleId) retry=\(retryCount)")
         crashlytics.setCustomValue(workout.uuid.uuidString, forKey: "route_workout_uuid")
         crashlytics.setCustomValue(type.rawValue, forKey: "route_activity_type")

@@ -64,6 +64,12 @@ class GamificationService: ObservableObject, GamificationServiceProtocol {
                  to userId: String,
                  at date: Date) async throws {
         
+        // GUARD: Never apply XP to "unknown_user"
+        guard userId != "unknown_user" && !userId.isEmpty else {
+            print("⚠️ [Gamification] Aborting applyXP: Invalid userId '\(userId)'")
+            return
+        }
+        
         // 1. Fetch current state (or use context if passed, but safer to fetch fresh)
         // For MVP we rely on repository update which merges
         let context = try await repository.buildXPContext(for: userId)
@@ -79,13 +85,15 @@ class GamificationService: ObservableObject, GamificationServiceProtocol {
         // 4. Persist
         repository.updateUserStats(userId: userId, xp: state.totalXP, level: state.level)
         
-        // Update local published state
+        // Update local published state ONLY if it's the current user
         let finalXP = state.totalXP
         let finalLevel = state.level
         
-        await MainActor.run {
-            self.currentXP = finalXP
-            self.currentLevel = finalLevel
+        if userId == AuthenticationService.shared.userId {
+            await MainActor.run {
+                self.currentXP = finalXP
+                self.currentLevel = finalLevel
+            }
         }
     }
     
