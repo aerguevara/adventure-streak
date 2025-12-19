@@ -264,6 +264,10 @@ class SocialService: ObservableObject {
         startObservingFollowing() // Added call to start observing following
     }
     
+    func refreshFeed() async {
+        await feedRepository.fetchLatest()
+    }
+    
     private func startObservingFollowing() {
         guard let currentUserId = AuthenticationService.shared.userId else { return }
         

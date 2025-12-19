@@ -32,7 +32,9 @@ class SocialViewModel: ObservableObject {
     }
 
     func refresh() async {
-        socialService.startObserving()
+        isLoading = true
+        await socialService.refreshFeed()
+        isLoading = false
     }
 
     var displayPosts: [SocialPost] {

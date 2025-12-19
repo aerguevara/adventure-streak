@@ -53,64 +53,13 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         
         listenerRegistration = db.collection("feed")
             .order(by: "date", descending: true)
-            .limit(to: 20)
+            .limit(to: 50)
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let documents = snapshot?.documents else { return }
+                guard let documents = snapshot?.documents, let self = self else { return }
                 
-                let decoded = documents.compactMap { doc -> FeedEvent? in
-                    do {
-                        var event = try doc.data(as: FeedEvent.self)
-                        // Manually assign the document ID since we aren't using @DocumentID in the model
-                        event.id = doc.documentID
-                        return event
-                    } catch {
-                        print("DEBUG: Error decoding FeedEvent \(doc.documentID): \(error)")
-                        return nil
-                    }
-                }
-                
-                // Deduplicate: prefer events con activityId; descartar legacy duplicados sin activityId si hay uno cercano en tiempo del mismo usuario
-                let withActivityId = decoded.filter { $0.activityId != nil }
-                
-                var unique: [String: FeedEvent] = [:]
-                for event in decoded {
-                    // Skip legacy doc if there's a version with activityId for same user in ~5 min window
-                    if event.activityId == nil,
-                       let userId = event.userId {
-                        let hasModern = withActivityId.contains {
-                            guard $0.userId == userId else { return false }
-                            return abs($0.date.timeIntervalSince(event.date)) <= 300 // 5 min
-                        }
-                        if hasModern { continue }
-                    }
-                    
-                    let roundedDate = floor(event.date.timeIntervalSince1970 / 60) // minute bucket
-                    let fallbackKey = "\(event.userId ?? "unknown")|\(event.type.rawValue)|\(event.title)|\(roundedDate)"
-                    let key = event.activityId.map { "act-\($0.uuidString)-\(event.type.rawValue)" } ?? fallbackKey
-                    
-                    guard let existing = unique[key] else {
-                        unique[key] = event
-                        continue
-                    }
-                    
-                    let existingHasName = !(existing.relatedUserName ?? "").isEmpty
-                    let currentHasName = !(event.relatedUserName ?? "").isEmpty
-                    let existingHasActivity = existing.activityId != nil
-                    let currentHasActivity = event.activityId != nil
-                    
-                    // Prefer events con activityId; luego con nombre; si no, mantener primero
-                    if !existingHasActivity && currentHasActivity {
-                        unique[key] = event
-                    } else if existingHasActivity == currentHasActivity {
-                        if !existingHasName && currentHasName {
-                            unique[key] = event
-                        }
-                    }
-                }
-                
-                let sorted = unique.values.sorted { $0.date > $1.date }
+                let sorted = self.processFeedDocuments(documents)
                 DispatchQueue.main.async {
-                    self?.events = sorted
+                    self.events = sorted
                 }
             }
         #endif
@@ -124,57 +73,10 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         do {
             let snapshot = try await db.collection("feed")
                 .order(by: "date", descending: true)
-                .limit(to: 20)
+                .limit(to: 50)
                 .getDocuments()
             
-            let decoded: [FeedEvent] = snapshot.documents.compactMap { doc in
-                do {
-                    var event = try doc.data(as: FeedEvent.self)
-                    event.id = doc.documentID
-                    return event
-                } catch {
-                    print("DEBUG: Error decoding FeedEvent \(doc.documentID): \(error)")
-                    return nil
-                }
-            }
-            
-            let withActivityId = decoded.filter { $0.activityId != nil }
-            
-            var unique: [String: FeedEvent] = [:]
-            for event in decoded {
-                if event.activityId == nil,
-                   let userId = event.userId {
-                    let hasModern = withActivityId.contains {
-                        guard $0.userId == userId else { return false }
-                        return abs($0.date.timeIntervalSince(event.date)) <= 300 // 5 min
-                    }
-                    if hasModern { continue }
-                }
-                
-                let roundedDate = floor(event.date.timeIntervalSince1970 / 60) // minute bucket
-                let fallbackKey = "\(event.userId ?? "unknown")|\(event.type.rawValue)|\(event.title)|\(roundedDate)"
-                let key = event.activityId.map { "act-\($0.uuidString)-\(event.type.rawValue)" } ?? fallbackKey
-                
-                guard let existing = unique[key] else {
-                    unique[key] = event
-                    continue
-                }
-                
-                let existingHasName = !(existing.relatedUserName ?? "").isEmpty
-                let currentHasName = !(event.relatedUserName ?? "").isEmpty
-                let existingHasActivity = existing.activityId != nil
-                let currentHasActivity = event.activityId != nil
-                
-                if !existingHasActivity && currentHasActivity {
-                    unique[key] = event
-                } else if existingHasActivity == currentHasActivity {
-                    if !existingHasName && currentHasName {
-                        unique[key] = event
-                    }
-                }
-            }
-            
-            let sorted = unique.values.sorted { $0.date > $1.date }
+            let sorted = processFeedDocuments(snapshot.documents)
             DispatchQueue.main.async { [weak self] in
                 self?.events = sorted
             }
@@ -182,6 +84,71 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
             print("Error fetching latest feed: \(error)")
         }
         #endif
+    }
+
+    private func processFeedDocuments(_ documents: [QueryDocumentSnapshot]) -> [FeedEvent] {
+        let decoded = documents.compactMap { doc -> FeedEvent? in
+            do {
+                var event = try doc.data(as: FeedEvent.self)
+                // Manually assign the document ID since we aren't using @DocumentID in the model
+                event.id = doc.documentID
+                return event
+            } catch {
+                print("DEBUG: Error decoding FeedEvent \(doc.documentID): \(error)")
+                return nil
+            }
+        }
+        
+        // Deduplicate: prefer events con activityId; descartar legacy duplicados sin activityId si hay uno cercano en tiempo del mismo usuario
+        let withActivityId = decoded.filter { $0.activityId != nil }
+        
+        var unique: [String: FeedEvent] = [:]
+        for event in decoded {
+            // Skip legacy doc if there's a version with activityId for same user in ~5 min window
+            // If it has activityId, we definitely want it.
+            if event.activityId == nil,
+               let userId = event.userId {
+                let hasModern = withActivityId.contains {
+                    guard $0.userId == userId else { return false }
+                    return abs($0.date.timeIntervalSince(event.date)) <= 300 // 5 min
+                }
+                if hasModern { continue }
+            }
+            
+            let roundedDate = floor(event.date.timeIntervalSince1970 / 60) // minute bucket
+            let fallbackKey = "\(event.userId ?? "unknown")|\(event.type.rawValue)|\(event.title)|\(roundedDate)"
+            let key = event.activityId.map { "act-\($0.uuidString)-\(event.type.rawValue)" } ?? fallbackKey
+            
+            guard let existing = unique[key] else {
+                unique[key] = event
+                continue
+            }
+            
+            // Priority logic:
+            // 1. Has activityId
+            // 2. Has relatedUserName
+            // 3. Newer ID (higher confidence)
+            
+            let existingHasName = !(existing.relatedUserName ?? "").isEmpty
+            let currentHasName = !(event.relatedUserName ?? "").isEmpty
+            let existingHasActivity = existing.activityId != nil
+            let currentHasActivity = event.activityId != nil
+            
+            if !existingHasActivity && currentHasActivity {
+                unique[key] = event
+            } else if existingHasActivity == currentHasActivity {
+                if !existingHasName && currentHasName {
+                    unique[key] = event
+                } else if existingHasName == currentHasName {
+                    // Same status, keep the one with the non-nil id if applicable
+                    if existing.id == nil && event.id != nil {
+                        unique[key] = event
+                    }
+                }
+            }
+        }
+        
+        return unique.values.sorted { $0.date > $1.date }
     }
     
     // NEW: Post a new event
