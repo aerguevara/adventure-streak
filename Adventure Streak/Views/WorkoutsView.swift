@@ -83,7 +83,7 @@ struct WorkoutsView: View {
                 .navigationDestination(isPresented: $showMissionGuide) {
                     MissionGuideView()
                 }
-                .fullScreenCover(isPresented: $showProfileDetail) {
+                .sheet(isPresented: $showProfileDetail) {
                     NavigationStack {
                         ProfileDetailView(
                             profileViewModel: profileViewModel,

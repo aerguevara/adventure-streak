@@ -47,7 +47,12 @@ struct SocialActivityData: Codable, Hashable {
         case trophyCount
         case devilCount
         case currentUserReaction
+        case calories
+        case averageHeartRate
     }
+    
+    let calories: Double?
+    let averageHeartRate: Int?
     
     var distanceKm: Double {
         distanceMeters / 1000.0
@@ -63,7 +68,9 @@ struct SocialActivityData: Codable, Hashable {
          fireCount: Int = 0,
          trophyCount: Int = 0,
          devilCount: Int = 0,
-         currentUserReaction: ReactionType? = nil) {
+         currentUserReaction: ReactionType? = nil,
+         calories: Double? = nil,
+         averageHeartRate: Int? = nil) {
         self.activityType = activityType
         self.distanceMeters = distanceMeters
         self.durationSeconds = durationSeconds
@@ -75,6 +82,8 @@ struct SocialActivityData: Codable, Hashable {
         self.trophyCount = trophyCount
         self.devilCount = devilCount
         self.currentUserReaction = currentUserReaction
+        self.calories = calories
+        self.averageHeartRate = averageHeartRate
     }
 
     init(from decoder: Decoder) throws {
@@ -90,6 +99,8 @@ struct SocialActivityData: Codable, Hashable {
         trophyCount = try container.decodeIfPresent(Int.self, forKey: .trophyCount) ?? 0
         devilCount = try container.decodeIfPresent(Int.self, forKey: .devilCount) ?? 0
         currentUserReaction = try container.decodeIfPresent(ReactionType.self, forKey: .currentUserReaction)
+        calories = try container.decodeIfPresent(Double.self, forKey: .calories)
+        averageHeartRate = try container.decodeIfPresent(Int.self, forKey: .averageHeartRate)
     }
 }
 

@@ -26,6 +26,12 @@ struct User: Identifiable, Codable {
     var totalCellsOwned: Int?
     var recentTerritories: Int?
     
+    // Extended Profile Info
+    var prestige: Int?
+    var currentStreakWeeks: Int?
+    var bestWeeklyDistanceKm: Double?
+    var currentWeekDistanceKm: Double?
+    
     // Remote logout control
     var forceLogoutVersion: Int?
 }

@@ -3,6 +3,34 @@ import SwiftUI
 import UIKit
 #endif
 
+struct NextGoalSuggestion: Identifiable {
+    let id = UUID()
+    let activityType: ActivityType
+    let distanceKm: Double
+    let durationMinutes: Double
+    let xp: Int
+    
+    var activityLabel: String {
+        let distanceText = String(format: "%.1f km", distanceKm)
+        if activityType == .indoor {
+            return "\(activityType.displayName) (\(distanceText))"
+        }
+        return "\(activityType.displayName) outdoor (\(distanceText))"
+    }
+    
+    var detailLabel: String {
+        let durationText: String = durationMinutes >= 1
+            ? "\(Int(durationMinutes.rounded())) min"
+            : "Sesión corta"
+        return "Tiempo estimado: \(durationText)"
+    }
+}
+
+struct NextGoalContext {
+    let current: RankingEntry
+    let target: RankingEntry
+}
+
 struct RankingView: View {
     @StateObject var viewModel = RankingViewModel()
     @State private var showSearch = false
@@ -34,7 +62,11 @@ struct RankingView: View {
                             emptyStateView
                         } else {
                             // Podium
-                            PodiumView(entries: Array(viewModel.entries.prefix(3)))
+                            PodiumView(entries: Array(viewModel.entries.prefix(3))) { entry in
+                                if !entry.isCurrentUser {
+                                    viewModel.selectUser(userId: entry.userId)
+                                }
+                            }
                                 .padding(.top, 10)
                             
                             if let goal = nextGoalInfo, goal.current.position <= 3 {
@@ -53,6 +85,10 @@ struct RankingView: View {
                                 ForEach(viewModel.entries.dropFirst(3)) { entry in
                                     RankingCard(entry: entry) {
                                         viewModel.toggleFollow(for: entry)
+                                    } onCardTapped: {
+                                        if !entry.isCurrentUser {
+                                            viewModel.selectUser(userId: entry.userId)
+                                        }
                                     }
                                     
                                     if let goal = nextGoalInfo, goal.current.userId == entry.userId {
@@ -91,6 +127,11 @@ struct RankingView: View {
                 Task { await loadSuggestions(for: nextGoalXPNeeded) }
             }
             .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $viewModel.showProfileSheet) {
+            if let user = viewModel.selectedUser {
+                UserProfileView(user: user)
+            }
         }
         .onAppear {
             viewModel.fetchRanking()
@@ -224,23 +265,33 @@ struct RankingView: View {
 
 struct PodiumView: View {
     let entries: [RankingEntry]
+    var onEntryTapped: ((RankingEntry) -> Void)?
     
     var body: some View {
         HStack(alignment: .bottom, spacing: 16) {
             // 2nd Place
             if entries.indices.contains(1) {
-                PodiumItem(entry: entries[1], scale: 0.9)
+                Button(action: { onEntryTapped?(entries[1]) }) {
+                    PodiumItem(entry: entries[1], scale: 0.9)
+                }
+                .buttonStyle(.plain)
             }
             
             // 1st Place
             if entries.indices.contains(0) {
-                PodiumItem(entry: entries[0], scale: 1.1, isFirst: true)
-                    .zIndex(1)
+                Button(action: { onEntryTapped?(entries[0]) }) {
+                    PodiumItem(entry: entries[0], scale: 1.1, isFirst: true)
+                }
+                .buttonStyle(.plain)
+                .zIndex(1)
             }
             
             // 3rd Place
             if entries.indices.contains(2) {
-                PodiumItem(entry: entries[2], scale: 0.85)
+                Button(action: { onEntryTapped?(entries[2]) }) {
+                    PodiumItem(entry: entries[2], scale: 0.85)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal)
@@ -341,95 +392,100 @@ struct PodiumItem: View {
 struct RankingCard: View {
     let entry: RankingEntry
     var onFollowTapped: (() -> Void)?
+    var onCardTapped: (() -> Void)?
     
     var body: some View {
-        HStack(spacing: 16) {
-            // Rank
-            Text("\(entry.position)")
-                .font(.headline)
-                .foregroundColor(.gray)
-                .frame(width: 24)
-            
-            // Avatar
-            avatarView(entry: entry)
-            
-            // Info
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(entry.displayName)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                    
-                    if entry.isCurrentUser {
-                        Text("(You)")
-                            .font(.caption2)
-                            .foregroundColor(Color(hex: "4C6FFF"))
-                    }
-                }
+        Button(action: { onCardTapped?() }) {
+            HStack(spacing: 16) {
+                // Rank
+                Text("\(entry.position)")
+                    .font(.headline)
+                    .foregroundColor(.gray)
+                    .frame(width: 24)
                 
-                // XP Progress Bar
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.white.opacity(0.1))
-                            .frame(height: 4)
+                // Avatar
+                avatarView(entry: entry)
+                
+                // Info
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(entry.displayName)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
                         
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: geometry.size.width * entry.xpProgress, height: 4)
+                        if entry.isCurrentUser {
+                            Text("(You)")
+                                .font(.caption2)
+                                .foregroundColor(Color(hex: "4C6FFF"))
+                        }
                     }
-                }
-                .frame(height: 4)
-            }
-            
-            Spacer()
-            
-            // Stats & Actions
-            HStack(spacing: 12) {
-                // Stats & Trend
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(entry.weeklyXP)")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
                     
-                    HStack(spacing: 2) {
-                        Image(systemName: trendIcon)
-                        Text(trendText)
+                    // XP Progress Bar
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.1))
+                                .frame(height: 4)
+                            
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")]),
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: geometry.size.width * entry.xpProgress, height: 4)
+                        }
                     }
-                    .font(.caption2)
-                    .foregroundColor(trendColor)
+                    .frame(height: 4)
                 }
                 
-                // Follow Button (Only for other users)
-                if !entry.isCurrentUser {
-                    Button(action: {
-                        onFollowTapped?()
-                    }) {
-                        Image(systemName: entry.isFollowing ? "person.badge.minus" : "person.badge.plus")
-                            .font(.system(size: 14))
-                            .foregroundColor(entry.isFollowing ? .gray : .white)
-                            .padding(8)
-                            .background(entry.isFollowing ? Color.white.opacity(0.1) : Color(hex: "4C6FFF"))
-                            .clipShape(Circle())
+                Spacer()
+                
+                // Stats & Actions
+                HStack(spacing: 12) {
+                    // Stats & Trend
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("\(entry.weeklyXP)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        HStack(spacing: 2) {
+                            Image(systemName: trendIcon)
+                            Text(trendText)
+                        }
+                        .font(.caption2)
+                        .foregroundColor(trendColor)
+                    }
+                    
+                    // Follow Button (Only for other users)
+                    if !entry.isCurrentUser {
+                        Button(action: {
+                            onFollowTapped?()
+                        }) {
+                            Image(systemName: entry.isFollowing ? "person.badge.minus" : "person.badge.plus")
+                                .font(.system(size: 14))
+                                .foregroundColor(entry.isFollowing ? .gray : .white)
+                                .padding(8)
+                                .background(entry.isFollowing ? Color.white.opacity(0.1) : Color(hex: "4C6FFF"))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain) // Ensure follow button is still tappable separately if needed, but in SwiftUI internal buttons in a Button can be tricky.
                     }
                 }
             }
+            .padding(16)
+            .background(Color(hex: "18181C"))
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(entry.isCurrentUser ? Color(hex: "4C6FFF").opacity(0.5) : Color.white.opacity(0.05), lineWidth: 1)
+            )
         }
-        .padding(16)
-        .background(Color(hex: "18181C"))
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(entry.isCurrentUser ? Color(hex: "4C6FFF").opacity(0.5) : Color.white.opacity(0.05), lineWidth: 1)
-        )
+        .buttonStyle(.plain)
     }
     
     var trendIcon: String {
@@ -643,33 +699,6 @@ struct NextGoalSuggestionsSheet: View {
     }
 }
 
-struct NextGoalSuggestion: Identifiable {
-    let id = UUID()
-    let activityType: ActivityType
-    let distanceKm: Double
-    let durationMinutes: Double
-    let xp: Int
-    
-    var activityLabel: String {
-        let distanceText = String(format: "%.1f km", distanceKm)
-        if activityType == .indoor {
-            return "\(activityType.displayName) (\(distanceText))"
-        }
-        return "\(activityType.displayName) outdoor (\(distanceText))"
-    }
-    
-    var detailLabel: String {
-        let durationText: String = durationMinutes >= 1
-            ? "\(Int(durationMinutes.rounded())) min"
-            : "Sesión corta"
-        return "Tiempo estimado: \(durationText)"
-    }
-}
-
-struct NextGoalContext {
-    let current: RankingEntry
-    let target: RankingEntry
-}
 
 private enum NextGoalSuggestionBuilder {
     static func suggestions(for missingXP: Int, context: XPContext) async throws -> [NextGoalSuggestion] {

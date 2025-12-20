@@ -23,88 +23,125 @@ struct ProfileDetailView: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
-            header
+        ZStack {
+            Color.black.ignoresSafeArea()
             
-            Picker("", selection: $selectedTab) {
-                ForEach(RelationTab.allCases) { tab in
-                    Text(tab.rawValue).tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            
-            if relationsViewModel.isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List {
-                    ForEach(selectedTab == .following ? relationsViewModel.following : relationsViewModel.followers) { user in
-                        HStack {
-                            if let data = user.avatarData, let uiImage = UIImage(data: data) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 36, height: 36)
-                                    .clipShape(Circle())
-                            } else if let url = user.avatarURL {
-                                AsyncImage(url: url) { image in
-                                    image.resizable()
-                                } placeholder: {
-                                    Circle().fill(Color.gray.opacity(0.2))
-                                }
-                                .frame(width: 36, height: 36)
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header: Avatar & Level
+                    VStack(spacing: 16) {
+                        ZStack(alignment: .bottomTrailing) {
+                            avatarView
+                                .frame(width: 120, height: 120)
                                 .clipShape(Circle())
-                            } else {
-                                Image(systemName: "person.crop.circle")
-                                    .foregroundColor(.accentColor)
-                                    .frame(width: 36, height: 36)
+                                .overlay(
+                                    Circle()
+                                        .stroke(LinearGradient(
+                                            colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ), lineWidth: 4)
+                                )
+                            
+                            // Change Photo Button
+                            Button {
+                                showImagePicker = true
+                            } label: {
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(8)
+                                    .background(Color(hex: "4C6FFF"))
+                                    .clipShape(Circle())
+                                    .shadow(radius: 4)
                             }
-                            VStack(alignment: .leading) {
-                                Text(user.displayName)
-                                    .font(.headline)
-                                if user.level > 0 {
-                                    Text("Nivel \(user.level)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                            .offset(x: 4, y: 4)
+                        }
+                        
+                        VStack(spacing: 4) {
+                            Text(profileViewModel.userDisplayName)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                            
+                            HStack(spacing: 8) {
+                                Label("Level \(profileViewModel.level)", systemImage: "bolt.fill")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(Color(hex: "A259FF"))
+                                
+                                if profileViewModel.streakWeeks > 0 {
+                                    Label("\(profileViewModel.streakWeeks) week streak", systemImage: "flame.fill")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.orange)
                                 }
                             }
-                            Spacer()
-                            if user.id != currentUserId {
-                                Button(action: {
-                                    relationsViewModel.toggleFollow(userId: user.id, displayName: user.displayName)
-                                }) {
-                                    Text(user.isFollowing ? "Siguiendo" : "Seguir")
-                                        .font(.subheadline.bold())
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(user.isFollowing ? Color.gray.opacity(0.2) : Color.blue.opacity(0.2))
-                                        .cornerRadius(8)
-                                }
-                                .buttonStyle(.borderless) // Limita el tap solo al botón
-                            }
+                            
+                            Text(profileViewModel.userTitle)
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(8)
                         }
                     }
+                    .padding(.top, 20)
+                    
+                    // Stats Grid
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                        StatCard(title: "Total XP", value: "\(profileViewModel.totalXP)", icon: "sparkles", color: .purple)
+                        StatCard(title: "Total Zones", value: "\(profileViewModel.totalCellsConquered)", icon: "map.fill", color: .blue)
+                        StatCard(title: "This Week", value: "+\(profileViewModel.territoriesCount)", icon: "figure.run", color: .green)
+                        StatCard(title: "Activities", value: "\(profileViewModel.activitiesCount)", icon: "bolt.horizontal.fill", color: .yellow)
+                    }
+                    .padding(.horizontal)
+                    
+                    // Relations Tabs
+                    VStack(spacing: 16) {
+                        Picker("", selection: $selectedTab) {
+                            ForEach(RelationTab.allCases) { tab in
+                                Text(tab.rawValue).tag(tab)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                        
+                        if relationsViewModel.isLoading {
+                            ProgressView()
+                                .tint(.white)
+                                .padding(.top, 20)
+                        } else {
+                            VStack(spacing: 12) {
+                                ForEach(selectedTab == .following ? relationsViewModel.following : relationsViewModel.followers) { user in
+                                    relationRow(for: user)
+                                }
+                                
+                                if (selectedTab == .following ? relationsViewModel.following : relationsViewModel.followers).isEmpty {
+                                    Text("Ninguno todavía")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                        .padding(.top, 20)
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                    }
+                    
+                    Spacer(minLength: 40)
                 }
-                .listStyle(.plain)
             }
         }
-        .navigationTitle("Perfil")
+        .navigationTitle("Mi Perfil")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            Task {
-                if let userId = currentUserId {
-                    await relationsViewModel.load(for: userId)
-                }
-            }
-        }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.headline)
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.white.opacity(0.2))
+                        .font(.title3)
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -112,6 +149,25 @@ struct ProfileDetailView: View {
                     showSignOutConfirmation = true
                 } label: {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .foregroundColor(.red.opacity(0.8))
+                }
+            }
+        }
+        .sheet(isPresented: $showImagePicker) {
+            AvatarImagePicker(image: $pickedImage)
+        }
+        .onChange(of: pickedImage) { _, newImage in
+            guard let img = newImage else { return }
+            Task {
+                if let data = img.resizedSquareData(maxSide: 256, quality: 0.7) {
+                    await profileViewModel.uploadAvatar(imageData: data)
+                }
+            }
+        }
+        .onAppear {
+            Task {
+                if let userId = currentUserId {
+                    await relationsViewModel.load(for: userId)
                 }
             }
         }
@@ -126,78 +182,92 @@ struct ProfileDetailView: View {
         }
     }
     
-    private var header: some View {
-        VStack(spacing: 8) {
+    private var avatarView: some View {
+        Group {
             if let url = profileViewModel.avatarURL {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
-                    Image(systemName: "person.fill")
-                        .foregroundColor(.gray)
+                    Circle().fill(Color(hex: "1C1C1E"))
                 }
-                .frame(width: 90, height: 90)
+            } else {
+                Circle()
+                    .fill(Color(hex: "1C1C1E"))
+                    .overlay(
+                        Text(profileViewModel.userDisplayName.prefix(1).uppercased())
+                            .font(.system(size: 40, weight: .bold))
+                            .foregroundColor(.gray)
+                    )
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func relationRow(for user: SocialUser) -> some View {
+        HStack {
+            if let data = user.avatarData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+            } else if let url = user.avatarURL {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Circle().fill(Color.white.opacity(0.05))
+                }
+                .frame(width: 40, height: 40)
                 .clipShape(Circle())
             } else {
-                Image(systemName: "person.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 90, height: 90)
-                    .padding(12)
-                    .background(Color.gray.opacity(0.2))
-                    .clipShape(Circle())
+                Circle()
+                    .fill(Color.white.opacity(0.05))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Text(user.displayName.prefix(1).uppercased())
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.gray)
+                    )
             }
-            Button {
-                showImagePicker = true
-            } label: {
-                VStack(spacing: 4) {
-                    Text("Cambiar foto")
-                        .font(.footnote.bold())
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.blue.opacity(0.15))
-                .cornerRadius(8)
-            }
-            .sheet(isPresented: $showImagePicker) {
-                AvatarImagePicker(image: $pickedImage)
-            }
-            .onChange(of: pickedImage) { _, newImage in
-                guard let img = newImage else { return }
-                Task {
-                    if let data = img.resizedSquareData(maxSide: 256, quality: 0.7) {
-                        await profileViewModel.uploadAvatar(imageData: data)
-                    }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(user.displayName)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                
+                if user.level > 0 {
+                    Text("Nivel \(user.level)")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
                 }
             }
             
-            Text(profileViewModel.userDisplayName)
-                .font(.title2.bold())
-            Text(profileViewModel.userTitle)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            Spacer()
             
-            HStack(spacing: 16) {
-                StatMini(title: "Nivel", value: "\(profileViewModel.level)")
-                StatMini(title: "XP", value: "\(profileViewModel.totalXP)")
-                StatMini(title: "Territorios", value: "\(profileViewModel.territoriesCount)")
+            if user.id != currentUserId {
+                Button(action: {
+                    relationsViewModel.toggleFollow(userId: user.id, displayName: user.displayName)
+                }) {
+                    Text(user.isFollowing ? "Siguiendo" : "Seguir")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(user.isFollowing ? Color.white.opacity(0.1) : Color(hex: "4C6FFF"))
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal)
-    }
-}
-
-private struct StatMini: View {
-    let title: String
-    let value: String
-    
-    var body: some View {
-        VStack {
-            Text(title).font(.caption).foregroundColor(.secondary)
-            Text(value).font(.headline)
-        }
-        .padding(8)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(10)
+        .padding()
+        .background(Color(hex: "18181C"))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+        )
     }
 }
 

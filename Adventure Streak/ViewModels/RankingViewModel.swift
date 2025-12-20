@@ -9,6 +9,10 @@ class RankingViewModel: ObservableObject {
     @Published var errorMessage: String? = nil
     @Published var selectedScope: RankingScope = .weekly
     
+    // Profile Sheet
+    @Published var showProfileSheet: Bool = false
+    @Published var selectedUser: User? = nil
+    
     // MARK: - Computed Properties
     var currentUserEntry: RankingEntry? {
         entries.first { $0.isCurrentUser }
@@ -109,6 +113,16 @@ class RankingViewModel: ObservableObject {
         // Update local state
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {
             entries[index].isFollowing.toggle()
+        }
+    }
+    
+    func selectUser(userId: String) {
+        UserRepository.shared.fetchUser(userId: userId) { [weak self] user in
+            guard let self = self else { return }
+            Task { @MainActor in
+                self.selectedUser = user
+                self.showProfileSheet = true
+            }
         }
     }
     

@@ -153,7 +153,9 @@ class GameEngine {
             xpEarned: xpBreakdown.total,
             newZonesCount: territoryStats.newCellsCount,
             defendedZonesCount: territoryStats.defendedCellsCount,
-            recapturedZonesCount: territoryStats.recapturedCellsCount
+            recapturedZonesCount: territoryStats.recapturedCellsCount,
+            calories: activity.calories,
+            averageHeartRate: activity.averageHeartRate
         )
         
         // Single event per activity

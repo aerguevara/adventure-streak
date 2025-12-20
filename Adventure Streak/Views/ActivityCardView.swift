@@ -52,9 +52,9 @@ struct ActivityCardView: View {
                 background: Color(hex: "18181C"),
                 borderColor: Color(hex: "E0AA3E").opacity(0.7),
                 borderWidth: 1.2,
-                verticalPadding: 18,
-                verticalSpacing: 12,
-                headerPadding: 6,
+                verticalPadding: 14,
+                verticalSpacing: 10,
+                headerPadding: 4,
                 bannerBackground: LinearGradient(
                     colors: [Color(hex: "F2C94C"), Color(hex: "E29500")],
                     startPoint: .topLeading,
@@ -67,9 +67,9 @@ struct ActivityCardView: View {
                 background: Color(hex: "18181C"),
                 borderColor: Color.white.opacity(0.06),
                 borderWidth: 1,
-                verticalPadding: 14,
-                verticalSpacing: 10,
-                headerPadding: 2,
+                verticalPadding: 12,
+                verticalSpacing: 8,
+                headerPadding: 0,
                 bannerBackground: LinearGradient(
                     colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
                     startPoint: .topLeading,
@@ -82,8 +82,8 @@ struct ActivityCardView: View {
                 background: Color(hex: "0F0F10"),
                 borderColor: Color.white.opacity(0.04),
                 borderWidth: 1,
-                verticalPadding: 10,
-                verticalSpacing: 8,
+                verticalPadding: 8,
+                verticalSpacing: 6,
                 headerPadding: 0,
                 bannerBackground: LinearGradient(
                     colors: [Color.clear, Color.clear],
@@ -108,6 +108,7 @@ struct ActivityCardView: View {
 
             if !missionNames.isEmpty {
                 missionSection
+                    .padding(.top, 4)
             }
 
             metricsSection
@@ -145,25 +146,25 @@ struct ActivityCardView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(activity.user.displayName)
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(.primary)
                     levelBadge
                 }
 
                 Text("\(activity.activityData.activityType.displayName) · +\(activity.activityData.xpEarned) XP")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary.opacity(0.8))
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(timeAgo(from: activity.date))
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.primary.opacity(0.6))
                 Text(formatAbsoluteDate(activity.date))
                     .font(.caption2)
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(.primary.opacity(0.4))
             }
         }
     }
@@ -173,29 +174,47 @@ struct ActivityCardView: View {
             switch activity.impactLevel {
             case .high, .medium:
                 HStack(spacing: 12) {
-                    metric(icon: "figure.run", label: "Distancia", value: String(format: "%.1f km", activity.activityData.distanceKm))
-                    metric(icon: "clock", label: "Tiempo", value: formatDuration(activity.activityData.durationSeconds))
+                    let hasDistance = activity.activityData.distanceKm > 0.05
+                    let isIndoor = activity.activityData.activityType == .indoor
+                    
+                    if isIndoor && !hasDistance {
+                        if let calories = activity.activityData.calories, calories > 0 {
+                            metric(icon: "flame.fill", label: "Kcal", value: "\(Int(calories))", valueColor: .orange)
+                        } else if let hr = activity.activityData.averageHeartRate, hr > 0 {
+                            metric(icon: "heart.fill", label: "FC Media", value: "\(hr) bpm", valueColor: .red)
+                        } else {
+                            metric(icon: "clock", label: "Tiempo", value: formatDuration(activity.activityData.durationSeconds))
+                        }
+                    } else {
+                        metric(icon: "figure.run", label: "Distancia", value: String(format: "%.1f km", activity.activityData.distanceKm))
+                    }
+                    
+                    if activity.activityData.activityType != .indoor || hasDistance {
+                        metric(icon: "clock", label: "Tiempo", value: formatDuration(activity.activityData.durationSeconds))
+                    }
+
                     metric(icon: "star.fill", label: "XP", value: "+\(activity.activityData.xpEarned)", valueColor: Color(hex: "A259FF"))
                 }
-                .padding(10)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 10)
                 .background(style.fadedBackground)
                 .cornerRadius(12)
                 if let impactLine = territoryImpactLine {
                     Text(impactLine)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.65))
+                        .foregroundColor(.primary.opacity(0.65))
                         .padding(.horizontal, 2)
                 }
             case .low:
                 HStack(spacing: 8) {
                     Image(systemName: "figure.run")
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.primary.opacity(0.5))
                     Text("\(activity.activityData.activityType.displayName) · \(formatDuration(activity.activityData.durationSeconds))")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.75))
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(.primary.opacity(0.75))
                     Spacer()
                     Text("+\(activity.activityData.xpEarned) XP")
-                        .font(.caption.bold())
+                        .font(.caption.weight(.bold))
                         .foregroundColor(Color(hex: "A259FF"))
                 }
                 .padding(10)
@@ -204,7 +223,7 @@ struct ActivityCardView: View {
                 if let impactLine = territoryImpactLine {
                     Text(impactLine)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.65))
+                        .foregroundColor(.primary.opacity(0.65))
                         .padding(.horizontal, 2)
                 }
             }
@@ -214,8 +233,8 @@ struct ActivityCardView: View {
     private var territoryImpactSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Impacto territorial")
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.65))
+                .font(.caption.weight(.bold))
+                .foregroundColor(.primary.opacity(0.65))
             HStack(spacing: 8) {
                 if activity.activityData.newZonesCount > 0 {
                     badge(text: "+\(activity.activityData.newZonesCount) zona\(activity.activityData.newZonesCount == 1 ? "" : "s") conquistada\(activity.activityData.newZonesCount == 1 ? "" : "s")", color: "32D74B")
@@ -247,10 +266,10 @@ struct ActivityCardView: View {
                 .foregroundColor(.white.opacity(0.6))
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(.primary.opacity(0.6))
                 Text(value)
-                    .font(.subheadline.weight(.bold))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundColor(valueColor)
             }
         }
@@ -260,8 +279,8 @@ struct ActivityCardView: View {
     private var missionSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Misiones")
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.65))
+                .font(.caption.weight(.bold))
+                .foregroundColor(.primary.opacity(0.65))
             MissionChipsView(missions: missionNames)
         }
     }
@@ -288,8 +307,12 @@ struct ActivityCardView: View {
                     )
             }
         }
-        .frame(width: 44, height: 44)
+        .frame(width: 56, height: 56)
         .clipShape(Circle())
+        .overlay(
+            Circle()
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
     }
 
     private var levelBadge: some View {
@@ -303,12 +326,12 @@ struct ActivityCardView: View {
     }
 
     private func impactHeader(style: ActivityCardStyle) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Text("🏅")
-                .font(.headline)
+                .font(.title3)
             VStack(alignment: .leading, spacing: 2) {
                 Text(highImpactTitle)
-                    .font(.subheadline.bold())
+                    .font(.subheadline.weight(.bold))
                     .foregroundColor(.black)
                 if let subtitle = impactSubtitle {
                     Text(subtitle)
@@ -382,6 +405,10 @@ struct ActivityCardView: View {
             .filter { !$0.isEmpty }
             .filter { token in
                 let lower = token.lowercased()
+                // Data Hygiene: No renderizar si el valor es 0
+                if lower.contains("nuevas: 0") || lower.contains("defendidas: 0") || lower.contains("recapturadas: 0") {
+                    return false
+                }
                 return !lower.contains("territorio") && !lower.contains("zona") && !lower.contains("conquist")
             }
     }
@@ -443,11 +470,11 @@ private struct MissionChipsView: View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
             ForEach(missions, id: \.self) { mission in
                 Text(mission)
-                    .font(.caption.bold())
-                    .foregroundColor(.white)
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(.primary)
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .background(Color.white.opacity(0.08))
+                    .background(Color.primary.opacity(0.08))
                     .cornerRadius(10)
             }
         }
@@ -475,12 +502,13 @@ struct ReactionBarView: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             ForEach(ReactionType.allCases, id: \.self) { reaction in
                 reactionButton(for: reaction)
             }
             Spacer()
         }
+        .padding(.top, 4)
     }
 
     private func reactionButton(for reaction: ReactionType) -> some View {
@@ -494,24 +522,26 @@ struct ReactionBarView: View {
                 onReaction(reaction)
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Text(reaction.emoji)
-                    .font(isSelected ? .headline.bold() : .subheadline)
+                    .font(isSelected ? .headline.weight(.bold) : .subheadline)
                 if total > 0 {
                     Text("\(total)")
-                        .font(.caption.bold())
-                        .foregroundColor(.white.opacity(0.8))
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(.primary.opacity(0.8))
                 }
             }
             .padding(.vertical, 8)
             .padding(.horizontal, isSelected ? 12 : 10)
             .background(
                 Capsule()
-                    .fill(isSelected ? Color(hex: "4C6FFF").opacity(0.25) : Color.white.opacity(0.06))
+                    .fill(isSelected ? Color(hex: "4C6FFF").opacity(0.2) : Color.primary.opacity(0.06))
             )
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Color(hex: "4C6FFF") : Color.white.opacity(0.12), lineWidth: 1)
+                    .stroke(isSelected ? Color(hex: "4C6FFF") : Color.primary.opacity(0.1), lineWidth: 1)
             )
             .scaleEffect(isSelected ? 1.05 : 1.0)
         }

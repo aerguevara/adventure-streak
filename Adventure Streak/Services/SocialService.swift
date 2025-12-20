@@ -93,7 +93,9 @@ class SocialService: ObservableObject {
                 fireCount: 0,
                 trophyCount: 0,
                 devilCount: 0,
-                currentUserReaction: nil
+                currentUserReaction: nil,
+                calories: 0,
+                averageHeartRate: 0
             )
             
             let avatarURL: URL? = {
@@ -408,7 +410,9 @@ class SocialService: ObservableObject {
             fireCount: 0,
             trophyCount: 0,
             devilCount: 0,
-            currentUserReaction: nil
+            currentUserReaction: nil,
+            calories: activity.calories,
+            averageHeartRate: activity.averageHeartRate
         )
         
         // Create FeedEvent
