@@ -4,16 +4,19 @@ import Foundation
 import FirebaseFirestore
 #endif
 
+@MainActor
 class GamificationRepository: ObservableObject {
-    static let shared = GamificationRepository()
+    nonisolated static let shared = GamificationRepository()
     
-    private var db: Any?
-    
-    init() {
+    nonisolated private let db: Any? = {
         #if canImport(FirebaseFirestore)
-        db = Firestore.firestore()
+        return Firestore.firestore()
+        #else
+        return nil
         #endif
-    }
+    }()
+    
+    nonisolated init() {}
     
     // NEW: Update user XP and Level
     func updateUserStats(userId: String, xp: Int, level: Int) {
@@ -41,6 +44,27 @@ class GamificationRepository: ObservableObject {
         ]
         
         db.collection("users").document(userId).collection("badges").addDocument(data: badgeData)
+        
+        // Create Notification for the badge
+        createNotification(recipientId: userId, type: "achievement", badgeId: badgeId)
+        #endif
+    }
+    
+    // NEW: Generic notification creation
+    func createNotification(recipientId: String, type: String, badgeId: String? = nil) {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        
+        let notificationData: [String: Any?] = [
+            "recipientId": recipientId,
+            "senderId": "system",
+            "senderName": "Adventure Streak",
+            "type": type,
+            "badgeId": badgeId,
+            "timestamp": FieldValue.serverTimestamp(),
+            "isRead": false
+        ]
+        db.collection("notifications").addDocument(data: notificationData.compactMapValues { $0 })
         #endif
     }
     // NEW: Fetch all badges with their unlocked status for a user

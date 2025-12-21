@@ -11,16 +11,19 @@ import FirebaseStorage
 import Firebase
 #endif
 
+@MainActor
 class UserRepository: ObservableObject {
-    static let shared = UserRepository()
+    nonisolated static let shared = UserRepository()
     
-    private var db: Any?
-    
-    init() {
+    nonisolated private let db: Any? = {
         #if canImport(FirebaseFirestore)
-        db = Firestore.firestore()
+        return Firestore.firestore()
+        #else
+        return nil
         #endif
-    }
+    }()
+    
+    nonisolated init() {}
     
     private var storage: Storage? {
         #if canImport(FirebaseStorage)

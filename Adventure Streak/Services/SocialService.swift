@@ -9,7 +9,7 @@ import FirebaseAuth
 
 @MainActor
 class SocialService: ObservableObject {
-    static let shared = SocialService()
+    nonisolated static let shared = SocialService()
     
     @Published var followingIds: Set<String> = []
     @Published var posts: [SocialPost] = []
@@ -21,39 +21,46 @@ class SocialService: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Dependencies
-    private var db: Any?
+    nonisolated private let db: Any? = {
+        #if canImport(FirebaseFirestore)
+        return Firestore.firestore()
+        #else
+        return nil
+        #endif
+    }()
+    
     #if canImport(FirebaseFirestore)
     private var listenerRegistration: ListenerRegistration?
     #else
     private var listenerRegistration: Any?
     #endif
     
-    private init() {
-        #if canImport(FirebaseFirestore)
-        db = Firestore.firestore()
-        #endif
-        
-        // Load persisted following state
-        startObservingFollowing() // Changed to startObservingFollowing()
-        
-        // Start observing feed
-        feedRepository.observeFeed()
-        
-        // Subscribe to repository updates
-        feedRepository.$events
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] events in
-                self?.updatePosts(from: events)
+    nonisolated private init() {
+        Task {
+            await MainActor.run {
+                // Load persisted following state
+                self.startObservingFollowing()
+                
+                // Start observing feed
+                self.feedRepository.observeFeed()
+                
+                // Subscribe to repository updates
+                self.feedRepository.$events
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] events in
+                        self?.updatePosts(from: events)
+                    }
+                    .store(in: &self.cancellables)
+                
+                // Also update when following changes
+                self.$followingIds
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] _ in
+                        self?.updatePosts(from: self?.feedRepository.events ?? [])
+                    }
+                    .store(in: &self.cancellables)
             }
-            .store(in: &cancellables)
-        
-        // Also update when following changes
-        $followingIds
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.updatePosts(from: self?.feedRepository.events ?? [])
-            }
-            .store(in: &cancellables)
+        }
     }
     
     private func updatePosts(from events: [FeedEvent]) {
@@ -211,6 +218,22 @@ class SocialService: ObservableObject {
                 try await db.collection("users").document(userId)
                     .collection("followers").document(currentUserId)
                     .setData(followerData.compactMapValues { $0 })
+                
+                // Create Notification for the followed user
+                let notificationRef = db.collection("notifications").document()
+                let notificationData: [String: Any] = [
+                    "recipientId": userId,
+                    "senderId": currentUserId,
+                    "senderName": currentName,
+                    "senderAvatarURL": followerAvatarURL ?? "",
+                    "type": "follow",
+                    "timestamp": now,
+                    "isRead": false
+                ]
+                try await notificationRef.setData(notificationData.compactMapValues { 
+                    if let s = $0 as? String, s.isEmpty { return nil }
+                    return $0
+                })
             } catch {
                 print("Error following user: \(error)")
                 self.followingIds.remove(userId)

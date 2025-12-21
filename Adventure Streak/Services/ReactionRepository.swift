@@ -7,36 +7,37 @@ import FirebaseFirestoreSwift
 #endif
 #endif
 
+@MainActor
 final class ReactionRepository: ObservableObject {
-    static let shared = ReactionRepository()
+    nonisolated static let shared = ReactionRepository()
 
     @Published private(set) var reactionStates: [UUID: ActivityReactionState] = [:]
 
     #if canImport(FirebaseFirestore)
-    private var db: Firestore?
+    nonisolated private let db = Firestore.firestore()
     private var statListeners: [UUID: ListenerRegistration] = [:]
     private var userListeners: [UUID: ListenerRegistration] = [:]
     #endif
 
-    private let localStore = JSONStore<ActivityReactionRecord>(filename: "activity_reactions.json")
+    nonisolated private let localStore = JSONStore<ActivityReactionRecord>(filename: "activity_reactions.json")
     private var localRecords: [ActivityReactionRecord] = []
 
-    private init() {
-        #if canImport(FirebaseFirestore)
-        db = Firestore.firestore()
-        #endif
-        localRecords = localStore.load()
-        rebuildStatesFromLocal()
+    nonisolated init() {
+        Task {
+            await self.loadInitialData()
+        }
+    }
+    
+    private func loadInitialData() {
+        self.localRecords = localStore.load()
+        self.rebuildStatesFromLocal()
     }
 
     func observeActivities(_ activityIds: [UUID]) {
         let set = Set(activityIds)
-        DispatchQueue.main.async {
-            self.reactionStates = self.reactionStates.filter { set.contains($0.key) }
-        }
+        self.reactionStates = self.reactionStates.filter { set.contains($0.key) }
         #if canImport(FirebaseFirestore)
         cleanObsoleteListeners(keeping: set)
-        guard let db else { return }
         for id in set {
             if statListeners[id] == nil {
                 let statsRef = db.collection("activity_reaction_stats").document(id.uuidString)
@@ -47,9 +48,7 @@ final class ReactionRepository: ObservableObject {
                     state.fireCount = stats?.fireCount ?? 0
                     state.trophyCount = stats?.trophyCount ?? 0
                     state.devilCount = stats?.devilCount ?? 0
-                    DispatchQueue.main.async {
-                        self.reactionStates[id] = state
-                    }
+                    self.reactionStates[id] = state
                 }
             }
 
@@ -61,9 +60,7 @@ final class ReactionRepository: ObservableObject {
                     if let reaction = snapshot?.get("reactionType") as? String, let type = ReactionType(rawValue: reaction) {
                         state.currentUserReaction = type
                     }
-                    DispatchQueue.main.async {
-                        self.reactionStates[id] = state
-                    }
+                    self.reactionStates[id] = state
                 }
             }
         }
@@ -76,16 +73,15 @@ final class ReactionRepository: ObservableObject {
         guard let currentUserId = AuthenticationService.shared.userId else { return }
 
         #if canImport(FirebaseFirestore)
-        guard let db else { return }
         let statsRef = db.collection("activity_reaction_stats").document(activityId.uuidString)
         let userRef = db.collection("activity_reactions").document("\(activityId.uuidString)_\(currentUserId)")
 
         do {
             _ = try await db.runTransaction { transaction, _ in
                 if let existing = try? transaction.getDocument(userRef), existing.exists {
-                    return nil
+                    return nil as Any?
                 }
-
+                
                 transaction.setData([
                     "activityId": activityId.uuidString,
                     "reactedUserId": currentUserId,
@@ -104,12 +100,36 @@ final class ReactionRepository: ObservableObject {
                 transaction.setData(fields, forDocument: statsRef, merge: true)
 
                 if type == .fire {
-                    let userRef = db.collection("users").document(authorId)
+                    let userRef = self.db.collection("users").document(authorId)
                     transaction.updateData(["prestige": FieldValue.increment(Int64(1))], forDocument: userRef)
                 }
-                return nil
+                
+                // Create Notification
+                let notificationRef = self.db.collection("notifications").document()
+                let senderName = AuthenticationService.shared.userName ?? "Adventurer"
+                let senderAvatarURL = AuthenticationService.shared.userAvatarURL
+                
+                var notificationData: [String: Any] = [
+                    "recipientId": authorId,
+                    "senderId": currentUserId,
+                    "senderName": senderName,
+                    "type": "reaction",
+                    "reactionType": type.rawValue,
+                    "activityId": activityId.uuidString,
+                    "timestamp": FieldValue.serverTimestamp(),
+                    "isRead": false
+                ]
+                
+                if let senderAvatarURL = senderAvatarURL {
+                    notificationData["senderAvatarURL"] = senderAvatarURL
+                }
+                
+                transaction.setData(notificationData, forDocument: notificationRef)
+                
+                return nil as Any?
             }
-        } catch {
+        }
+ catch {
             print("[Reactions] Failed to persist reaction: \(error)")
         }
         #else
@@ -128,7 +148,6 @@ final class ReactionRepository: ObservableObject {
         guard let currentUserId = AuthenticationService.shared.userId else { return }
 
         #if canImport(FirebaseFirestore)
-        guard let db else { return }
         let statsRef = db.collection("activity_reaction_stats").document(activityId.uuidString)
         let userRef = db.collection("activity_reactions").document("\(activityId.uuidString)_\(currentUserId)")
 
@@ -138,7 +157,7 @@ final class ReactionRepository: ObservableObject {
                       existing.exists,
                       let reactionString = existing.get("reactionType") as? String,
                       let reaction = ReactionType(rawValue: reactionString) else {
-                    return nil
+                    return nil as Any?
                 }
 
                 var fields: [String: Any] = [:]
@@ -153,9 +172,10 @@ final class ReactionRepository: ObservableObject {
 
                 transaction.updateData(fields, forDocument: statsRef)
                 transaction.deleteDocument(userRef)
-                return nil
+                return nil as Any?
             }
-        } catch {
+        }
+ catch {
             print("[Reactions] Failed to remove reaction: \(error)")
         }
         #else
@@ -201,9 +221,7 @@ final class ReactionRepository: ObservableObject {
             }
             states[record.activityId] = state
         }
-        DispatchQueue.main.async {
-            self.reactionStates.merge(states) { _, new in new }
-        }
+        self.reactionStates.merge(states) { _, new in new }
     }
 
     private func persistLocal() {

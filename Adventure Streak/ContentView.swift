@@ -110,6 +110,9 @@ struct ContentView: View {
     private func startBackgroundServices() {
         HealthKitManager.shared.startBackgroundObservers()
         BackgroundTaskService.shared.scheduleRefresh()
-        NotificationService.shared.requestPermissions()
+        Task {
+            NotificationService.shared.requestPermissions()
+            NotificationService.shared.startObserving()
+        }
     }
 }

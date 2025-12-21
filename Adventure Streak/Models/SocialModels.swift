@@ -30,10 +30,18 @@ struct SocialActivityData: Codable, Hashable {
     let newZonesCount: Int
     let defendedZonesCount: Int
     let recapturedZonesCount: Int
-    let fireCount: Int
-    let trophyCount: Int
-    let devilCount: Int
-    let currentUserReaction: ReactionType?
+    
+    // Reactions
+    var currentUserReaction: ReactionType?
+    var fireCount: Int
+    var trophyCount: Int
+    var devilCount: Int
+    var latestReactorNames: [String]? // NEW: For "UserA and 2 others reacted"
+    
+    // Map Snapshot (Optional string to store a map image URL or data)
+    let mapSnapshotURL: String?
+    let calories: Double?
+    let averageHeartRate: Int?
 
     enum CodingKeys: String, CodingKey {
         case activityType
@@ -49,10 +57,9 @@ struct SocialActivityData: Codable, Hashable {
         case currentUserReaction
         case calories
         case averageHeartRate
+        case latestReactorNames
+        case mapSnapshotURL
     }
-    
-    let calories: Double?
-    let averageHeartRate: Int?
     
     var distanceKm: Double {
         distanceMeters / 1000.0
@@ -69,6 +76,8 @@ struct SocialActivityData: Codable, Hashable {
          trophyCount: Int = 0,
          devilCount: Int = 0,
          currentUserReaction: ReactionType? = nil,
+         latestReactorNames: [String]? = nil,
+         mapSnapshotURL: String? = nil,
          calories: Double? = nil,
          averageHeartRate: Int? = nil) {
         self.activityType = activityType
@@ -82,25 +91,10 @@ struct SocialActivityData: Codable, Hashable {
         self.trophyCount = trophyCount
         self.devilCount = devilCount
         self.currentUserReaction = currentUserReaction
+        self.latestReactorNames = latestReactorNames
+        self.mapSnapshotURL = mapSnapshotURL
         self.calories = calories
         self.averageHeartRate = averageHeartRate
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        activityType = try container.decode(ActivityType.self, forKey: .activityType)
-        distanceMeters = try container.decode(Double.self, forKey: .distanceMeters)
-        durationSeconds = try container.decode(Double.self, forKey: .durationSeconds)
-        xpEarned = try container.decode(Int.self, forKey: .xpEarned)
-        newZonesCount = try container.decodeIfPresent(Int.self, forKey: .newZonesCount) ?? 0
-        defendedZonesCount = try container.decodeIfPresent(Int.self, forKey: .defendedZonesCount) ?? 0
-        recapturedZonesCount = try container.decodeIfPresent(Int.self, forKey: .recapturedZonesCount) ?? 0
-        fireCount = try container.decodeIfPresent(Int.self, forKey: .fireCount) ?? 0
-        trophyCount = try container.decodeIfPresent(Int.self, forKey: .trophyCount) ?? 0
-        devilCount = try container.decodeIfPresent(Int.self, forKey: .devilCount) ?? 0
-        currentUserReaction = try container.decodeIfPresent(ReactionType.self, forKey: .currentUserReaction)
-        calories = try container.decodeIfPresent(Double.self, forKey: .calories)
-        averageHeartRate = try container.decodeIfPresent(Int.self, forKey: .averageHeartRate)
     }
 }
 

@@ -99,6 +99,41 @@ struct ProfileDetailView: View {
                     }
                     .padding(.horizontal)
                     
+                    // Extra Actions: Missions
+                    VStack(spacing: 12) {
+                        NavigationLink(destination: MissionGuideView()) {
+                            HStack {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(hex: "5856D6").opacity(0.15))
+                                        .frame(width: 36, height: 36)
+                                    
+                                    Image(systemName: "info.circle.fill")
+                                        .foregroundColor(Color(hex: "5856D6"))
+                                }
+                                
+                                Text("Guía de Misiones")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.white)
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding()
+                            .background(Color(hex: "18181C"))
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                            )
+                        }
+                    }
+                    .padding(.horizontal)
+                    
                     // Relations Tabs
                     VStack(spacing: 16) {
                         Picker("", selection: $selectedTab) {

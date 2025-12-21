@@ -11,21 +11,22 @@ protocol GamificationServiceProtocol {
                  at date: Date) async throws
 }
 
+@MainActor
 class GamificationService: ObservableObject, GamificationServiceProtocol {
-    static let shared = GamificationService()
+    nonisolated static let shared = GamificationService()
     
     private let repository = GamificationRepository.shared
     
     @Published var currentXP: Int = 0
     @Published var currentLevel: Int = 1
     
+    nonisolated init() {}
+    
     // MARK: - Public Interface
     
     func syncState(xp: Int, level: Int) {
-        Task { @MainActor in
-            self.currentXP = xp
-            self.currentLevel = level
-        }
+        self.currentXP = xp
+        self.currentLevel = level
     }
     
     func computeXP(for activity: ActivitySession,
@@ -80,20 +81,28 @@ class GamificationService: ObservableObject, GamificationServiceProtocol {
         
         // 3. Recalculate Level (Simple formula: Level = 1 + XP / 1000)
         let newLevel = 1 + (state.totalXP / 1000)
+        let oldLevel = state.level
         state.level = newLevel
         
         // 4. Persist
         repository.updateUserStats(userId: userId, xp: state.totalXP, level: state.level)
+        
+        // 5. Level Up Notification
+        if newLevel > oldLevel {
+            repository.createNotification(
+                recipientId: userId,
+                type: "achievement",
+                badgeId: "level_up_\(newLevel)"
+            )
+        }
         
         // Update local published state ONLY if it's the current user
         let finalXP = state.totalXP
         let finalLevel = state.level
         
         if userId == AuthenticationService.shared.userId {
-            await MainActor.run {
-                self.currentXP = finalXP
-                self.currentLevel = finalLevel
-            }
+            self.currentXP = finalXP
+            self.currentLevel = finalLevel
         }
     }
     

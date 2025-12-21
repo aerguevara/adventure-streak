@@ -9,6 +9,7 @@ enum PermissionStep: Int, CaseIterable {
     case done
 }
 
+@MainActor
 class OnboardingViewModel: ObservableObject {
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
     @Published var currentStep: PermissionStep = .intro

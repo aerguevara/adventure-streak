@@ -26,19 +26,21 @@ protocol FeedRepositoryProtocol {
 
 @MainActor
 class FeedRepository: ObservableObject, FeedRepositoryProtocol {
-    static let shared = FeedRepository()
+    nonisolated static let shared = FeedRepository()
     
     @Published var events: [FeedEvent] = []
     
-    private var db: Any?
+    nonisolated private let db: Any? = {
+        #if canImport(FirebaseFirestore)
+        return Firestore.firestore()
+        #else
+        return nil
+        #endif
+    }()
     
     private var listenerRegistration: ListenerRegistration?
     
-    init() {
-        #if canImport(FirebaseFirestore)
-        db = Firestore.firestore()
-        #endif
-    }
+    nonisolated init() {}
     
     // NEW: Stream recent feed events
     func observeFeed() {
@@ -47,9 +49,7 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         
         // Remove existing listener if any
         listenerRegistration?.remove()
-        DispatchQueue.main.async { [weak self] in
-            self?.events = []
-        }
+        self.events = []
         
         listenerRegistration = db.collection("feed")
             .order(by: "date", descending: true)
@@ -58,9 +58,7 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
                 guard let documents = snapshot?.documents, let self = self else { return }
                 
                 let sorted = self.processFeedDocuments(documents)
-                DispatchQueue.main.async {
-                    self.events = sorted
-                }
+                self.events = sorted
             }
         #endif
     }
@@ -77,9 +75,7 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
                 .getDocuments()
             
             let sorted = processFeedDocuments(snapshot.documents)
-            DispatchQueue.main.async { [weak self] in
-                self?.events = sorted
-            }
+            self.events = sorted
         } catch {
             print("Error fetching latest feed: \(error)")
         }

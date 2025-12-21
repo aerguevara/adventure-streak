@@ -7,13 +7,15 @@ import FirebaseAuth
 import FirebaseFirestore
 #endif
 
+@MainActor
 class AuthenticationService: NSObject, ObservableObject {
-    static let shared = AuthenticationService()
+    nonisolated static let shared = AuthenticationService()
     
     @Published var isAuthenticated = false
     @Published var userId: String?
     @Published var userEmail: String?
     @Published var userName: String?
+    @Published var userAvatarURL: String?
     @Published var isSyncingData = false
     
     private let userDefaults = UserDefaults.standard
@@ -22,23 +24,31 @@ class AuthenticationService: NSObject, ObservableObject {
     // Helper for nonce
     fileprivate var currentNonce: String?
     
-    override init() {
+    nonisolated override init() {
         super.init()
+        Task {
+            await setupInitialSession()
+        }
+    }
+    
+    private func setupInitialSession() {
         if let user = Auth.auth().currentUser {
             self.isAuthenticated = true
             self.userId = user.uid
             self.userEmail = user.email
             self.userName = AuthenticationService.resolveDisplayName(for: user)
             loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
-            NotificationService.shared.syncCachedFCMToken(for: user.uid)
-            NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+            Task {
+                NotificationService.shared.syncCachedFCMToken(for: user.uid)
+                NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+            }
             self.observeForceLogout(for: user.uid)
             
             // Sincronizar actividades remotas si ya hay sesión persistida
             Task {
-                await MainActor.run { self.isSyncingData = true }
+                self.isSyncingData = true
                 await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
-                await MainActor.run { self.isSyncingData = false }
+                self.isSyncingData = false
             }
         }
     }
@@ -70,8 +80,10 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userId = user.uid
             self.userEmail = nil
             self.userName = "Guest Adventurer"
-            NotificationService.shared.syncCachedFCMToken(for: user.uid)
-            NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+            Task {
+                NotificationService.shared.syncCachedFCMToken(for: user.uid)
+                NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+            }
             self.observeForceLogout(for: user.uid)
             
             // Sync Guest User to Firestore
@@ -102,11 +114,14 @@ class AuthenticationService: NSObject, ObservableObject {
         do {
             try Auth.auth().signOut()
             if let currentUserId {
-                NotificationService.shared.removeActiveToken(for: currentUserId)
+                Task {
+                    NotificationService.shared.removeActiveToken(for: currentUserId)
+                }
             }
             self.isAuthenticated = false
             self.userId = nil
             self.userName = nil
+            self.userAvatarURL = nil
             self.userEmail = nil
             userListener?.remove()
             userListener = nil
@@ -186,6 +201,7 @@ class AuthenticationService: NSObject, ObservableObject {
             if let remoteName = remoteName, !remoteName.isEmpty {
                 DispatchQueue.main.async {
                     self.userName = remoteName
+                    self.userAvatarURL = user?.avatarURL
                 }
             }
         }
@@ -280,8 +296,10 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                     
                     // Set an early value to avoid nil in UI while fetching remote
                     self.userName = appleName ?? resolvedFallback
-                    NotificationService.shared.syncCachedFCMToken(for: user.uid)
-                    NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+                    Task {
+                        NotificationService.shared.syncCachedFCMToken(for: user.uid)
+                        NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+                    }
             
             UserRepository.shared.fetchUser(userId: user.uid) { [weak self] remoteUser in
                 guard let self = self else { return }
@@ -290,6 +308,7 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                 
                 DispatchQueue.main.async {
                 self.userName = chosenName
+                self.userAvatarURL = remoteUser?.avatarURL
             }
             
             // Sync without clobbering: use chosenName (remote preferred) so displayName stays consistent, and update lastLogin.

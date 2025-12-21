@@ -4,9 +4,10 @@ struct WorkoutsView: View {
     @ObservedObject var viewModel: WorkoutsViewModel
     @ObservedObject var profileViewModel: ProfileViewModel
     @ObservedObject var badgesViewModel: BadgesViewModel
+    @StateObject private var notificationService = NotificationService.shared
     
     @State private var showProfileDetail = false
-    @State private var showMissionGuide = false
+    @State private var showNotifications = false
     @State private var showImportAlert = false
     
     // Init with dependency injection
@@ -80,9 +81,6 @@ struct WorkoutsView: View {
                 }
             }
                 .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(isPresented: $showMissionGuide) {
-                    MissionGuideView()
-                }
                 .sheet(isPresented: $showProfileDetail) {
                     NavigationStack {
                         ProfileDetailView(
@@ -91,11 +89,15 @@ struct WorkoutsView: View {
                         )
                     }
                 }
+                .sheet(isPresented: $showNotifications) {
+                    NotificationsView()
+                }
                 .onAppear {
                     Task {
                         await viewModel.refresh()
                         profileViewModel.fetchProfileData()
                         badgesViewModel.fetchBadges()
+                        notificationService.startObserving()
                 }
             }
         }
@@ -162,23 +164,35 @@ struct WorkoutsView: View {
             
             Spacer()
             
+            // Notifications
             Button {
-                showMissionGuide = true
+                showNotifications = true
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "info.circle")
-                    Text("Misiones")
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "bell.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        )
+                    
+                    if notificationService.unreadCount > 0 {
+                        Text("\(notificationService.unreadCount)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(4)
+                            .background(
+                                Circle()
+                                    .fill(Color.red)
+                                    .overlay(Circle().stroke(Color.black, lineWidth: 2))
+                            )
+                            .offset(x: 4, y: -4)
+                    }
                 }
-                .font(.caption.bold())
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(hex: "1C1C1E"))
-                .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                )
             }
         }
         .padding(.horizontal)

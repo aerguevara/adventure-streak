@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import Combine
 #if canImport(FirebaseMessaging)
 import FirebaseMessaging
 #endif
@@ -7,10 +8,72 @@ import FirebaseMessaging
 import FirebaseFirestore
 #endif
 
-class NotificationService {
-    static let shared = NotificationService()
+@MainActor
+class NotificationService: ObservableObject {
+    nonisolated static let shared = NotificationService()
+    
+    @Published var notifications: [AppNotification] = []
+    @Published var unreadCount: Int = 0
+    
     private let userDefaults = UserDefaults.standard
     private let cachedTokenKey = "fcm_cached_token"
+    
+    #if canImport(FirebaseFirestore)
+    private var db = Firestore.firestore()
+    private var listenerRegistration: ListenerRegistration?
+    #endif
+    
+    nonisolated private init() {}
+    
+    // MARK: - In-App Notifications
+    
+    func startObserving() {
+        guard let userId = AuthenticationService.shared.userId else { return }
+        
+        #if canImport(FirebaseFirestore)
+        listenerRegistration?.remove()
+        
+        listenerRegistration = db.collection("notifications")
+            .whereField("recipientId", isEqualTo: userId)
+            .order(by: "timestamp", descending: true)
+            .limit(to: 50)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let documents = snapshot?.documents else {
+                    print("Error fetching notifications: \(error?.localizedDescription ?? "Unknown error")")
+                    return
+                }
+                
+                let fetched = documents.compactMap { doc -> AppNotification? in
+                    try? doc.data(as: AppNotification.self)
+                }
+                
+                self?.notifications = fetched
+                self?.unreadCount = fetched.filter { !$0.isRead }.count
+            }
+        #endif
+    }
+    
+    func markAsRead(_ notification: AppNotification) {
+        guard let id = notification.id else { return }
+        #if canImport(FirebaseFirestore)
+        db.collection("notifications").document(id).updateData(["isRead": true])
+        #endif
+    }
+    
+    func markAllAsRead() {
+        #if canImport(FirebaseFirestore)
+        let batch = db.batch()
+        for notification in notifications where !notification.isRead {
+            if let id = notification.id {
+                let ref = db.collection("notifications").document(id)
+                batch.updateData(["isRead": true], forDocument: ref)
+            }
+        }
+        batch.commit()
+        #endif
+    }
+    
+    // MARK: - Permissions & Push
     
     func requestPermissions(completion: ((Bool) -> Void)? = nil) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
@@ -25,7 +88,6 @@ class NotificationService {
         }
     }
     
-    // NEW: Added for multiplayer conquest feature
     func notifyTerritoryAtRisk(cellId: String) {
         let content = UNMutableNotificationContent()
         content.title = "⚠️ Territory at Risk!"
@@ -36,7 +98,6 @@ class NotificationService {
         UNUserNotificationCenter.current().add(request)
     }
     
-    // NEW: Added for multiplayer conquest feature
     func notifyTerritoryLost(cellId: String) {
         let content = UNMutableNotificationContent()
         content.title = "❌ Territory Lost"
@@ -47,12 +108,8 @@ class NotificationService {
         UNUserNotificationCenter.current().add(request)
     }
     
-    func scheduleExpirationWarning(daysRemaining: Int) {
-        // Stub for MVP
-        // In a real app, we would schedule a local notification for when the nearest territory expires
-    }
+    func scheduleExpirationWarning(daysRemaining: Int) { }
     
-    // Cache local para cuando el token llega antes del login
     func cacheFCMToken(_ token: String) {
         userDefaults.set(token, forKey: cachedTokenKey)
     }
@@ -61,14 +118,12 @@ class NotificationService {
         userDefaults.string(forKey: cachedTokenKey)
     }
     
-    /// Se llama desde el delegate de Messaging cuando llega un token nuevo.
     func handleNewFCMToken(_ token: String, userId: String?) {
         cacheFCMToken(token)
         guard let userId else { return }
         uploadActiveToken(token, for: userId)
     }
     
-    /// Sube el token cacheado (o lo solicita) cuando ya tenemos userId.
     func syncCachedFCMToken(for userId: String) {
         if let token = cachedToken {
             uploadActiveToken(token, for: userId)
@@ -84,16 +139,14 @@ class NotificationService {
         #endif
     }
     
-    /// Limpia el token activo de este dispositivo del usuario (para sign-out o cambio de cuenta).
     func removeActiveToken(for userId: String) {
         guard let token = cachedToken else { return }
         UserRepository.shared.removeFCMToken(userId: userId, token: token)
     }
     
-    /// Re-genera y sube un nuevo token FCM cuando el backend marca `needsTokenRefresh` o no hay tokens.
     func refreshFCMTokenIfNeeded(for userId: String) {
         #if canImport(FirebaseFirestore)
-        let userRef = Firestore.firestore().collection("users").document(userId)
+        let userRef = db.collection("users").document(userId)
         
         userRef.getDocument { [weak self] snapshot, _ in
             guard let self else { return }
