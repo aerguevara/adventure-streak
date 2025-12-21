@@ -35,6 +35,36 @@ struct User: Identifiable, Codable {
     // Remote logout control
     var forceLogoutVersion: Int?
 
+    init(id: String? = nil,
+         email: String? = nil,
+         displayName: String? = nil,
+         joinedAt: Date? = nil,
+         avatarURL: String? = nil,
+         xp: Int = 0,
+         level: Int = 1,
+         totalCellsOwned: Int? = nil,
+         recentTerritories: Int? = nil,
+         prestige: Int? = nil,
+         currentStreakWeeks: Int? = nil,
+         bestWeeklyDistanceKm: Double? = nil,
+         currentWeekDistanceKm: Double? = nil,
+         forceLogoutVersion: Int? = nil) {
+        self.id = id
+        self.email = email
+        self.displayName = displayName
+        self.joinedAt = joinedAt
+        self.avatarURL = avatarURL
+        self.xp = xp
+        self.level = level
+        self.totalCellsOwned = totalCellsOwned
+        self.recentTerritories = recentTerritories
+        self.prestige = prestige
+        self.currentStreakWeeks = currentStreakWeeks
+        self.bestWeeklyDistanceKm = bestWeeklyDistanceKm
+        self.currentWeekDistanceKm = currentWeekDistanceKm
+        self.forceLogoutVersion = forceLogoutVersion
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case email
