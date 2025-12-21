@@ -1,6 +1,9 @@
 import Foundation
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
+#if canImport(FirebaseFirestoreSwift)
+import FirebaseFirestoreSwift
+#endif
 #endif
 #if canImport(FirebaseAuth)
 import FirebaseAuth
@@ -42,7 +45,7 @@ class UserRepository: ObservableObject {
         
         let userRef = db.collection("users").document(user.uid)
         
-        userRef.getDocument { (document, error) in
+        userRef.getDocument(source: .default) { (document, error) in
             if let document = document, document.exists {
                 // User exists: only update displayName if missing/empty, always bump lastLogin
                 var data: [String: Any] = [
@@ -132,7 +135,7 @@ class UserRepository: ObservableObject {
             return
         }
         
-        db.collection("users").document(userId).getDocument { (document, error) in
+        db.collection("users").document(userId).getDocument(source: .default) { (document, error) in
             if let document = document, document.exists {
                 do {
                     let user = try document.data(as: User.self)
