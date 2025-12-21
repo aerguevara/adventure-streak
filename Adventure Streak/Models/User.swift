@@ -66,7 +66,6 @@ struct User: Identifiable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id
         case email
         case displayName
         case joinedAt

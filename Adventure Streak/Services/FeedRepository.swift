@@ -86,7 +86,6 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         let decoded = documents.compactMap { doc -> FeedEvent? in
             do {
                 var event = try doc.data(as: FeedEvent.self)
-                // Manually assign the document ID since we aren't using @DocumentID in the model
                 event.id = doc.documentID
                 return event
             } catch {
@@ -95,52 +94,81 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
             }
         }
         
-        // Deduplicate: prefer events con activityId; descartar legacy duplicados sin activityId si hay uno cercano en tiempo del mismo usuario
-        let withActivityId = decoded.filter { $0.activityId != nil }
+        // Step 1: Group by Document ID (Firestore stability)
+        var byDocId: [String: FeedEvent] = [:]
+        for event in decoded {
+            if let id = event.id {
+                // If we have duplicates of the SAME document ID (rare in a single snapshot),
+                // we'd probably want the most complete version, but here we just take the first.
+                if byDocId[id] == nil { byDocId[id] = event }
+            }
+        }
+        
+        // Step 2: Cross-document deduplication (identifying same activity across different docs)
+        // e.g. a client post vs. a server-modified update
+        let allEvents = Array(byDocId.values)
+        let withActivityId = allEvents.filter { $0.activityId != nil }
         
         var unique: [String: FeedEvent] = [:]
-        for event in decoded {
-            // Skip legacy doc if there's a version with activityId for same user in ~5 min window
-            // If it has activityId, we definitely want it.
-            if event.activityId == nil,
-               let userId = event.userId {
+        
+        for event in allEvents {
+            // Deduplicate legacy vs modern (5 min window for same user)
+            if event.activityId == nil, let userId = event.userId {
                 let hasModern = withActivityId.contains {
                     guard $0.userId == userId else { return false }
-                    return abs($0.date.timeIntervalSince(event.date)) <= 300 // 5 min
+                    return abs($0.date.timeIntervalSince(event.date)) <= 300 
                 }
                 if hasModern { continue }
             }
             
-            let roundedDate = floor(event.date.timeIntervalSince1970 / 60) // minute bucket
+            // Stable key for activities
+            let roundedDate = floor(event.date.timeIntervalSince1970 / 60)
             let fallbackKey = "\(event.userId ?? "unknown")|\(event.type.rawValue)|\(event.title)|\(roundedDate)"
-            let key = event.activityId.map { "act-\($0.uuidString)-\(event.type.rawValue)" } ?? fallbackKey
+            let key = event.activityId.map { "act-\($0)-\(event.type.rawValue)" } ?? fallbackKey
             
             guard let existing = unique[key] else {
                 unique[key] = event
                 continue
             }
             
-            // Priority logic:
+            // Priority/Richness Logic:
             // 1. Has activityId
-            // 2. Has relatedUserName
-            // 3. Newer ID (higher confidence)
+            // 2. Has Mission Info or "Misión" in title
+            // 3. Has XP info
+            // 4. Has relatedUserName
             
-            let existingHasName = !(existing.relatedUserName ?? "").isEmpty
-            let currentHasName = !(event.relatedUserName ?? "").isEmpty
+            let existingHasMission = (existing.rarity != nil) || existing.title.contains("Misión")
+            let currentHasMission = (event.rarity != nil) || event.title.contains("Misión")
+            
+            let existingHasXP = (existing.xpEarned ?? 0) > 0
+            let currentHasXP = (event.xpEarned ?? 0) > 0
+            
             let existingHasActivity = existing.activityId != nil
             let currentHasActivity = event.activityId != nil
             
+            let existingHasName = !(existing.relatedUserName ?? "").isEmpty
+            let currentHasName = !(event.relatedUserName ?? "").isEmpty
+            
+            var shouldReplace = false
+            
             if !existingHasActivity && currentHasActivity {
-                unique[key] = event
+                shouldReplace = true
             } else if existingHasActivity == currentHasActivity {
-                if !existingHasName && currentHasName {
-                    unique[key] = event
-                } else if existingHasName == currentHasName {
-                    // Same status, keep the one with the non-nil id if applicable
-                    if existing.id == nil && event.id != nil {
-                        unique[key] = event
+                if !existingHasMission && currentHasMission {
+                    shouldReplace = true
+                } else if existingHasMission == currentHasMission {
+                    if !existingHasXP && currentHasXP {
+                        shouldReplace = true
+                    } else if existingHasXP == currentHasXP {
+                        if !existingHasName && currentHasName {
+                            shouldReplace = true
+                        }
                     }
                 }
+            }
+            
+            if shouldReplace {
+                unique[key] = event
             }
         }
         

@@ -8,6 +8,10 @@ enum NotificationType: String, Codable {
     case reaction
     case follow
     case achievement
+    case territory_conquered
+    case territory_stolen
+    case territory_defended
+    case workout_import
 }
 
 struct AppNotification: Identifiable, Codable {

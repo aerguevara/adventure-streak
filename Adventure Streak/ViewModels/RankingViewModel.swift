@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 @MainActor
 class RankingViewModel: ObservableObject {
@@ -29,6 +32,12 @@ class RankingViewModel: ObservableObject {
     private var followingCancellable: Any?
     private let avatarCache = AvatarCacheManager.shared
     
+    #if canImport(FirebaseFirestore)
+    private var rankingListener: ListenerRegistration?
+    #else
+    private var rankingListener: Any?
+    #endif
+    
     // MARK: - Init
     init(repository: GamificationRepository = .shared,
          authService: AuthenticationService = .shared,
@@ -37,10 +46,73 @@ class RankingViewModel: ObservableObject {
         self.authService = authService
         self.socialService = socialService ?? SocialService.shared
         observeFollowing()
-        fetchRanking()
+        startObservingRanking()
+    }
+    
+    deinit {
+        #if canImport(FirebaseFirestore)
+        rankingListener?.remove()
+        #endif
     }
     
     // MARK: - Actions
+    func startObservingRanking() {
+        #if canImport(FirebaseFirestore)
+        rankingListener?.remove()
+        
+        isLoading = true
+        rankingListener = repository.observeWeeklyRanking(limit: 50) { [weak self] fetchedEntries in
+            guard let self = self else { return }
+            
+            Task { @MainActor in
+                await self.processAndSetEntries(fetchedEntries)
+            }
+        }
+        #else
+        fetchRanking()
+        #endif
+    }
+    
+    private func processAndSetEntries(_ fetchedEntries: [RankingEntry]) async {
+        // Mark current user
+        var processedEntries = fetchedEntries
+        var missingAvatarIds: Set<String> = []
+        let currentUserId = self.authService.userId
+        
+        for i in 0..<processedEntries.count {
+            if let uid = currentUserId, processedEntries[i].userId == uid {
+                processedEntries[i].isCurrentUser = true
+            }
+            
+            // Mock data for redesign
+            processedEntries[i].xpProgress = Double.random(in: 0.3...0.9)
+            processedEntries[i].isFollowing = self.socialService.isFollowing(userId: processedEntries[i].userId)
+            
+            if let data = self.avatarCache.data(for: processedEntries[i].userId) {
+                processedEntries[i].avatarData = data
+            } else {
+                missingAvatarIds.insert(processedEntries[i].userId)
+            }
+        }
+        
+        // Sort by position to ensure Podium works correctly
+        processedEntries.sort { $0.position < $1.position }
+        
+        self.entries = processedEntries
+        self.isLoading = false
+        
+        if !missingAvatarIds.isEmpty {
+            await self.socialService.fetchAvatars(for: missingAvatarIds)
+            self.entries = self.entries.map { entry in
+                var updated = entry
+                if let data = self.avatarCache.data(for: entry.userId) {
+                    updated.avatarData = data
+                }
+                return updated
+            }
+        }
+    }
+    
     func fetchRanking() {
         isLoading = true
         errorMessage = nil
@@ -49,57 +121,15 @@ class RankingViewModel: ObservableObject {
             guard let self = self else { return }
             
             Task { @MainActor in
-                // Mark current user
-                var processedEntries = fetchedEntries
-                var missingAvatarIds: Set<String> = []
-                if let currentUserId = self.authService.userId {
-                    for i in 0..<processedEntries.count {
-                        if processedEntries[i].userId == currentUserId {
-                            processedEntries[i].isCurrentUser = true
-                        }
-                        
-                        // Mock data for redesign
-                        processedEntries[i].xpProgress = Double.random(in: 0.3...0.9)
-                        processedEntries[i].isFollowing = self.socialService.isFollowing(userId: processedEntries[i].userId)
-                        if let data = self.avatarCache.data(for: processedEntries[i].userId) {
-                            processedEntries[i].avatarData = data
-                        } else {
-                            missingAvatarIds.insert(processedEntries[i].userId)
-                        }
-                    }
-                }
-                
-                // Sort by position to ensure Podium works correctly
-                processedEntries.sort { $0.position < $1.position }
-                
-                self.entries = processedEntries
-                self.isLoading = false
-                
-                if !missingAvatarIds.isEmpty {
-                    Task {
-                        await self.socialService.fetchAvatars(for: missingAvatarIds)
-                        await MainActor.run {
-                            self.entries = self.entries.map { entry in
-                                var updated = entry
-                                if let data = self.avatarCache.data(for: entry.userId) {
-                                    updated.avatarData = data
-                                }
-                                return updated
-                            }
-                        }
-                    }
-                }
-                
-                if self.entries.isEmpty {
-                    // Optional: Set specific message if empty but no error
-                    // self.errorMessage = "No ranking data available yet."
-                }
+                await self.processAndSetEntries(fetchedEntries)
             }
         }
     }
     
     func onScopeChanged(_ scope: RankingScope) {
         self.selectedScope = scope
+        // For MVP, we only have one listener/collection
+        // If we had different collections for daily/monthly, we'd restart listener here
         fetchRanking()
     }
     

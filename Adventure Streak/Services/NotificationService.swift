@@ -56,7 +56,7 @@ class NotificationService: ObservableObject {
     func markAsRead(_ notification: AppNotification) {
         guard let id = notification.id else { return }
         #if canImport(FirebaseFirestore)
-        db.collection("notifications").document(id).updateData(["isRead": true])
+        db.collection("notifications").document(id).setData(["isRead": true], merge: true)
         #endif
     }
     
@@ -66,7 +66,7 @@ class NotificationService: ObservableObject {
         for notification in notifications where !notification.isRead {
             if let id = notification.id {
                 let ref = db.collection("notifications").document(id)
-                batch.updateData(["isRead": true], forDocument: ref)
+                batch.setData(["isRead": true], forDocument: ref, merge: true)
             }
         }
         batch.commit()
@@ -79,6 +79,9 @@ class NotificationService: ObservableObject {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if granted {
                 print("Notification permissions granted")
+                DispatchQueue.main.async {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
             } else if let error = error {
                 print("Notification permissions error: \(error)")
             }
@@ -167,10 +170,10 @@ class NotificationService: ObservableObject {
                     guard let self = self, let token = token, error == nil else { return }
                     self.cacheFCMToken(token)
                     self.uploadActiveToken(token, for: userId)
-                    userRef.updateData([
+                    userRef.setData([
                         "needsTokenRefresh": false,
                         "needsTokenRefreshAt": FieldValue.delete()
-                    ])
+                    ], merge: true)
                 }
             }
             #endif
@@ -180,5 +183,37 @@ class NotificationService: ObservableObject {
     
     private func uploadActiveToken(_ token: String, for userId: String) {
         UserRepository.shared.updateFCMToken(userId: userId, token: token)
+    }
+    
+    // MARK: - Notification Creation
+    
+    func createFirestoreNotification(
+        recipientId: String,
+        type: NotificationType,
+        senderId: String = "system",
+        senderName: String = "Adventure Streak",
+        senderAvatarURL: String? = nil,
+        reactionType: String? = nil,
+        activityId: String? = nil
+    ) {
+        #if canImport(FirebaseFirestore)
+        let notification = AppNotification(
+            recipientId: recipientId,
+            senderId: senderId,
+            senderName: senderName,
+            senderAvatarURL: senderAvatarURL,
+            type: type,
+            reactionType: reactionType,
+            activityId: activityId,
+            timestamp: Date(),
+            isRead: false
+        )
+        
+        do {
+            _ = try db.collection("notifications").addDocument(from: notification)
+        } catch {
+            print("Error creating notification: \(error)")
+        }
+        #endif
     }
 }

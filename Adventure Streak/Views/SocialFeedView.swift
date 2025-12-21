@@ -211,11 +211,14 @@ struct SocialPostCard: View {
 
     private func reactionButton(for reaction: ReactionType) -> some View {
         let isSelected = userReaction == reaction
-        let disabled = userReaction != nil || post.activityId == nil
+        // Allow changing reaction, disable only if processing or no activityId
+        let disabled = post.activityId == nil
         let count = reactionCount(for: reaction)
 
         return Button {
             guard !disabled else { return }
+            // If selecting the same one, maybe toggle off? (For now, just return or re-apply)
+            if userReaction == reaction { return } 
             handleReaction(reaction)
         } label: {
             HStack(spacing: 6) {

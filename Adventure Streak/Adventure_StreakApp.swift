@@ -28,10 +28,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     UNUserNotificationCenter.current().delegate = self
     Messaging.messaging().delegate = self
-    // Registrar notificaciones remotas (FCM)
-    NotificationService.shared.requestPermissions { _ in
-        DispatchQueue.main.async {
-            UIApplication.shared.registerForRemoteNotifications()
+    
+    // Check current permissions silently. Only register if already authorized.
+    UNUserNotificationCenter.current().getNotificationSettings { settings in
+        if settings.authorizationStatus == .authorized {
+            DispatchQueue.main.async {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
         }
     }
     

@@ -59,6 +59,24 @@ class SocialService: ObservableObject {
                         self?.updatePosts(from: self?.feedRepository.events ?? [])
                     }
                     .store(in: &self.cancellables)
+                    
+                // NEW: React to login/logout
+                AuthenticationService.shared.$userId
+                    .receive(on: RunLoop.main)
+                    .sink { [weak self] userId in
+                        guard let self = self else { return }
+                        if userId != nil {
+                            print("SocialService: userId found, restarting observers...")
+                            self.startObservingFollowing()
+                            self.feedRepository.observeFeed()
+                        } else {
+                            print("SocialService: user logged out, clearing state")
+                            self.followingIds.removeAll()
+                            self.posts.removeAll()
+                            self.feedRepository.clear()
+                        }
+                    }
+                    .store(in: &self.cancellables)
             }
         }
     }
@@ -443,7 +461,7 @@ class SocialService: ObservableObject {
             id: "activity-\(activity.id.uuidString)-social",
             type: .weeklySummary, // Using generic type for now, or add .activity
             date: activity.endDate,
-            activityId: activity.id,
+            activityId: activity.id.uuidString,
             title: "Activity Completed",
             subtitle: nil,
             xpEarned: activity.xpBreakdown?.total,

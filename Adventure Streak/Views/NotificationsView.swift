@@ -71,7 +71,14 @@ struct NotificationRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Avatar or Icon
-            if let avatarURL = notification.senderAvatarURL, let url = URL(string: avatarURL) {
+            if notification.senderId == "system" {
+                Circle().fill(systemColor(for: notification.type).opacity(0.1))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: systemIcon(for: notification.type))
+                            .foregroundColor(systemColor(for: notification.type))
+                    )
+            } else if let avatarURL = notification.senderAvatarURL, let url = URL(string: avatarURL) {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
@@ -88,7 +95,7 @@ struct NotificationRow: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(notification.senderName)
+                    Text(notification.senderId == "system" ? "Adventure Streak" : notification.senderName)
                         .font(.headline)
                         .foregroundColor(.white)
                     
@@ -132,11 +139,41 @@ struct NotificationRow: View {
     private func messageFor(_ notification: AppNotification) -> String {
         switch notification.type {
         case .reaction:
-            return "reacted to your activity"
+            return "reaccionó a tu actividad"
         case .follow:
-            return "started following you"
+            return "empezó a seguirte"
         case .achievement:
-            return "unlocked a new achievement"
+            return "desbloqueó un nuevo logro"
+        case .territory_conquered:
+            return "¡Has conquistado nuevos territorios!"
+        case .territory_stolen:
+            return "¡Cuidado! Alguien te ha robado un territorio"
+        case .territory_defended:
+            return "Has defendido tus territorios con éxito"
+        case .workout_import:
+            return "Entrenamiento importado correctamente"
+        }
+    }
+    
+    private func systemIcon(for type: NotificationType) -> String {
+        switch type {
+        case .achievement: return "trophy.fill"
+        case .territory_conquered: return "map.fill"
+        case .territory_stolen: return "exclamationmark.triangle.fill"
+        case .territory_defended: return "shield.fill"
+        case .workout_import: return "arrow.down.doc.fill"
+        default: return "bell.fill"
+        }
+    }
+    
+    private func systemColor(for type: NotificationType) -> Color {
+        switch type {
+        case .achievement: return .yellow
+        case .territory_conquered: return .green
+        case .territory_stolen: return .red
+        case .territory_defended: return .blue
+        case .workout_import: return .purple
+        default: return .gray
         }
     }
 }

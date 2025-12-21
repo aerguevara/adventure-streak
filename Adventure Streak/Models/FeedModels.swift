@@ -6,14 +6,14 @@ import MapKit
 // MARK: - Enums
 
 enum FeedEventType: String, Codable {
-    case weeklySummary
-    case streakMaintained
-    case newBadge
-    case levelUp
-    case territoryConquered
-    case territoryLost
-    case territoryRecaptured
-    case distanceRecord
+    case weeklySummary = "weekly_summary"
+    case streakMaintained = "streak_maintained"
+    case newBadge = "new_badge"
+    case levelUp = "level_up"
+    case territoryConquered = "territory_conquered"
+    case territoryLost = "territory_lost"
+    case territoryRecaptured = "territory_recaptured"
+    case distanceRecord = "distance_record"
 }
 
 enum BadgeRarity: String, Codable {
@@ -47,7 +47,7 @@ struct FeedEvent: Identifiable, Codable {
     let date: Date
     
     // Link to activity when applicable to deduplicar eventos reimportados
-    let activityId: UUID?
+    let activityId: String?
     
     let title: String
     let subtitle: String?

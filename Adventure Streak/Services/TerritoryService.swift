@@ -1,79 +1,25 @@
 import Foundation
 import CoreLocation
 
+enum TerritoryInteraction: String {
+    case conquest
+    case defense
+    case steal
+    case recapture
+}
+
+struct TerritoryEvent {
+    let interaction: TerritoryInteraction
+    let cellId: String
+    let previousOwnerId: String?
+}
+
 @MainActor
 class TerritoryService {
     private let territoryStore: TerritoryStore
     
     init(territoryStore: TerritoryStore) {
         self.territoryStore = territoryStore
-    }
-    
-    func processActivity(_ activity: ActivitySession, ownerUserId: String? = nil, ownerDisplayName: String? = nil) async -> (cells: [TerritoryCell], stats: TerritoryStats) {
-        // Prefetch dueños remotos de las celdas que se van a tocar para clasificar correctamente (robo vs nuevo)
-        let mergedCells = await mergeWithRemoteOwners(for: [activity], existing: territoryStore.conqueredCells)
-        let expirationDays = GameConfigService.shared.config.territoryExpirationDays
-        let (newCells, stats) = TerritoryService.calculateTerritories(
-            activities: [activity],
-            existingCells: mergedCells,
-            ownerUserId: ownerUserId,
-            ownerDisplayName: ownerDisplayName,
-            expirationDays: expirationDays
-        )
-        
-        if !newCells.isEmpty {
-            territoryStore.upsertCells(newCells)
-
-            // Multiplayer Sync - only if we have a valid user
-            if let userId = AuthenticationService.shared.userId, !userId.isEmpty {
-                TerritoryRepository.shared.saveCells(newCells, userId: userId, activityId: activity.id.uuidString)
-            } else {
-                print("[Territories] Skipping cloud save because userId is missing")
-            }
-        }
-        
-        return (newCells, stats)
-    }
-    
-
-    
-    func recalculateExpiredCells() {
-        territoryStore.removeExpiredCells(now: Date())
-    }
-    
-    // NEW: Batch processing to prevent update storms
-    // NEW: Batch processing to prevent update storms
-    // Now async to allow offloading to background thread
-    func processActivities(_ activities: [ActivitySession], ownerUserId: String? = nil, ownerDisplayName: String? = nil) async -> TerritoryStats {
-        // 1. Capture existing cells (Main Actor access)
-        let existingCells = territoryStore.conqueredCells
-        let mergedCells = await mergeWithRemoteOwners(for: activities, existing: existingCells)
-        let expirationDays = GameConfigService.shared.config.territoryExpirationDays
-        
-        // 2. Perform heavy calculation on background thread
-        let result = await Task.detached(priority: .userInitiated) {
-            return TerritoryService.calculateTerritories(
-                activities: activities,
-                existingCells: mergedCells,
-                ownerUserId: ownerUserId,
-                ownerDisplayName: ownerDisplayName,
-                expirationDays: expirationDays
-            )
-        }.value
-        
-        // 3. Update store ONCE (Main Actor access)
-        if !result.newCells.isEmpty {
-            territoryStore.upsertCells(result.newCells)
-
-            // Multiplayer Sync - only if we have a valid user
-            if let userId = AuthenticationService.shared.userId, !userId.isEmpty {
-                TerritoryRepository.shared.saveCells(result.newCells, userId: userId)
-            } else {
-                print("[Territories] Skipping cloud save because userId is missing")
-            }
-        }
-        
-        return result.stats
     }
     
     // Prefetch remote owners for cells involved to avoid misclassification (robo vs nuevo)
@@ -127,11 +73,71 @@ class TerritoryService {
         return ids
     }
     
+    func processActivity(_ activity: ActivitySession, ownerUserId: String? = nil, ownerDisplayName: String? = nil) async -> (cells: [TerritoryCell], stats: TerritoryStats, events: [TerritoryEvent]) {
+        // [SERVER MIGRATION]
+        // Local calculation disabled to prevent cache conflicts.
+        // The Cloud Function 'processActivityTerritories' is now the single source of truth.
+        print("ℹ️ TerritoryService: Skipping local calculation. Delegating to Server.")
+        
+        let emptyStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+        return ([], emptyStats, [])
+    }
+    
+    // Remote notifications moved to Cloud Function
+    /*
+    private func handleNotifications(for events: [TerritoryEvent], activityId: String) {
+        // ... (Logic moved to backend)
+    }
+    */    
+    func recalculateExpiredCells() {
+        territoryStore.removeExpiredCells(now: Date())
+    }
+    
+    // NEW: Batch processing to prevent update storms
+    // Now async to allow offloading to background thread
+    func processActivities(_ activities: [ActivitySession], ownerUserId: String? = nil, ownerDisplayName: String? = nil) async -> TerritoryStats {
+        // 1. Capture existing cells (Main Actor access)
+        let existingCells = territoryStore.conqueredCells
+        let mergedCells = await mergeWithRemoteOwners(for: activities, existing: existingCells)
+        let expirationDays = GameConfigService.shared.config.territoryExpirationDays
+        
+        // 2. Perform heavy calculation on background thread
+        let result = await Task.detached(priority: .userInitiated) {
+            return TerritoryService.calculateTerritories(
+                activities: activities,
+                existingCells: mergedCells,
+                ownerUserId: ownerUserId,
+                ownerDisplayName: ownerDisplayName,
+                expirationDays: expirationDays
+            )
+        }.value
+        
+        // 3. Update store ONCE (Main Actor access)
+        if !result.newCells.isEmpty {
+            territoryStore.upsertCells(result.newCells)
+
+            // Multiplayer Sync - only if we have a valid user
+            if let userId = AuthenticationService.shared.userId, !userId.isEmpty {
+                TerritoryRepository.shared.saveCells(result.newCells, userId: userId)
+            } else {
+                print("[Territories] Skipping cloud save because userId is missing")
+            }
+        }
+        
+        // Note: For batch processing, we might want to consolidate notifications 
+        // but for now let's focus on single activity processing (Sync/Import)
+        
+        return result.stats
+    }
+    
+    // ... (rest of the file)
+    
     // Pure logic helper - Non-isolated to run on background thread
-    nonisolated private static func calculateTerritories(activities: [ActivitySession], existingCells: [String: TerritoryCell], ownerUserId: String?, ownerDisplayName: String?, expirationDays: Int) -> (newCells: [TerritoryCell], stats: TerritoryStats) {
+    nonisolated private static func calculateTerritories(activities: [ActivitySession], existingCells: [String: TerritoryCell], ownerUserId: String?, ownerDisplayName: String?, expirationDays: Int) -> (newCells: [TerritoryCell], stats: TerritoryStats, events: [TerritoryEvent]) {
         var newConqueredCount = 0
         var defendedCount = 0
         var recapturedCount = 0
+        var events: [TerritoryEvent] = []
         
         // Temporary local cache of new cells to avoid duplicates within the batch
         var batchNewCells: [TerritoryCell] = []
@@ -142,7 +148,7 @@ class TerritoryService {
             // Add start point cell
             if let first = activity.route.first {
                 let cell = existingCells[TerritoryGrid.cellId(x: TerritoryGrid.cellIndex(for: first.coordinate).x, y: TerritoryGrid.cellIndex(for: first.coordinate).y)] ?? TerritoryGrid.getCell(for: first.coordinate, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName, expirationDays: expirationDays)
-                processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName, expirationDays: expirationDays)
+                processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, events: &events, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName, expirationDays: expirationDays)
             }
             
             // Process segments
@@ -159,7 +165,7 @@ class TerritoryService {
                     }
                     
                     let cell = existingCells[cellTemplate.id] ?? cellTemplate
-                    processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName, expirationDays: expirationDays)
+                    processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, events: &events, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName, expirationDays: expirationDays)
                 }
             }
         }
@@ -170,11 +176,11 @@ class TerritoryService {
             recapturedCellsCount: recapturedCount
         )
         
-        return (batchNewCells, stats)
+        return (batchNewCells, stats, events)
     }
     
     // Helper must be static or non-isolated to be called from detached task without capturing self
-    nonisolated private static func processCell(_ cell: TerritoryCell, existingCells: [String: TerritoryCell], newCells: inout [TerritoryCell], newConqueredCount: inout Int, defendedCount: inout Int, recapturedCount: inout Int, activity: ActivitySession, currentUserId: String?, currentUserName: String?, expirationDays: Int) {
+    nonisolated private static func processCell(_ cell: TerritoryCell, existingCells: [String: TerritoryCell], newCells: inout [TerritoryCell], newConqueredCount: inout Int, defendedCount: inout Int, recapturedCount: inout Int, events: inout [TerritoryEvent], activity: ActivitySession, currentUserId: String?, currentUserName: String?, expirationDays: Int) {
         var mutableCell = cell
         let existing = existingCells[mutableCell.id]
         
@@ -187,23 +193,34 @@ class TerritoryService {
            existing.expiresAt > Date() {
             return
         }
+        
         let wasExpiredOrNew = mutableCell.isExpired || existing == nil
         let wasPreviouslyOwned = existing != nil
         let ownedByCurrent = mutableCell.ownerUserId == currentUserId
         let ownedByOther = (mutableCell.ownerUserId != nil) && (mutableCell.ownerUserId != currentUserId)
         
+        var interaction: TerritoryInteraction = .conquest
+        var prevOwner: String? = nil
+        
         if wasExpiredOrNew {
             if wasPreviouslyOwned && ownedByCurrent {
                 recapturedCount += 1
+                interaction = .recapture
             } else {
                 newConqueredCount += 1
+                interaction = .conquest
             }
         } else if ownedByOther {
             // Stealing from another active owner
             recapturedCount += 1
+            interaction = .steal
+            prevOwner = mutableCell.ownerUserId
         } else {
             defendedCount += 1
+            interaction = .defense
         }
+        
+        events.append(TerritoryEvent(interaction: interaction, cellId: mutableCell.id, previousOwnerId: prevOwner))
         
         mutableCell.lastConqueredAt = activity.endDate
         mutableCell.expiresAt = Calendar.current.date(byAdding: .day, value: expirationDays, to: activity.endDate)!

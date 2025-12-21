@@ -25,13 +25,13 @@ struct ActivityReactionState: Equatable {
 
 struct ActivityReactionRecord: Identifiable, Codable, Equatable {
     let id: String
-    let activityId: UUID
+    let activityId: String
     let reactedUserId: String
     let reactionType: ReactionType
     let createdAt: Date
 
-    init(activityId: UUID, reactedUserId: String, reactionType: ReactionType, createdAt: Date = Date()) {
-        self.id = "\(activityId.uuidString)_\(reactedUserId)"
+    init(activityId: String, reactedUserId: String, reactionType: ReactionType, createdAt: Date = Date()) {
+        self.id = "\(activityId)_\(reactedUserId)"
         self.activityId = activityId
         self.reactedUserId = reactedUserId
         self.reactionType = reactionType

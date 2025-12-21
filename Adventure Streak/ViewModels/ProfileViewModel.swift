@@ -123,6 +123,17 @@ class ProfileViewModel: ObservableObject {
                 self?.refreshLocalStats()
             }
             .store(in: &cancellables)
+            
+        // NEW: React to login/logout
+        authService.$userId
+            .receive(on: RunLoop.main)
+            .sink { [weak self] userId in
+                if userId != nil {
+                    print("ProfileViewModel: userId found, fetching profile data...")
+                    self?.fetchProfileData()
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Actions

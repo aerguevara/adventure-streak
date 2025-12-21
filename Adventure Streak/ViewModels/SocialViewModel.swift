@@ -5,7 +5,7 @@ import Combine
 class SocialViewModel: ObservableObject {
     @Published var posts: [SocialPost] = []
     @Published var isLoading: Bool = false
-    @Published var reactionStates: [UUID: ActivityReactionState] = [:]
+    @Published var reactionStates: [String: ActivityReactionState] = [:]
 
     private let socialService = SocialService.shared
     private let reactionRepository = ReactionRepository.shared

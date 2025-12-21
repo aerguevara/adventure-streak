@@ -14,7 +14,7 @@ struct SocialPost: Identifiable, Codable, Hashable {
     let userId: String
     let user: SocialUser
     let date: Date
-    let activityId: UUID?
+    let activityId: String?
     let activityData: SocialActivityData
     let eventType: FeedEventType?
     let eventTitle: String?

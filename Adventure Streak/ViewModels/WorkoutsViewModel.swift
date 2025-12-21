@@ -98,6 +98,14 @@ class WorkoutsViewModel: ObservableObject {
                 self?.loadWorkouts()
             }
             .store(in: &cancellables)
+            
+        // NEW: React to login/logout
+        AuthenticationService.shared.$userId
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.loadWorkouts()
+            }
+            .store(in: &cancellables)
     }
     
     func loadWorkouts() {

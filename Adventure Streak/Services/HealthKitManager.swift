@@ -238,14 +238,21 @@ class HealthKitManager: ObservableObject {
             if newNotified.contains(id) { continue }
             newNotified.insert(id)
             
+            // Suppress notifications for historic workouts (> 24 hours old)
+            // This prevents spam during initial import.
+            let hoursSinceEnd = Date().timeIntervalSince(workout.endDate) / 3600
+            if hoursSinceEnd > 24 {
+                continue
+            }
+            
             let content = UNMutableNotificationContent()
             content.title = "Nuevo entreno detectado"
             let distance = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
             let km = distance / 1000
             let formattedDistance = km > 0 ? String(format: "%.1f km", km) : ""
             content.body = formattedDistance.isEmpty
-                ? "Abre Adventure Streak para procesarlo y ganar XP."
-                : "Entreno de \(formattedDistance). Abre Adventure Streak para procesarlo y ganar XP."
+                ? "🔥 ¡Nuevo entreno detectado! Entra para conquistar territorios y subir de nivel."
+                : "🔥 ¡Has recorrido \(formattedDistance)! Entra ahora para reclamar tus territorios y XP."
             content.sound = .default
             
             let request = UNNotificationRequest(identifier: "workout_\(id)", content: content, trigger: nil)

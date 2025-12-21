@@ -11,12 +11,12 @@ import FirebaseFirestoreSwift
 final class ReactionRepository: ObservableObject {
     nonisolated static let shared = ReactionRepository()
 
-    @Published private(set) var reactionStates: [UUID: ActivityReactionState] = [:]
+    @Published private(set) var reactionStates: [String: ActivityReactionState] = [:]
 
     #if canImport(FirebaseFirestore)
     nonisolated private let db = Firestore.firestore()
-    private var statListeners: [UUID: ListenerRegistration] = [:]
-    private var userListeners: [UUID: ListenerRegistration] = [:]
+    private var statListeners: [String: ListenerRegistration] = [:]
+    private var userListeners: [String: ListenerRegistration] = [:]
     #endif
 
     nonisolated private let localStore = JSONStore<ActivityReactionRecord>(filename: "activity_reactions.json")
@@ -33,14 +33,14 @@ final class ReactionRepository: ObservableObject {
         self.rebuildStatesFromLocal()
     }
 
-    func observeActivities(_ activityIds: [UUID]) {
+    func observeActivities(_ activityIds: [String]) {
         let set = Set(activityIds)
         self.reactionStates = self.reactionStates.filter { set.contains($0.key) }
         #if canImport(FirebaseFirestore)
         cleanObsoleteListeners(keeping: set)
         for id in set {
             if statListeners[id] == nil {
-                let statsRef = db.collection("activity_reaction_stats").document(id.uuidString)
+                let statsRef = db.collection("activity_reaction_stats").document(id)
                 statListeners[id] = statsRef.addSnapshotListener { [weak self] snapshot, _ in
                     guard let self else { return }
                     let stats = snapshot.flatMap { try? $0.data(as: ReactionStats.self) }
@@ -53,7 +53,7 @@ final class ReactionRepository: ObservableObject {
             }
 
             if let userId = AuthenticationService.shared.userId, userListeners[id] == nil {
-                let userDoc = db.collection("activity_reactions").document("\(id.uuidString)_\(userId)")
+                let userDoc = db.collection("activity_reactions").document("\(id)_\(userId)")
                 userListeners[id] = userDoc.addSnapshotListener { [weak self] snapshot, _ in
                     guard let self else { return }
                     var state = self.reactionStates[id] ?? .empty
@@ -69,62 +69,71 @@ final class ReactionRepository: ObservableObject {
         #endif
     }
 
-    func sendReaction(for activityId: UUID, authorId: String, type: ReactionType) async {
+    func sendReaction(for activityId: String, authorId: String, type: ReactionType) async {
         guard let currentUserId = AuthenticationService.shared.userId else { return }
 
         #if canImport(FirebaseFirestore)
-        let statsRef = db.collection("activity_reaction_stats").document(activityId.uuidString)
-        let userRef = db.collection("activity_reactions").document("\(activityId.uuidString)_\(currentUserId)")
+        let statsRef = db.collection("activity_reaction_stats").document(activityId)
+        let userRef = db.collection("activity_reactions").document("\(activityId)_\(currentUserId)")
 
         do {
             _ = try await db.runTransaction { transaction, _ in
-                if let existing = try? transaction.getDocument(userRef), existing.exists {
+                // 1. Check Previous Reaction
+                var oldType: ReactionType? = nil
+                if let existingSnap = try? transaction.getDocument(userRef), 
+                   existingSnap.exists,
+                   let data = existingSnap.data(),
+                   let oldRaw = data["reactionType"] as? String {
+                    oldType = ReactionType(rawValue: oldRaw)
+                }
+
+                // 2. If same reaction, do nothing
+                if let old = oldType, old == type {
                     return nil as Any?
                 }
-                
-                transaction.setData([
-                    "activityId": activityId.uuidString,
+
+                // 3. Update User Reaction Record
+                var reactionData: [String: Any] = [
+                    "activityId": activityId,
                     "reactedUserId": currentUserId,
                     "reactionType": type.rawValue,
-                    "createdAt": FieldValue.serverTimestamp()
-                ], forDocument: userRef, merge: true)
-
-                var fields: [String: Any] = [
-                    "fireCount": FieldValue.increment(Int64(type == .fire ? 1 : 0)),
-                    "trophyCount": FieldValue.increment(Int64(type == .trophy ? 1 : 0)),
-                    "devilCount": FieldValue.increment(Int64(type == .devil ? 1 : 0))
+                    "updatedAt": FieldValue.serverTimestamp()
                 ]
-                if type == .trophy { fields["competitiveTaggedAt"] = FieldValue.serverTimestamp() }
-                if type == .devil { fields["rivalryTaggedAt"] = FieldValue.serverTimestamp() }
+                if oldType == nil {
+                    reactionData["createdAt"] = FieldValue.serverTimestamp()
+                }
+                transaction.setData(reactionData, forDocument: userRef, merge: true)
 
-                transaction.setData(fields, forDocument: statsRef, merge: true)
-
-                if type == .fire {
-                    let userRef = self.db.collection("users").document(authorId)
-                    transaction.updateData(["prestige": FieldValue.increment(Int64(1))], forDocument: userRef)
+                // 4. Update Activity Stats
+                var statsFields: [String: Any] = [:]
+                // Increment New
+                statsFields["\(type.rawValue)Count"] = FieldValue.increment(Int64(1))
+                // Decrement Old
+                if let old = oldType {
+                    statsFields["\(old.rawValue)Count"] = FieldValue.increment(Int64(-1))
                 }
                 
-                // Create Notification
-                let notificationRef = self.db.collection("notifications").document()
-                let senderName = AuthenticationService.shared.userName ?? "Adventurer"
-                let senderAvatarURL = AuthenticationService.shared.userAvatarURL
-                
-                var notificationData: [String: Any] = [
-                    "recipientId": authorId,
-                    "senderId": currentUserId,
-                    "senderName": senderName,
-                    "type": "reaction",
-                    "reactionType": type.rawValue,
-                    "activityId": activityId.uuidString,
-                    "timestamp": FieldValue.serverTimestamp(),
-                    "isRead": false
-                ]
-                
-                if let senderAvatarURL = senderAvatarURL {
-                    notificationData["senderAvatarURL"] = senderAvatarURL
+                // Update timestamps for specific types
+                if type == .trophy { statsFields["competitiveTaggedAt"] = FieldValue.serverTimestamp() }
+                if type == .devil { statsFields["rivalryTaggedAt"] = FieldValue.serverTimestamp() }
+
+                transaction.setData(statsFields, forDocument: statsRef, merge: true)
+
+                // 5. Update Author Prestige (Fire = Prestige)
+                // Logic: Only change if Fire status changes
+                var prestigeChange: Int64 = 0
+                if type == .fire && oldType != .fire {
+                    prestigeChange = 1
+                } else if type != .fire && oldType == .fire {
+                    prestigeChange = -1
+                }
+
+                if prestigeChange != 0 {
+                    let authorRef = self.db.collection("users").document(authorId)
+                    transaction.setData(["prestige": FieldValue.increment(prestigeChange)], forDocument: authorRef, merge: true)
                 }
                 
-                transaction.setData(notificationData, forDocument: notificationRef)
+                // Notification handled by Cloud Function (onReactionCreated)
                 
                 return nil as Any?
             }
@@ -144,12 +153,12 @@ final class ReactionRepository: ObservableObject {
         #endif
     }
 
-    func removeReaction(for activityId: UUID, authorId: String) async {
+    func removeReaction(for activityId: String, authorId: String) async {
         guard let currentUserId = AuthenticationService.shared.userId else { return }
 
         #if canImport(FirebaseFirestore)
-        let statsRef = db.collection("activity_reaction_stats").document(activityId.uuidString)
-        let userRef = db.collection("activity_reactions").document("\(activityId.uuidString)_\(currentUserId)")
+        let statsRef = db.collection("activity_reaction_stats").document(activityId)
+        let userRef = db.collection("activity_reactions").document("\(activityId)_\(currentUserId)")
 
         do {
             _ = try await db.runTransaction { transaction, _ in
@@ -187,13 +196,13 @@ final class ReactionRepository: ObservableObject {
         #endif
     }
 
-    func updateLocalState(for activityId: UUID, state: ActivityReactionState) {
+    func updateLocalState(for activityId: String, state: ActivityReactionState) {
         DispatchQueue.main.async {
             self.reactionStates[activityId] = state
         }
     }
 
-    private func cleanObsoleteListeners(keeping ids: Set<UUID>) {
+    private func cleanObsoleteListeners(keeping ids: Set<String>) {
         #if canImport(FirebaseFirestore)
         for (key, listener) in statListeners where !ids.contains(key) {
             listener.remove()
@@ -206,9 +215,9 @@ final class ReactionRepository: ObservableObject {
         #endif
     }
 
-    private func rebuildStatesFromLocal(only ids: Set<UUID>? = nil) {
+    private func rebuildStatesFromLocal(only ids: Set<String>? = nil) {
         let filtered = localRecords.filter { ids?.contains($0.activityId) ?? true }
-        var states: [UUID: ActivityReactionState] = [:]
+        var states: [String: ActivityReactionState] = [:]
         for record in filtered {
             var state = states[record.activityId] ?? .empty
             switch record.reactionType {

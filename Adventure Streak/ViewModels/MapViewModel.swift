@@ -143,12 +143,12 @@ class MapViewModel: ObservableObject {
             
         // NEW: Optimized pipeline - Process on background, update on main
         territoryRepository.$otherTerritories
-            .combineLatest(territoryStore.$conqueredCells)
+            .combineLatest(territoryStore.$conqueredCells, AuthenticationService.shared.$userId)
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .userInitiated)) // Debounce to prevent thrashing
             .receive(on: DispatchQueue.global(qos: .userInitiated)) // Process in background
-            .map { [weak self] (remote, localDict) -> [RemoteTerritory] in
+            .map { [weak self] (remote, localDict, currentUserId) -> [RemoteTerritory] in
                 guard let self = self else { return [] }
-                guard let currentUserId = AuthenticationService.shared.userId, !currentUserId.isEmpty else {
+                guard let currentUserId = currentUserId, !currentUserId.isEmpty else {
                     print("[Territories] Ignoring remote updates until userId is available")
                     return []
                 }

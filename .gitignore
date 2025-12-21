@@ -1,0 +1,17 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad
+
+# CocoaPods
+Pods/
+
+# Secrets and Credentials
+*service-account.json
+*serviceAccount.json
+*.p12
+*.plist
+
+# OS junk
+.DS_Store

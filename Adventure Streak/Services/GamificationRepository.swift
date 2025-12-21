@@ -105,7 +105,7 @@ class GamificationRepository: ObservableObject {
         completion(allBadges)
         #endif
     }
-    // NEW: Fetch weekly ranking
+    // NEW: Fetch weekly ranking (One-shot)
     func fetchWeeklyRanking(limit: Int, completion: @escaping ([RankingEntry]) -> Void) {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else {
@@ -113,42 +113,12 @@ class GamificationRepository: ObservableObject {
             return
         }
         
-        // For MVP, we'll query users ordered by XP descending.
-        // Ideally, we'd have a separate 'weeklyXP' field reset periodically or a separate collection.
-        // For this MVP, we will use total 'xp' as a proxy for ranking, or 'weeklyXP' if it existed.
-        // Let's assume we query 'xp' for now to show something working.
-        
         db.collection("users")
             .order(by: "xp", descending: true)
             .limit(to: limit)
             .getDocuments { (snapshot, error) in
                 if let documents = snapshot?.documents {
-                    var entries: [RankingEntry] = []
-                    for (index, doc) in documents.enumerated() {
-                        let data = doc.data()
-                        let currentRank = index + 1
-                        let previousRank = data["previousRank"] as? Int ?? 0
-                        var trend: RankingTrend = .neutral
-                        
-                        if previousRank > 0 {
-                            if currentRank < previousRank {
-                                trend = .up
-                            } else if currentRank > previousRank {
-                                trend = .down
-                            }
-                        }
-                        
-                        var entry = RankingEntry(
-                            userId: doc.documentID,
-                            displayName: data["displayName"] as? String ?? "Unknown",
-                            level: data["level"] as? Int ?? 1,
-                            weeklyXP: data["xp"] as? Int ?? 0, // Using total XP as proxy for MVP
-                            position: currentRank,
-                            isCurrentUser: false // Will be set by ViewModel
-                        )
-                        entry.trend = trend
-                        entries.append(entry)
-                    }
+                    let entries = self.processRankingDocuments(documents)
                     completion(entries)
                 } else {
                     print("Error fetching ranking: \(String(describing: error))")
@@ -156,10 +126,66 @@ class GamificationRepository: ObservableObject {
                 }
             }
         #else
-        // Fallback for no Firestore
         completion([])
         #endif
     }
+    
+    // NEW: Observe weekly ranking (Real-time)
+    func observeWeeklyRanking(limit: Int, completion: @escaping ([RankingEntry]) -> Void) -> ListenerRegistration? {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else {
+            completion([])
+            return nil
+        }
+        
+        return db.collection("users")
+            .order(by: "xp", descending: true)
+            .limit(to: limit)
+            .addSnapshotListener { (snapshot, error) in
+                if let documents = snapshot?.documents {
+                    let entries = self.processRankingDocuments(documents)
+                    completion(entries)
+                } else if let error = error {
+                    print("Error observing ranking: \(error.localizedDescription)")
+                }
+            }
+        #else
+        completion([])
+        return nil
+        #endif
+    }
+    
+    #if canImport(FirebaseFirestore)
+    private func processRankingDocuments(_ documents: [QueryDocumentSnapshot]) -> [RankingEntry] {
+        var entries: [RankingEntry] = []
+        for (index, doc) in documents.enumerated() {
+            let data = doc.data()
+            let currentRank = index + 1
+            let previousRank = data["previousRank"] as? Int ?? 0
+            var trend: RankingTrend = .neutral
+            
+            if previousRank > 0 {
+                if currentRank < previousRank {
+                    trend = .up
+                } else if currentRank > previousRank {
+                    trend = .down
+                }
+            }
+            
+            var entry = RankingEntry(
+                userId: doc.documentID,
+                displayName: data["displayName"] as? String ?? "Unknown",
+                level: data["level"] as? Int ?? 1,
+                weeklyXP: data["xp"] as? Int ?? 0,
+                position: currentRank,
+                isCurrentUser: false
+            )
+            entry.trend = trend
+            entries.append(entry)
+        }
+        return entries
+    }
+    #endif
     // NEW: Build context for XP calculation
     func buildXPContext(for userId: String) async throws -> XPContext {
         #if canImport(FirebaseFirestore)

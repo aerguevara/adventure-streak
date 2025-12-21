@@ -49,6 +49,9 @@ class AuthenticationService: NSObject, ObservableObject {
                 self.isSyncingData = true
                 await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
                 self.isSyncingData = false
+                
+                // Iniciar observación en tiempo real
+                ActivityStore.shared.startObserving(userId: user.uid)
             }
         }
     }
@@ -109,6 +112,8 @@ class AuthenticationService: NSObject, ObservableObject {
                     await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
                     self.isSyncingData = false
                     
+                    ActivityStore.shared.startObserving(userId: user.uid)
+                    
                     completion(true, nil)
                 }
             } else {
@@ -150,6 +155,7 @@ class AuthenticationService: NSObject, ObservableObject {
                 SocialService.shared.clear()
                 PendingRouteStore.shared.clear()
                 GamificationService.shared.syncState(xp: 0, level: 1)
+                ActivityStore.shared.stopObserving()
             }
         } catch {
             print("Error signing out: \(error)")
@@ -255,6 +261,15 @@ class AuthenticationService: NSObject, ObservableObject {
             // Default to -1 so that a remoteVersion of 0 triggers once for everyone after an update
             let key = self.forceLogoutKey(for: userId)
             let lastSeen = self.userDefaults.object(forKey: key) as? Int ?? -1
+            
+            if lastSeen == -1 {
+                // First time observing this user's force logout version. 
+                // We sync with remote to avoid immediate logout.
+                print("Force logout: First sync for user \(userId), setting lastSeen to \(remoteVersion)")
+                self.userDefaults.set(remoteVersion, forKey: key)
+                return
+            }
+            
             if remoteVersion > lastSeen {
                 print("Force logout triggered for user \(userId): remoteVersion \(remoteVersion) > lastSeen \(lastSeen)")
                 self.userDefaults.set(remoteVersion, forKey: key)
@@ -299,7 +314,9 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                     return
                 }
                 
-                if let user = authResult?.user {
+                guard let user = authResult?.user else { return }
+                
+                Task { @MainActor in
                     self.isAuthenticated = true
                     self.userId = user.uid
                     self.userEmail = user.email
@@ -315,34 +332,48 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                     
                     // Set an early value to avoid nil in UI while fetching remote
                     self.userName = appleName ?? resolvedFallback
-                    Task {
-                        NotificationService.shared.syncCachedFCMToken(for: user.uid)
-                        NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+                    
+                    NotificationService.shared.syncCachedFCMToken(for: user.uid)
+                    NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+                    self.observeForceLogout(for: user.uid)
+                    
+                    // Prefetch remote user to avoid clobbering existing name if it's a return login
+                    UserRepository.shared.fetchUser(userId: user.uid) { [weak self] remoteUser in
+                        guard let self = self else { return }
+                        let remoteName = remoteUser?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let chosenName = (remoteName?.isEmpty == false) ? remoteName! : (appleName ?? resolvedFallback)
+                        
+                        self.userName = chosenName
+                        self.userAvatarURL = remoteUser?.avatarURL
+                        
+                        // Realistic starting stats for new Apple users (Start at 0 for real devices)
+                        let initialXP = 0
+                        let initialLevel = 1
+                        
+                        // Sync with robustness (will merge if exists, create if not)
+                        UserRepository.shared.syncUser(user: user, name: chosenName, initialXP: initialXP, initialLevel: initialLevel)
+                        
+                        // Ensure local gamification state is immediate
+                        // If user is nil OR was partially created (missing XP and join date), apply initial stats
+                        let isNewOrDummy = remoteUser == nil || (remoteUser?.xp == 0 && remoteUser?.joinedAt == nil)
+                        
+                        if isNewOrDummy {
+                            GamificationService.shared.syncState(xp: initialXP, level: initialLevel)
+                        } else if let remoteUser = remoteUser {
+                            GamificationService.shared.syncState(xp: remoteUser.xp, level: remoteUser.level)
+                        }
+                        
+                        Task {
+                            self.isSyncingData = true
+                            await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                            self.isSyncingData = false
+                            
+                            ActivityStore.shared.startObserving(userId: user.uid)
+                        }
                     }
-            
-            UserRepository.shared.fetchUser(userId: user.uid) { [weak self] remoteUser in
-                guard let self = self else { return }
-                let remoteName = remoteUser?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let chosenName = (remoteName?.isEmpty == false) ? remoteName! : (appleName ?? resolvedFallback)
-                
-                DispatchQueue.main.async {
-                self.userName = chosenName
-                self.userAvatarURL = remoteUser?.avatarURL
-            }
-            
-            // Sync without clobbering: use chosenName (remote preferred) so displayName stays consistent, and update lastLogin.
-            UserRepository.shared.syncUser(user: user, name: chosenName)
-            
-            // Backfill + parity check so remote list matches local feed/events
-            Task {
-                await MainActor.run { self.isSyncingData = true }
-                await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
-                await MainActor.run { self.isSyncingData = false }
+                }
             }
         }
-    }
-}
-    }
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {

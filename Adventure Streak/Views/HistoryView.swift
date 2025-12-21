@@ -14,11 +14,24 @@ struct HistoryView: View {
                             .frame(width: 30)
                         
                         VStack(alignment: .leading) {
-                            Text(activity.startDate.formatted(date: .abbreviated, time: .shortened))
+                            let headline = activity.missions?.first?.name ?? activity.startDate.formatted(date: .abbreviated, time: .shortened)
+                            Text(headline)
                                 .font(.headline)
-                            Text(String(format: "%.2f km", activity.distanceMeters / 1000))
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(activity.missions?.isEmpty == false ? missionColor(for: activity.missions?.first?.rarity ?? .common) : .primary)
+                            
+                            HStack(spacing: 8) {
+                                Text(String(format: "%.2f km", activity.distanceMeters / 1000))
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                
+                                Text("·")
+                                    .foregroundColor(.secondary)
+                                
+                                let subheadline = activity.workoutName ?? activity.activityType.displayName
+                                Text(subheadline)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         
                         Spacer()
@@ -30,12 +43,6 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("History")
-            .navigationTitle("History")
-            .onAppear {
-                viewModel.loadActivities()
-            }
-            // Removed manual import button as requested
-            // .toolbar { ... }
             .onAppear {
                 viewModel.loadActivities()
             }
@@ -50,6 +57,15 @@ struct HistoryView: View {
         formatter.allowedUnits = [.hour, .minute]
         formatter.unitsStyle = .abbreviated
         return formatter.string(from: duration) ?? ""
+    }
+    
+    func missionColor(for rarity: MissionRarity) -> Color {
+        switch rarity {
+        case .common: return .gray
+        case .rare: return .blue
+        case .epic: return .purple
+        case .legendary: return .orange
+        }
     }
 }
 
@@ -82,6 +98,39 @@ struct ActivityDetailView: View {
                     StatBox(title: "Type", value: baseName)
                     StatBox(title: "Date", value: activity.startDate.formatted(date: .numeric, time: .omitted))
                 }
+                
+                // Missions Section
+                if let missions = activity.missions, !missions.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Misiones")
+                            .font(.headline)
+                            .padding(.top, 8)
+                        
+                        ForEach(missions) { mission in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(mission.name)
+                                        .font(.subheadline.bold())
+                                    Spacer()
+                                    Text(mission.rarity.rawValue.capitalizingFirstLetter())
+                                        .font(.caption.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(missionColor(for: mission.rarity).opacity(0.2))
+                                        .foregroundColor(missionColor(for: mission.rarity))
+                                        .cornerRadius(4)
+                                }
+                                
+                                Text(mission.description)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding()
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(10)
+                        }
+                    }
+                }
             }
             .padding()
         }
@@ -99,6 +148,21 @@ struct ActivityDetailView: View {
         formatter.allowedUnits = [.hour, .minute, .second]
         formatter.unitsStyle = .positional
         return formatter.string(from: duration) ?? ""
+    }
+    
+    func missionColor(for rarity: MissionRarity) -> Color {
+        switch rarity {
+        case .common: return .gray
+        case .rare: return .blue
+        case .epic: return .purple
+        case .legendary: return .orange
+        }
+    }
+}
+
+extension String {
+    func capitalizingFirstLetter() -> String {
+        return prefix(1).capitalized + dropFirst()
     }
 }
 

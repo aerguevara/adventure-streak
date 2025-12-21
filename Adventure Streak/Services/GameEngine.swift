@@ -47,71 +47,60 @@ class GameEngine {
             return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
         }
         
-        // 2. Get XP context
-        let context = try await GamificationRepository.shared.buildXPContext(for: userId)
-        print("✅ XP Context loaded")
+        // 2. Classify missions (Disabled - Moved to Cloud Function)
         
         // 3. Calculate territorial delta
-        let territoryResult: (cells: [TerritoryCell], stats: TerritoryStats)
+        let territoryResult: (cells: [TerritoryCell], stats: TerritoryStats, events: [TerritoryEvent])
         if activity.activityType.isOutdoor {
             // Use the passed userId and userName for territory processing
             territoryResult = await territoryService.processActivity(activity, ownerUserId: userId, ownerDisplayName: userName)
-            print("✅ Territory processed: \(territoryResult.stats.newCellsCount) new, \(territoryResult.stats.defendedCellsCount) defended")
+            print("ℹ️ Territory calculation delegated to Server (Local result empty)")
         } else {
-            territoryResult = ([], TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0))
+            territoryResult = ([], TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0), [])
             print("ℹ️ Actividad indoor: se omite conquista de territorios")
         }
         let territoryStats = territoryResult.stats
         
-        // 4. Classify missions
-        let missions = try await missionEngine.classifyMissions(
-            for: activity,
-            territoryStats: territoryStats,
-            context: context
-        )
-        print("✅ \(missions.count) missions classified")
-        for mission in missions {
-            print("   📋 Mission: \(mission.name) (\(mission.rarity))")
-        }
+        // 4. Classify missions (Disabled - Moved to Cloud Function)
+        // let missions = try await missionEngine.classifyMissions(...)
+        print("ℹ️ Missions calculation delegated to Server")
         
-        // 5. Calculate XP for the activity
-        let xpBreakdown = try await gamificationService.computeXP(
-            for: activity,
-            territoryStats: territoryStats,
-            context: context
-        )
-        print("✅ XP calculated: \(xpBreakdown.total) total")
+        // 5. Calculate XP for the activity (Disabled - Moved to Cloud Function)
+        // let xpBreakdown = try await gamificationService.computeXP(...)
+        print("ℹ️ XP calculation delegated to Server")
         
         // 6. Update activity with results
+        // var updatedActivity = activity
+        // updatedActivity.xpBreakdown = xpBreakdown
+        // updatedActivity.territoryStats = territoryStats
+        // updatedActivity.missions = missions
+        
+        // Just update territory stats for local consistency if needed
         var updatedActivity = activity
-        updatedActivity.xpBreakdown = xpBreakdown
         updatedActivity.territoryStats = territoryStats
-        updatedActivity.missions = missions
-        print("💾 Saving activity with \(missions.count) missions")
-        if let firstMission = missions.first {
-            print("   First mission: \(firstMission.name)")
-        }
         activityStore.updateActivity(updatedActivity)
         
-        // 7b. Persist remotely in dedicated collection (non-blocking)
+        // 7b. Persist remotely in dedicated collection (non-blocking) - Triggers Cloud Function
         Task {
             await self.activityRepository.saveActivity(updatedActivity, territories: territoryResult.cells, userId: userId)
         }
         
-        // 7. Apply XP to user
-        try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)
-        print("✅ XP applied to user")
+        // 7. Apply XP to user (Disabled - Server authoritative)
+        // try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)
         
-        // 8. Create feed events
-        try await createFeedEvents(
-            missions: missions,
-            activity: updatedActivity,
-            territoryStats: territoryStats,
-            xpBreakdown: xpBreakdown,
-            userId: userId,
-            providedUserName: userName
+        // 8. Create feed events (Disabled - Server authoritative)
+        // try await createFeedEvents(...)
+        print("✅ Activity processing handed off to Server")
+        
+        // 9. Send workout_import notification
+        // Moved to Cloud Function 'processActivityTerritories'
+        /*
+        NotificationService.shared.createFirestoreNotification(
+            recipientId: userId,
+            type: .workout_import,
+            activityId: activity.id.uuidString
         )
-        print("✅ Feed events created")
+        */
         
         print("🎉 GameEngine: Activity processing complete!")
         
@@ -198,7 +187,7 @@ class GameEngine {
             id: "activity-\(activity.id.uuidString)-summary",
             type: eventType,
             date: activity.endDate,
-            activityId: activity.id,
+            activityId: activity.id.uuidString,
             title: title,
             subtitle: subtitle,
             xpEarned: xpBreakdown.total,

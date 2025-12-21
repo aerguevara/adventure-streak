@@ -31,7 +31,7 @@ private struct FirestoreActivity: Codable {
     let territoryPointsCount: Int?
     let territoryChunkCount: Int?
     let processingStatus: String?
-    let lastUpdatedAt: Date
+    let lastUpdatedAt: Date?
     
     init(activity: ActivitySession, userId: String, routeChunkCount: Int, territoryChunkCount: Int, includeProcessingStatus: Bool) {
         self.id = activity.id.uuidString
@@ -102,7 +102,7 @@ final class ActivityRepository {
         let chunks = chunkRoute(activity.route, size: chunkSize)
         let territoryChunks = chunkTerritories(territories ?? [], size: 200)
 
-        // Solo setear processingStatus="pending" si el doc no existe o no tiene processingStatus.
+        // Only set processingStatus="uploading" if doc doesn't exist or has no status
         var includeProcessingStatus = true
         do {
             let existing = try await docRef.getDocument()
@@ -110,22 +110,35 @@ final class ActivityRepository {
                let status = existing.data()?["processingStatus"] as? String,
                !status.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 includeProcessingStatus = false
+            } else {
+                includeProcessingStatus = true
             }
         } catch {
             print("[Activities] Failed to check processingStatus for \(docId): \(error.localizedDescription)")
         }
         
         // 1) Save metadata doc (without route)
-        let meta = FirestoreActivity(
-            activity: activity,
-            userId: userId,
-            routeChunkCount: chunks.count,
-            territoryChunkCount: territoryChunks.count,
-            includeProcessingStatus: includeProcessingStatus
-        )
+        var metaData: [String: Any] = [
+            "userId": userId,
+            "startDate": activity.startDate,
+            "endDate": activity.endDate,
+            "activityType": activity.activityType.rawValue,
+            "distanceMeters": activity.distanceMeters,
+            "durationSeconds": activity.durationSeconds,
+            "workoutName": activity.workoutName as Any,
+            "routePointsCount": activity.route.count,
+            "routeChunkCount": chunks.count,
+            "territoryChunkCount": territoryChunks.count,
+            "lastUpdatedAt": FieldValue.serverTimestamp()
+        ]
+        
+        if includeProcessingStatus {
+            metaData["processingStatus"] = "uploading"
+        }
+
         do {
-            try docRef.setData(from: meta, merge: true)
-            print("[Activities] Saved metadata for \(docId) with \(chunks.count) route chunks (\(activity.route.count) pts) and \(territoryChunks.count) territory chunks")
+            try await docRef.setData(metaData, merge: true)
+            print("[Activities] Saved metadata for \(docId)")
         } catch {
             print("[Activities] Failed to save metadata for \(docId): \(error.localizedDescription)")
             return
@@ -140,7 +153,6 @@ final class ActivityRepository {
                     .collection("routes")
                     .document("chunk_\(index)")
                     .setData(from: chunkPayload, merge: true)
-                print("[Activities] Saved route chunk \(index + 1)/\(chunks.count) for \(docId) with \(points.count) pts")
             } catch {
                 print("[Activities] Failed to save route chunk \(index) for \(docId): \(error.localizedDescription)")
             }
@@ -159,83 +171,94 @@ final class ActivityRepository {
                 print("[Activities] Failed to save territory chunk \(index) for \(docId): \(error.localizedDescription)")
             }
         }
-        #else
-        print("[Activities] Firestore SDK not available; skipping remote save.")
+
+        // 4) FINAL STEP: Signal server processing by switching to "pending"
+        if includeProcessingStatus {
+            do {
+                try await docRef.updateData(["processingStatus": "pending"])
+                print("[Activities] Finalized upload for \(docId). Status set to PENDING.")
+            } catch {
+                print("[Activities] Failed to set status to pending for \(docId): \(error.localizedDescription)")
+            }
+        }
         #endif
     }
     
-    private func chunkRoute(_ route: [RoutePoint], size: Int) -> [[RoutePoint]] {
-        guard size > 0, !route.isEmpty else { return [] }
-        var chunks: [[RoutePoint]] = []
-        var index = 0
-        while index < route.count {
-            let end = min(index + size, route.count)
-            let slice = Array(route[index..<end])
-            chunks.append(slice)
-            index = end
-        }
-        return chunks
-    }
-    
-    private func chunkTerritories(_ cells: [TerritoryCell], size: Int) -> [[TerritoryCell]] {
-        guard size > 0, !cells.isEmpty else { return [] }
-        var chunks: [[TerritoryCell]] = []
-        var index = 0
-        while index < cells.count {
-            let end = min(index + size, cells.count)
-            let slice = Array(cells[index..<end])
-            chunks.append(slice)
-            index = end
-        }
-        return chunks
-    }
-    private func fetchRouteChunks(activityId: String, expectedCount: Int, fallbackRoute: [RoutePoint]?) async -> [RoutePoint] {
+    /// Observe activities for a user (real-time).
+    func observeActivities(userId: String, completion: @escaping ([ActivitySession]) -> Void) -> ListenerRegistration? {
         #if canImport(FirebaseFirestore)
-        if expectedCount == 0, let fallbackRoute = fallbackRoute {
-            return fallbackRoute
-        }
-        
-        let routesRef = db.collection("activities").document(activityId).collection("routes")
-        var points: [RoutePoint] = []
-        
-        if expectedCount > 0 {
-            for order in 0..<expectedCount {
-                do {
-                    let doc = try await routesRef.document("chunk_\(order)").getDocument()
-                    if doc.exists {
-                        let chunk = try doc.data(as: FirestoreRouteChunk.self)
-                        points.append(contentsOf: chunk.points)
+        return db.collection("activities")
+            .whereField("userId", isEqualTo: userId)
+            .addSnapshotListener { (snapshot, error) in
+                guard let documents = snapshot?.documents else {
+                    if let error = error {
+                        print("Error observing activities: \(error.localizedDescription)")
                     }
-                } catch {
-                    print("[Activities] Failed to fetch chunk \(order) for \(activityId): \(error)")
+                    completion([])
+                    return
                 }
-            }
-        } else {
-            do {
-                let snapshot = try await routesRef.getDocuments()
-                let sorted = snapshot.documents.sorted { $0.documentID < $1.documentID }
-                for doc in sorted {
+                
+                let activities = documents.compactMap { doc -> ActivitySession? in
                     do {
-                        let chunk = try doc.data(as: FirestoreRouteChunk.self)
-                        points.append(contentsOf: chunk.points)
+                        // Use Firestore's built-in decoder for robustness and correct type handling (e.g. Timestamps)
+                        let remote = try doc.data(as: FirestoreActivity.self)
+                        
+                        return ActivitySession(
+                            id: UUID(uuidString: remote.id ?? doc.documentID) ?? UUID(),
+                            startDate: remote.startDate,
+                            endDate: remote.endDate,
+                            activityType: remote.activityType,
+                            distanceMeters: remote.distanceMeters,
+                            durationSeconds: remote.durationSeconds,
+                            workoutName: remote.workoutName,
+                            route: [], // Route is fetched on demand
+                            xpBreakdown: remote.xpBreakdown,
+                            territoryStats: remote.territoryStats,
+                            missions: remote.missions
+                        )
                     } catch {
-                        print("[Activities] Failed to decode chunk \(doc.documentID) for \(activityId): \(error)")
+                        print("Error decoding firestore activity \(doc.documentID):")
+                        if let decodingError = error as? DecodingError {
+                            switch decodingError {
+                            case .keyNotFound(let key, let context):
+                                print("   Key '\(key)' not found: \(context.debugDescription)")
+                                print("   Coding path: \(context.codingPath)")
+                            case .valueNotFound(let value, let context):
+                                print("   Value '\(value)' not found: \(context.debugDescription)")
+                                print("   Coding path: \(context.codingPath)")
+                            case .typeMismatch(let type, let context):
+                                print("   Type mismatch for '\(type)': \(context.debugDescription)")
+                                print("   Coding path: \(context.codingPath)")
+                            case .dataCorrupted(let context):
+                                print("   Data corrupted: \(context.debugDescription)")
+                                print("   Coding path: \(context.codingPath)")
+                            @unknown default:
+                                print("   Unknown decoding error: \(error)")
+                            }
+                        } else {
+                            print("   \(error.localizedDescription)")
+                        }
+                        return nil
                     }
                 }
-            } catch {
-                print("[Activities] Failed to fetch chunks for \(activityId): \(error)")
+                completion(activities)
             }
-        }
-        
-        return points
         #else
-        return fallbackRoute ?? []
+        completion([])
+        return nil
         #endif
     }
     
     /// Batch-save convenience; iterates sequentially to avoid Firestore rate limits on small batches.
     func saveActivities(_ activities: [ActivitySession], userId: String) async {
         for activity in activities {
+            // Check if already exists to avoid redundant processing
+            #if canImport(FirebaseFirestore)
+            do {
+                let doc = try await db.collection("activities").document(activity.id.uuidString).getDocument()
+                if doc.exists { continue }
+            } catch { }
+            #endif
             await saveActivity(activity, userId: userId)
         }
     }
@@ -369,7 +392,7 @@ final class ActivityRepository {
         do {
             var query: Query = db.collection("activities").whereField("userId", isEqualTo: userId)
             if let ids = ids, !ids.isEmpty {
-                let list = Array(ids.prefix(10)) // Firestore in query limitation; fetch individually if more
+                let list = Array(ids.prefix(10)) 
                 query = query.whereField(FieldPath.documentID(), in: list)
             }
             
@@ -400,7 +423,6 @@ final class ActivityRepository {
                 }
             }
             
-            // If there were more than 10 ids, fetch the rest individually
             if let ids = ids, ids.count > 10 {
                 let remaining = ids.subtracting(Set(snapshot.documents.map { $0.documentID }))
                 if !remaining.isEmpty {
@@ -451,8 +473,59 @@ final class ActivityRepository {
     }
 
     /// Fetch territory cells associated to a specific activity.
-    func fetchTerritoriesForActivity(activityId: UUID, expectedCount: Int? = nil) async -> [TerritoryCell] {
-        await fetchTerritoryChunks(activityId: activityId.uuidString, expectedCount: expectedCount)
+    func fetchTerritoriesForActivity(activityId: String, expectedCount: Int? = nil) async -> [TerritoryCell] {
+        await fetchTerritoryChunks(activityId: activityId, expectedCount: expectedCount)
+    }
+    
+    private func chunkRoute(_ route: [RoutePoint], size: Int) -> [[RoutePoint]] {
+        guard size > 0, !route.isEmpty else { return [] }
+        var chunks: [[RoutePoint]] = []
+        var index = 0
+        while index < route.count {
+            let end = min(index + size, route.count)
+            let slice = Array(route[index..<end])
+            chunks.append(slice)
+            index = end
+        }
+        return chunks
+    }
+    
+    private func chunkTerritories(_ cells: [TerritoryCell], size: Int) -> [[TerritoryCell]] {
+        guard size > 0, !cells.isEmpty else { return [] }
+        var chunks: [[TerritoryCell]] = []
+        var index = 0
+        while index < cells.count {
+            let end = min(index + size, cells.count)
+            let slice = Array(cells[index..<end])
+            chunks.append(slice)
+            index = end
+        }
+        return chunks
+    }
+    
+    private func fetchRouteChunks(activityId: String, expectedCount: Int, fallbackRoute: [RoutePoint]?) async -> [RoutePoint] {
+        #if canImport(FirebaseFirestore)
+        let routesRef = db.collection("activities").document(activityId).collection("routes")
+        var points: [RoutePoint] = []
+        
+        if expectedCount > 0 {
+            for order in 0..<expectedCount {
+                do {
+                    let doc = try await routesRef.document("chunk_\(order)").getDocument()
+                    if doc.exists {
+                        let chunk = try doc.data(as: FirestoreRouteChunk.self)
+                        points.append(contentsOf: chunk.points)
+                    }
+                } catch { }
+            }
+        } else if let fallback = fallbackRoute {
+            return fallback
+        }
+        
+        return points
+        #else
+        return fallbackRoute ?? []
+        #endif
     }
     
     #if canImport(FirebaseFirestore)
@@ -478,9 +551,7 @@ final class ActivityRepository {
                     missions: remote.missions
                 )
                 results.append(session)
-            } catch {
-                print("[Activities] Failed to decode activity \(doc.documentID): \(error)")
-            }
+            } catch { }
         }
         return results
     }

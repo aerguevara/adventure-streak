@@ -1,7 +1,11 @@
 import Foundation
 import HealthKit
+import Combine
 #if canImport(FirebaseCrashlytics)
 import FirebaseCrashlytics
+#endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
 #endif
 
 @MainActor
@@ -13,6 +17,8 @@ class HistoryViewModel: ObservableObject {
     private let configService: GameConfigService
     private let authService: AuthenticationService
     private let pendingRouteStore: PendingRouteStore
+    
+    private var cancellables = Set<AnyCancellable>()
     
     @Published var isImporting = false
     @Published var showAlert = false
@@ -30,17 +36,32 @@ class HistoryViewModel: ObservableObject {
         self.configService = configService
         self.pendingRouteStore = pendingRouteStore
         self.authService = authService
+        
+        setupSubscriptions()
         loadActivities()
+        
         Task {
             await configService.loadConfigIfNeeded()
-            await MainActor.run {
-                self.loadActivities()
-            }
             await MainActor.run {
                 self.importFromHealthKit()
             }
         }
     }
+    
+    deinit {
+        cancellables.removeAll()
+    }
+    
+    private func setupSubscriptions() {
+        activityStore.$activities
+            .receive(on: RunLoop.main)
+            .sink { [weak self] updatedActivities in
+                self?.activities = updatedActivities
+            }
+            .store(in: &cancellables)
+    }
+    
+    // Eliminado: startObservingActivities() - Ahora lo gestiona ActivityStore
     
     func loadActivities() {
         self.activities = activityStore.fetchAllActivities()

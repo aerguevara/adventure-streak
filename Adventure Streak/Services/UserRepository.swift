@@ -45,13 +45,32 @@ class UserRepository: ObservableObject {
         
         let userRef = db.collection("users").document(user.uid)
         
+        // Simple and robust: check if name is needed, then setData(merge: true)
         userRef.getDocument(source: .default) { (document, error) in
-            if let document = document, document.exists {
-                // User exists: only update displayName if missing/empty, always bump lastLogin
-                var data: [String: Any] = [
-                    "lastLogin": FieldValue.serverTimestamp()
-                ]
-                
+            var data: [String: Any] = [
+                "lastLogin": FieldValue.serverTimestamp()
+            ]
+            
+            // Default values for new user part of the data if it doesn't exist
+            if let document = document, !document.exists {
+                data["joinedAt"] = FieldValue.serverTimestamp()
+                data["email"] = user.email as Any
+                data["xp"] = initialXP
+                data["level"] = initialLevel
+                data["displayName"] = name ?? "Adventurer"
+            } else if let document = document, document.exists {
+                // EVEN if the document exists, check if critical stats are missing 
+                // (e.g. if another service created the doc with just a token)
+                if document.get("xp") == nil {
+                    data["xp"] = initialXP
+                }
+                if document.get("level") == nil {
+                    data["level"] = initialLevel
+                }
+                if document.get("joinedAt") == nil {
+                    data["joinedAt"] = FieldValue.serverTimestamp()
+                }
+
                 let existingName = (document.get("displayName") as? String)?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 
@@ -60,28 +79,9 @@ class UserRepository: ObservableObject {
                    (existingName == nil || existingName?.isEmpty == true) {
                     data["displayName"] = name
                 }
-                
-                // Keep avatarURL if already set; no change here
-                
-                userRef.updateData(data)
-            } else {
-                // Create new user
-                let newUser = User(
-                    id: user.uid,
-                    email: user.email,
-                    displayName: name ?? "Adventurer",
-                    joinedAt: Date(),
-                    avatarURL: nil,
-                    xp: initialXP,
-                    level: initialLevel
-                )
-                
-                do {
-                    try userRef.setData(from: newUser)
-                } catch {
-                    print("Error creating user: \(error)")
-                }
             }
+            
+            userRef.setData(data, merge: true)
         }
         #endif
     }
@@ -117,9 +117,9 @@ class UserRepository: ObservableObject {
         guard let db = db as? Firestore else { return }
         let userRef = db.collection("users").document(userId)
         // Se elimina el campo completo porque ahora es un string (el parámetro se ignora)
-        userRef.updateData([
+        userRef.setData([
             "fcmTokens": FieldValue.delete()
-        ])
+        ], merge: true)
         #endif
     }
     #else

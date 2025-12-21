@@ -23,8 +23,9 @@ struct Mission: Identifiable, Codable {
     let description: String
     let rarity: MissionRarity
     
-    // Simplified - no complex nested objects that might cause serialization issues
-    // The activity itself already has territoryStats and xpBreakdown
+    enum CodingKeys: String, CodingKey {
+        case id, userId, category, name, description, rarity
+    }
     
     init(id: String = UUID().uuidString,
          userId: String,
@@ -38,5 +39,15 @@ struct Mission: Identifiable, Codable {
         self.name = name
         self.description = description
         self.rarity = rarity
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        self.userId = try container.decode(String.self, forKey: .userId)
+        self.category = try container.decode(MissionCategory.self, forKey: .category)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.description = try container.decode(String.self, forKey: .description)
+        self.rarity = try container.decode(MissionRarity.self, forKey: .rarity)
     }
 }
