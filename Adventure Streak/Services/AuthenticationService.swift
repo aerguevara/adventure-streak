@@ -71,33 +71,52 @@ class AuthenticationService: NSObject, ObservableObject {
         Auth.auth().signInAnonymously { authResult, error in
             if let error = error {
                 print("Error signing in anonymously: \(error.localizedDescription)")
-                completion(false, error)
+                Task { @MainActor in
+                    completion(false, error)
+                }
                 return
             }
             
-        if let user = authResult?.user {
-            self.isAuthenticated = true
-            self.userId = user.uid
-            self.userEmail = nil
-            self.userName = "Guest Adventurer"
-            Task {
-                NotificationService.shared.syncCachedFCMToken(for: user.uid)
-                NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+            if let user = authResult?.user {
+                Task { @MainActor in
+                    self.isAuthenticated = true
+                    self.userId = user.uid
+                    self.userEmail = nil
+                    
+                    // Realistic Name Generation
+                    let adjectives = ["Veloz", "Intrépido", "Legendario", "Silencioso", "Audaz", "Infatigable", "Nómada"]
+                    let nouns = ["Explorador", "Caminante", "Rastreador", "Senda", "Halcón", "Lobo", "Jaguar"]
+                    let guestName = "\(nouns.randomElement() ?? "Explorador") \(adjectives.randomElement() ?? "Veloz")"
+                    
+                    self.userName = guestName
+                    
+                    NotificationService.shared.syncCachedFCMToken(for: user.uid)
+                    NotificationService.shared.refreshFCMTokenIfNeeded(for: user.uid)
+                    
+                    self.observeForceLogout(for: user.uid)
+                    
+                    // Initial realistic stats for a "vibrant" first impression
+                    let initialXP = 1200
+                    let initialLevel = 2
+                    
+                    // Sync Guest User to Firestore
+                    UserRepository.shared.syncUser(user: user, name: guestName, initialXP: initialXP, initialLevel: initialLevel)
+                    
+                    // Update local gamification state immediately
+                    GamificationService.shared.syncState(xp: initialXP, level: initialLevel)
+                    
+                    self.isSyncingData = true
+                    await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                    self.isSyncingData = false
+                    
+                    completion(true, nil)
+                }
+            } else {
+                Task { @MainActor in
+                    completion(false, nil)
+                }
             }
-            self.observeForceLogout(for: user.uid)
-            
-            // Sync Guest User to Firestore
-            UserRepository.shared.syncUser(user: user, name: "Guest Adventurer")
-            Task {
-                await MainActor.run { self.isSyncingData = true }
-                await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
-                await MainActor.run { self.isSyncingData = false }
-            }
-            completion(true, nil)
-        } else {
-            completion(false, nil)
         }
-    }
     }
     
     func signInWithGoogle(completion: @escaping (Bool, Error?) -> Void) {

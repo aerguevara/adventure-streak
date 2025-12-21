@@ -39,7 +39,7 @@ class UserRepository: ObservableObject {
     }
     
     #if canImport(FirebaseAuth)
-    func syncUser(user: FirebaseAuth.User, name: String?) {
+    func syncUser(user: FirebaseAuth.User, name: String?, initialXP: Int = 0, initialLevel: Int = 1) {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         
@@ -71,7 +71,9 @@ class UserRepository: ObservableObject {
                     email: user.email,
                     displayName: name ?? "Adventurer",
                     joinedAt: Date(),
-                    avatarURL: nil
+                    avatarURL: nil,
+                    xp: initialXP,
+                    level: initialLevel
                 )
                 
                 do {
