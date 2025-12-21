@@ -96,6 +96,30 @@ struct SocialActivityData: Codable, Hashable {
         self.calories = calories
         self.averageHeartRate = averageHeartRate
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // Required fields
+        activityType = try container.decode(ActivityType.self, forKey: .activityType)
+        distanceMeters = try container.decode(Double.self, forKey: .distanceMeters)
+        durationSeconds = try container.decode(Double.self, forKey: .durationSeconds)
+        xpEarned = try container.decode(Int.self, forKey: .xpEarned)
+        newZonesCount = try container.decode(Int.self, forKey: .newZonesCount)
+        defendedZonesCount = try container.decode(Int.self, forKey: .defendedZonesCount)
+        recapturedZonesCount = try container.decode(Int.self, forKey: .recapturedZonesCount)
+        
+        // Optional/Newer fields with defaults
+        fireCount = try container.decodeIfPresent(Int.self, forKey: .fireCount) ?? 0
+        trophyCount = try container.decodeIfPresent(Int.self, forKey: .trophyCount) ?? 0
+        devilCount = try container.decodeIfPresent(Int.self, forKey: .devilCount) ?? 0
+        
+        currentUserReaction = try container.decodeIfPresent(ReactionType.self, forKey: .currentUserReaction)
+        latestReactorNames = try container.decodeIfPresent([String].self, forKey: .latestReactorNames)
+        mapSnapshotURL = try container.decodeIfPresent(String.self, forKey: .mapSnapshotURL)
+        calories = try container.decodeIfPresent(Double.self, forKey: .calories)
+        averageHeartRate = try container.decodeIfPresent(Int.self, forKey: .averageHeartRate)
+    }
 }
 
 enum ActivityImpactLevel {
