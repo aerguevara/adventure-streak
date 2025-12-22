@@ -51,6 +51,7 @@ class ActivityStore: ObservableObject {
             print("📣 ActivityStore: Received \(updatedActivities.count) activities from Firestore")
             DispatchQueue.main.async {
                 self.saveActivities(updatedActivities)
+                self.backfillSmartNames(for: updatedActivities)
             }
         }
         #endif
@@ -129,5 +130,56 @@ class ActivityStore: ObservableObject {
         }
         
         return streak
+    }
+    
+    /// Checks for activities missing a location label and generates one.
+    private func backfillSmartNames(for activities: [ActivitySession]) {
+        // Filter candidates: No label, and reasonably recent (optimization) or ignore date limit if user wants all.
+        // Let's process all but throttle to avoid rate limits.
+        let candidates = activities.filter { $0.locationLabel == nil }
+        
+        guard !candidates.isEmpty else { return }
+        
+        print("🌍 [Backfill] Found \(candidates.count) activities missing Smart Names. Starting backfill...")
+        
+        Task {
+            for activity in candidates {
+                // Throttle: 2 seconds between requests to avoid CLGeocoder limit (50 req/60s)
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                
+                // 1. Get Route
+                var route = activity.route
+                if route.isEmpty {
+                    // Fetch from repo if missing locally
+                    route = await ActivityRepository.shared.fetchRouteForActivity(activityId: activity.id.uuidString)
+                }
+                
+                guard !route.isEmpty else {
+                    print("⚠️ [Backfill] Skipped \(activity.id) (No route available)")
+                    continue
+                }
+                
+                // 2. Generate Name
+                if let smartName = await SmartPlaceNameService.shared.generateSmartTitle(for: route) {
+                    print("✅ [Backfill] Generated: '\(smartName)' for \(activity.id)")
+                    
+                    // 3. Update Remote
+                    await ActivityRepository.shared.updateLocationLabel(activityId: activity.id, label: smartName)
+                    // 3.1 Update Feed (NEW)
+                    await FeedRepository.shared.updateLocationLabel(activityId: activity.id.uuidString, label: smartName)
+                    
+                    // 4. Update Local
+                    await MainActor.run {
+                        if let index = self.activities.firstIndex(where: { $0.id == activity.id }) {
+                            var updated = self.activities[index]
+                            updated.locationLabel = smartName
+                            self.activities[index] = updated
+                            self.persist()
+                        }
+                    }
+                }
+            }
+            print("🏁 [Backfill] Completed.")
+        }
     }
 }

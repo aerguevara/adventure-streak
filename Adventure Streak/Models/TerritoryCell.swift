@@ -36,15 +36,26 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
     // NEW: Explicit CodingKeys required for custom decoding
     enum CodingKeys: String, CodingKey {
         case id, centerLatitude, centerLongitude, boundary, lastConqueredAt, expiresAt, ownerUserId, ownerDisplayName, ownerUploadedAt, activityId
+        case serverLastConqueredAt = "activityEndAt" // Fallback key used by server
     }
     
-    // NEW: Custom decoding to handle legacy data without 'boundary'
+    // NEW: Custom decoding to handle legacy data without 'boundary' or with mismatching date keys
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         centerLatitude = try container.decode(Double.self, forKey: .centerLatitude)
         centerLongitude = try container.decode(Double.self, forKey: .centerLongitude)
-        lastConqueredAt = try container.decode(Date.self, forKey: .lastConqueredAt)
+        
+        // Try standard key, fallback to server key
+        if let date = try container.decodeIfPresent(Date.self, forKey: .lastConqueredAt) {
+            lastConqueredAt = date
+        } else if let serverDate = try container.decodeIfPresent(Date.self, forKey: .serverLastConqueredAt) {
+            lastConqueredAt = serverDate
+        } else {
+            // Throw the original error if both missing for clarity in logs
+            lastConqueredAt = try container.decode(Date.self, forKey: .lastConqueredAt)
+        }
+        
         expiresAt = try container.decode(Date.self, forKey: .expiresAt)
         ownerUserId = try container.decodeIfPresent(String.self, forKey: .ownerUserId)
         ownerDisplayName = try container.decodeIfPresent(String.self, forKey: .ownerDisplayName)
@@ -67,6 +78,21 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
                 TerritoryPoint(latitude: centerLatitude - halfSize, longitude: centerLongitude - halfSize)
             ]
         }
+    }
+    
+    // NEW: Explicit encoding required when custom decoding is present
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(centerLatitude, forKey: .centerLatitude)
+        try container.encode(centerLongitude, forKey: .centerLongitude)
+        try container.encode(boundary, forKey: .boundary)
+        try container.encode(lastConqueredAt, forKey: .lastConqueredAt)
+        try container.encode(expiresAt, forKey: .expiresAt)
+        try container.encodeIfPresent(ownerUserId, forKey: .ownerUserId)
+        try container.encodeIfPresent(ownerDisplayName, forKey: .ownerDisplayName)
+        try container.encodeIfPresent(ownerUploadedAt, forKey: .ownerUploadedAt)
+        try container.encodeIfPresent(activityId, forKey: .activityId)
     }
     
     // Default init for creating new cells

@@ -140,110 +140,122 @@ class HistoryViewModel: ObservableObject {
                         let requiresRoute = config.requiresRoute(for: bundleId) && type.isOutdoor
                         
                         HealthKitManager.shared.fetchRoute(for: workout) { result in
-                            defer { 
-                                group.leave()
-                                semaphore.signal() // Release slot
-                            }
-                            
                             let distanceMeters = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
                             let durationSeconds = workout.duration
                             let name = self.workoutName(for: workout)
                             
-                            switch result {
-                            case .success(let routePoints):
-                                if requiresRoute && routePoints.isEmpty {
-                                    Task { @MainActor in
-                                        self.handlePendingRoute(
-                                            workout: workout,
-                                            type: type,
-                                            workoutName: name,
-                                            sourceBundleId: bundleId,
-                                            sourceName: sourceName,
-                                            status: .missingRoute,
-                                            errorDescription: nil
-                                        )
+                            // Process calculation in a Task to allow await, then signal group completion
+                            Task {
+                                defer { 
+                                    group.leave()
+                                    semaphore.signal() // Release slot
+                                }
+                                
+                                switch result {
+                                case .success(let routePoints):
+                                    if requiresRoute && routePoints.isEmpty {
+                                        await MainActor.run {
+                                            self.handlePendingRoute(
+                                                workout: workout,
+                                                type: type,
+                                                workoutName: name,
+                                                sourceBundleId: bundleId,
+                                                sourceName: sourceName,
+                                                status: .missingRoute,
+                                                errorDescription: nil
+                                            )
+                                        }
+                                        return
                                     }
-                                    return
-                                }
-                                
-                                pendingStore.remove(workoutId: workout.uuid)
-                                
-                                let session = ActivitySession(
-                                    id: workout.uuid, // stable id from HKWorkout to prevent duplicates
-                                    startDate: workout.startDate,
-                                    endDate: workout.endDate,
-                                    activityType: type,
-                                    distanceMeters: distanceMeters,
-                                    durationSeconds: durationSeconds,
-                                    workoutName: name,
-                                    route: routePoints
-                                )
-                                
-                                // Thread-safe append
-                                DispatchQueue.global(qos: .utility).sync {
-                                    newSessions.append(session)
-                                }
-                            case .emptySeries:
-                                if requiresRoute {
-                                    Task { @MainActor in
-                                        self.handlePendingRoute(
-                                            workout: workout,
-                                            type: type,
-                                            workoutName: name,
-                                            sourceBundleId: bundleId,
-                                            sourceName: sourceName,
-                                            status: .missingRoute,
-                                            errorDescription: nil
-                                        )
+                                    
+                                    pendingStore.remove(workoutId: workout.uuid)
+                                    
+                                    // Calculate Smart Location label locally
+                                    let smartLocation = await SmartPlaceNameService.shared.generateSmartTitle(for: routePoints)
+                                    
+                                    let session = ActivitySession(
+                                        id: workout.uuid, // stable id from HKWorkout to prevent duplicates
+                                        startDate: workout.startDate,
+                                        endDate: workout.endDate,
+                                        activityType: type,
+                                        distanceMeters: distanceMeters,
+                                        durationSeconds: durationSeconds,
+                                        workoutName: name,
+                                        route: routePoints,
+                                        locationLabel: smartLocation
+                                    )
+                                    
+                                    // Thread-safe append
+                                    DispatchQueue.global(qos: .utility).sync {
+                                        newSessions.append(session)
                                     }
-                                    return
-                                }
-                                
-                                let session = ActivitySession(
-                                    id: workout.uuid,
-                                    startDate: workout.startDate,
-                                    endDate: workout.endDate,
-                                    activityType: type,
-                                    distanceMeters: distanceMeters,
-                                    durationSeconds: durationSeconds,
-                                    workoutName: name,
-                                    route: []
-                                )
-                                
-                                DispatchQueue.global(qos: .utility).sync {
-                                    newSessions.append(session)
-                                }
-                            case .error(let error):
-                                if requiresRoute {
-                                    Task { @MainActor in
-                                        self.handlePendingRoute(
-                                            workout: workout,
-                                            type: type,
-                                            workoutName: name,
-                                            sourceBundleId: bundleId,
-                                            sourceName: sourceName,
-                                            status: .fetchError,
-                                            errorDescription: error.localizedDescription
-                                        )
+                                    
+                                case .emptySeries:
+                                    if requiresRoute {
+                                        await MainActor.run {
+                                            self.handlePendingRoute(
+                                                workout: workout,
+                                                type: type,
+                                                workoutName: name,
+                                                sourceBundleId: bundleId,
+                                                sourceName: sourceName,
+                                                status: .missingRoute,
+                                                errorDescription: nil
+                                            )
+                                        }
+                                        return
                                     }
-                                    return
-                                }
-                                
-                                print("⚠️ Route fetch error for optional source \(bundleId): \(error.localizedDescription)")
-                                
-                                let session = ActivitySession(
-                                    id: workout.uuid,
-                                    startDate: workout.startDate,
-                                    endDate: workout.endDate,
-                                    activityType: type,
-                                    distanceMeters: distanceMeters,
-                                    durationSeconds: durationSeconds,
-                                    workoutName: name,
-                                    route: []
-                                )
-                                
-                                DispatchQueue.global(qos: .utility).sync {
-                                    newSessions.append(session)
+                                    
+                                    pendingStore.remove(workoutId: workout.uuid)
+                                    
+                                    let session = ActivitySession(
+                                        id: workout.uuid,
+                                        startDate: workout.startDate,
+                                        endDate: workout.endDate,
+                                        activityType: type,
+                                        distanceMeters: distanceMeters,
+                                        durationSeconds: durationSeconds,
+                                        workoutName: name,
+                                        route: []
+                                    )
+                                    
+                                    DispatchQueue.global(qos: .utility).sync {
+                                        newSessions.append(session)
+                                    }
+                                    
+                                case .error(let error):
+                                    if requiresRoute {
+                                        await MainActor.run {
+                                            self.handlePendingRoute(
+                                                workout: workout,
+                                                type: type,
+                                                workoutName: name,
+                                                sourceBundleId: bundleId,
+                                                sourceName: sourceName,
+                                                status: .fetchError,
+                                                errorDescription: error.localizedDescription
+                                            )
+                                        }
+                                        return
+                                    }
+                                    
+                                    pendingStore.remove(workoutId: workout.uuid)
+                                    print("⚠️ Route fetch error for optional source \(bundleId): \(error.localizedDescription)")
+                                    
+                                    let session = ActivitySession(
+                                        id: workout.uuid,
+                                        startDate: workout.startDate,
+                                        endDate: workout.endDate,
+                                        activityType: type,
+                                        distanceMeters: distanceMeters,
+                                        durationSeconds: durationSeconds,
+                                        workoutName: name,
+                                        route: []
+                                    )
+                                    
+                                    DispatchQueue.global(qos: .utility).sync {
+                                        newSessions.append(session)
+                                    }
                                 }
                             }
                         }
@@ -259,93 +271,18 @@ class HistoryViewModel: ObservableObject {
                             // 1. Save Activities locally
                             self.activityStore.saveActivities(newSessions)
                             
-                            // 1b. Persist remotely in independent collection
+                            // 2. Persist remotely (Triggers Cloud Functions for XP and Territories)
                             if let userId = AuthenticationService.shared.userId {
                                 Task {
                                     await ActivityRepository.shared.saveActivities(newSessions, userId: userId)
-                                }
-                            }
-                            
-                            // 2. Process Territories (BATCHED)
-                            Task {
-                                guard let userId = AuthenticationService.shared.userId else {
-                                    print("Batch Import (History) -> aborted: no authenticated user")
-                                    return
-                                }
-                                
-                                // A. Batch Process Territories (Updates Store ONCE)
-                                let userName = AuthenticationService.shared.userName
-                                let totalStats = await self.territoryService.processActivities(newSessions, ownerUserId: userId, ownerDisplayName: userName)
-                                print("Batch Import: \(totalStats.newCellsCount) new cells.")
-                                
-                                // B. Calculate & Award XP
-                                // We award Base XP for each activity, and Territory XP based on the batch result
-                                do {
-                                    let context = try await GamificationRepository.shared.buildXPContext(for: userId)
+                                    print("Batch Import: Sent \(newSessions.count) activities to Server for processing.")
                                     
-                                    // 1. Base XP for each activity
-                                    for session in newSessions {
-                                        // Pass empty stats here, we award territory XP separately
-                                        let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
-                                        let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
-                                        try await GamificationService.shared.applyXP(breakdown, to: userId, at: session.endDate)
+                                    // Refresh UI after server delegation is kicked off
+                                    await MainActor.run {
+                                        self.loadActivities()
+                                        print("Import complete (delegated to Server).")
                                     }
-                                    
-                                    // 2. Territory XP (Aggregated)
-                                    // We create a dummy "Import Bonus" breakdown or just apply the XP directly
-                                    // For simplicity, we'll use the last session to attach the territory XP
-                                    // Logic simplified to use the loop below
-                                    
-                                    // SIMPLIFIED APPROACH:
-                                    // Just loop and process Base XP.
-                                    // Then manually award Territory XP if possible.
-                                    // Or, since we are in a rush to fix the crash, let's just award Base XP for imports and ignore Territory XP for now?
-                                    // No, user wants XP.
-                                    // Let's use the "Apply to last session" strategy but be careful not to double count Base XP.
-                                    
-                                    // Actually, let's just loop for Base XP.
-                                    // And then call a direct "addXP" if we can? No.
-                                    
-                                    // Let's stick to the loop for Base XP.
-                                    // And for the Territory XP, we'll just create a "Bonus" transaction?
-                                    // GamificationService.applyXP takes a breakdown.
-                                    
-                                    // Let's just award the Territory XP attached to the last session.
-                                    // We will skip the last session in the loop.
-                                    
-                                    for (index, session) in newSessions.enumerated() {
-                                        if index == newSessions.count - 1 { continue } // Skip last
-                                        
-                                        let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
-                                        let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
-                                        
-                                        // Update session with XP
-                                        var updatedSession = session
-                                        updatedSession.xpBreakdown = breakdown
-                                        self.activityStore.updateActivity(updatedSession)
-                                        
-                                        try await GamificationService.shared.applyXP(breakdown, to: userId, at: session.endDate)
-                                    }
-                                    
-                                    if let lastSession = newSessions.last {
-                                        // Award Base XP for last session + ALL Territory XP
-                                        let breakdown = try await GamificationService.shared.computeXP(for: lastSession, territoryStats: totalStats, context: context)
-                                        
-                                        // Update session with XP
-                                        var updatedSession = lastSession
-                                        updatedSession.xpBreakdown = breakdown
-                                        self.activityStore.updateActivity(updatedSession)
-                                        
-                                        try await GamificationService.shared.applyXP(breakdown, to: userId, at: lastSession.endDate)
-                                    }
-                                    
-                                } catch {
-                                    print("Error awarding XP for import: \(error)")
                                 }
-                                
-                                // Refresh UI
-                                self.loadActivities()
-                                print("Import complete.")
                             }
                         }
                         self.isImporting = false

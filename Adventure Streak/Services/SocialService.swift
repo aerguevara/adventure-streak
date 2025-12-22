@@ -119,6 +119,7 @@ class SocialService: ObservableObject {
                 trophyCount: 0,
                 devilCount: 0,
                 currentUserReaction: nil,
+                locationLabel: nil, // Fallback
                 calories: 0,
                 averageHeartRate: 0
             )
@@ -436,49 +437,7 @@ class SocialService: ObservableObject {
     
     // Posts are now exposed via @Published var posts
     
-    func createPost(from activity: ActivitySession) {
-        guard let userId = AuthenticationService.shared.userId else { return }
-        let userName = AuthenticationService.shared.resolvedUserName()
-        
-        let activityData = SocialActivityData(
-            activityType: activity.activityType,
-            distanceMeters: activity.distanceMeters,
-            durationSeconds: activity.durationSeconds,
-            xpEarned: activity.xpBreakdown?.total ?? 0,
-            newZonesCount: activity.territoryStats?.newCellsCount ?? 0,
-            defendedZonesCount: activity.territoryStats?.defendedCellsCount ?? 0,
-            recapturedZonesCount: activity.territoryStats?.recapturedCellsCount ?? 0,
-            fireCount: 0,
-            trophyCount: 0,
-            devilCount: 0,
-            currentUserReaction: nil,
-            calories: activity.calories,
-            averageHeartRate: activity.averageHeartRate
-        )
-        
-        // Create FeedEvent
-        let event = FeedEvent(
-            id: "activity-\(activity.id.uuidString)-social",
-            type: .weeklySummary, // Using generic type for now, or add .activity
-            date: activity.endDate,
-            activityId: activity.id.uuidString,
-            title: "Activity Completed",
-            subtitle: nil,
-            xpEarned: activity.xpBreakdown?.total,
-            userId: userId,
-            relatedUserName: userName,
-            userLevel: GamificationService.shared.currentLevel,
-            userAvatarURL: nil, // TODO: Get from profile
-            miniMapRegion: nil, // Could add if available
-            badgeName: nil,
-            badgeRarity: nil,
-            activityData: activityData,
-            rarity: nil,
-            isPersonal: false
-        )
-        
-        feedRepository.postEvent(event)
-    }
+
     
     @MainActor
     func fetchAvatars(for userIds: Set<String>) async {

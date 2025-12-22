@@ -59,6 +59,14 @@ class GameEngine {
             territoryResult = ([], TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0), [])
             print("ℹ️ Actividad indoor: se omite conquista de territorios")
         }
+        
+        // 3b. Smart Place Naming (Hybrid Approach)
+        // Calculate the place name locally (free) and attach it to the activity
+        // This avoids expensive Google Maps API calls on the server
+        let smartLocation = await SmartPlaceNameService.shared.generateSmartTitle(for: activity.route)
+        if let locationName = smartLocation {
+            print("📍 Smart Location Detected: \(locationName)")
+        }
         let territoryStats = territoryResult.stats
         
         // 4. Classify missions (Disabled - Moved to Cloud Function)
@@ -78,6 +86,7 @@ class GameEngine {
         // Just update territory stats for local consistency if needed
         var updatedActivity = activity
         updatedActivity.territoryStats = territoryStats
+        updatedActivity.locationLabel = smartLocation
         activityStore.updateActivity(updatedActivity)
         
         // 7b. Persist remotely in dedicated collection (non-blocking) - Triggers Cloud Function
@@ -88,9 +97,7 @@ class GameEngine {
         // 7. Apply XP to user (Disabled - Server authoritative)
         // try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)
         
-        // 8. Create feed events (Disabled - Server authoritative)
-        // try await createFeedEvents(...)
-        print("✅ Activity processing handed off to Server")
+
         
         // 9. Send workout_import notification
         // Moved to Cloud Function 'processActivityTerritories'
@@ -107,102 +114,6 @@ class GameEngine {
         return territoryStats
     }
     
-    // MARK: - Feed Event Creation
+
     
-    private func createFeedEvents(
-        missions: [Mission],
-        activity: ActivitySession,
-        territoryStats: TerritorialDelta,
-        xpBreakdown: XPBreakdown,
-        userId: String,
-        providedUserName: String? = nil
-    ) async throws {
-        var userName = providedUserName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? AuthenticationService.shared.resolvedUserName()
-        
-        // Saneamiento adicional: si el nombre es genérico o vacío, intentar descarga directa de Firestore
-        if userName.isEmpty || userName == "Aventurero" || userName == "Guest Adventurer" {
-            let userDoc = await withCheckedContinuation { continuation in
-                UserRepository.shared.fetchUser(userId: userId) { user in
-                    continuation.resume(returning: user)
-                }
-            }
-            if let remoteName = userDoc?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !remoteName.isEmpty {
-                userName = remoteName
-                print("🔄 [GameEngine] Nome recuperado de Firestore para el feed: \(userName)")
-            }
-        }
-
-        let userLevel = GamificationService.shared.currentLevel
-        
-        // Create activity data for the feed
-        let activityData = SocialActivityData(
-            activityType: activity.activityType,
-            distanceMeters: activity.distanceMeters,
-            durationSeconds: activity.durationSeconds,
-            xpEarned: xpBreakdown.total,
-            newZonesCount: territoryStats.newCellsCount,
-            defendedZonesCount: territoryStats.defendedCellsCount,
-            recapturedZonesCount: territoryStats.recapturedCellsCount,
-            calories: activity.calories,
-            averageHeartRate: activity.averageHeartRate
-        )
-        
-        // Single event per activity
-        let primaryMission: Mission? = missions.first
-        let missionNames: String = {
-            let names = missions.map { $0.name }
-            return names.isEmpty ? "" : names.joined(separator: " · ")
-        }()
-        
-        let title: String = primaryMission?.name ?? "Actividad completada"
-        let territoryHighlights: [String] = [
-            territoryStats.newCellsCount > 0 ? "\(territoryStats.newCellsCount) territorios conquistados" : nil,
-            territoryStats.defendedCellsCount > 0 ? "\(territoryStats.defendedCellsCount) territorios defendidos" : nil,
-            territoryStats.recapturedCellsCount > 0 ? "\(territoryStats.recapturedCellsCount) territorios robados" : nil
-        ].compactMap { $0 }
-
-        let subtitle: String? = {
-            var components: [String] = []
-            if !missionNames.isEmpty {
-                components.append("Misiones: \(missionNames)")
-            }
-            if !territoryHighlights.isEmpty {
-                components.append(territoryHighlights.joined(separator: " · "))
-            }
-            return components.isEmpty ? nil : components.joined(separator: " · ")
-        }()
-
-        let eventType: FeedEventType
-        if territoryStats.recapturedCellsCount > 0 {
-            eventType = .territoryRecaptured
-        } else if territoryStats.newCellsCount > 0 {
-            eventType = .territoryConquered
-        } else if territoryStats.defendedCellsCount > 0 {
-            eventType = .territoryConquered
-        } else {
-            eventType = .distanceRecord
-        }
-        
-        let event: FeedEvent = FeedEvent(
-            id: "activity-\(activity.id.uuidString)-summary",
-            type: eventType,
-            date: activity.endDate,
-            activityId: activity.id.uuidString,
-            title: title,
-            subtitle: subtitle,
-            xpEarned: xpBreakdown.total,
-            userId: userId,
-            relatedUserName: userName,
-            userLevel: userLevel,
-            userAvatarURL: nil, // TODO: Fetch from profile if needed
-            miniMapRegion: nil,
-            badgeName: nil,
-            badgeRarity: nil,
-            activityData: activityData,
-            rarity: primaryMission?.rarity,
-            isPersonal: true
-        )
-        
-        feedRepository.postEvent(event)
-    }
 }

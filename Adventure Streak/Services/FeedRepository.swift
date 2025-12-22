@@ -192,6 +192,30 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         #endif
     }
     
+    // NEW: Update location label for existing feed events (Backfill support)
+    func updateLocationLabel(activityId: String, label: String) async {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        
+        do {
+            // Find feed events linked to this activity
+            let snapshot = try await db.collection("feed")
+                .whereField("activityId", isEqualTo: activityId)
+                .getDocuments()
+            
+            for doc in snapshot.documents {
+                // Update the deep nested field 'activityData.locationLabel'
+                // Note: Firestore supports dot notation for nested fields
+                let data: [String: Any] = ["activityData.locationLabel": label]
+                try await doc.reference.updateData(data)
+                print("✅ [Feed] Updated locationLabel for event \(doc.documentID)")
+            }
+        } catch {
+            print("Error updating feed location label: \(error)")
+        }
+        #endif
+    }
+    
     func clear() {
         listenerRegistration?.remove()
         listenerRegistration = nil

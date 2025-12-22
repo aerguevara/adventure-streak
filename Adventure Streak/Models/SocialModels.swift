@@ -40,6 +40,7 @@ struct SocialActivityData: Codable, Hashable {
     
     // Map Snapshot (Optional string to store a map image URL or data)
     let mapSnapshotURL: String?
+    let locationLabel: String? // NEW: Smart Naming for Social Feed
     let calories: Double?
     let averageHeartRate: Int?
 
@@ -59,6 +60,7 @@ struct SocialActivityData: Codable, Hashable {
         case averageHeartRate
         case latestReactorNames
         case mapSnapshotURL
+        case locationLabel
     }
     
     var distanceKm: Double {
@@ -78,6 +80,7 @@ struct SocialActivityData: Codable, Hashable {
          currentUserReaction: ReactionType? = nil,
          latestReactorNames: [String]? = nil,
          mapSnapshotURL: String? = nil,
+         locationLabel: String? = nil,
          calories: Double? = nil,
          averageHeartRate: Int? = nil) {
         self.activityType = activityType
@@ -93,6 +96,7 @@ struct SocialActivityData: Codable, Hashable {
         self.currentUserReaction = currentUserReaction
         self.latestReactorNames = latestReactorNames
         self.mapSnapshotURL = mapSnapshotURL
+        self.locationLabel = locationLabel
         self.calories = calories
         self.averageHeartRate = averageHeartRate
     }
@@ -117,6 +121,7 @@ struct SocialActivityData: Codable, Hashable {
         currentUserReaction = try container.decodeIfPresent(ReactionType.self, forKey: .currentUserReaction)
         latestReactorNames = try container.decodeIfPresent([String].self, forKey: .latestReactorNames)
         mapSnapshotURL = try container.decodeIfPresent(String.self, forKey: .mapSnapshotURL)
+        locationLabel = try container.decodeIfPresent(String.self, forKey: .locationLabel)
         calories = try container.decodeIfPresent(Double.self, forKey: .calories)
         averageHeartRate = try container.decodeIfPresent(Int.self, forKey: .averageHeartRate)
     }

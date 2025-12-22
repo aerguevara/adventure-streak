@@ -318,11 +318,25 @@ class AuthenticationService: NSObject, ObservableObject {
         
         UserRepository.shared.fetchUser(userId: userId) { [weak self] user in
             guard let self = self else { return }
-            let remoteName = user?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let remoteName = remoteName, !remoteName.isEmpty {
-                DispatchQueue.main.async {
-                    self.userName = remoteName
-                    self.userAvatarURL = user?.avatarURL
+            
+            if let user = user {
+                let remoteName = user.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let remoteName = remoteName, !remoteName.isEmpty {
+                    DispatchQueue.main.async {
+                        self.userName = remoteName
+                        self.userAvatarURL = user.avatarURL
+                    }
+                }
+            } else {
+                // User document missing (e.g. after DB wipe). Re-sync from Auth data.
+                print("Remote user missing. Re-syncing from Auth...")
+                if let currentUser = Auth.auth().currentUser {
+                    let name = AuthenticationService.resolveDisplayName(for: currentUser) ?? "Aventurero"
+                    UserRepository.shared.syncUser(user: currentUser, name: name)
+                    // Reset UI name just in case
+                    DispatchQueue.main.async {
+                        self.userName = name
+                    }
                 }
             }
         }

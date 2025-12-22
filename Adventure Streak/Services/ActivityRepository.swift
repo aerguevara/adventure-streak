@@ -32,6 +32,7 @@ private struct FirestoreActivity: Codable {
     let territoryChunkCount: Int?
     let processingStatus: String?
     let lastUpdatedAt: Date?
+    let locationLabel: String?
     
     init(activity: ActivitySession, userId: String, routeChunkCount: Int, territoryChunkCount: Int, includeProcessingStatus: Bool) {
         self.id = activity.id.uuidString
@@ -52,6 +53,7 @@ private struct FirestoreActivity: Codable {
         self.territoryChunkCount = territoryChunkCount
         self.processingStatus = includeProcessingStatus ? "pending" : nil
         self.lastUpdatedAt = Date()
+        self.locationLabel = activity.locationLabel
     }
 }
 
@@ -129,7 +131,8 @@ final class ActivityRepository {
             "routePointsCount": activity.route.count,
             "routeChunkCount": chunks.count,
             "territoryChunkCount": territoryChunks.count,
-            "lastUpdatedAt": FieldValue.serverTimestamp()
+            "lastUpdatedAt": FieldValue.serverTimestamp(),
+            "locationLabel": activity.locationLabel as Any
         ]
         
         if includeProcessingStatus {
@@ -214,7 +217,8 @@ final class ActivityRepository {
                             route: [], // Route is fetched on demand
                             xpBreakdown: remote.xpBreakdown,
                             territoryStats: remote.territoryStats,
-                            missions: remote.missions
+                            missions: remote.missions,
+                            locationLabel: remote.locationLabel
                         )
                     } catch {
                         print("Error decoding firestore activity \(doc.documentID):")
@@ -415,7 +419,8 @@ final class ActivityRepository {
                         route: route,
                         xpBreakdown: remote.xpBreakdown,
                         territoryStats: remote.territoryStats,
-                        missions: remote.missions
+                        missions: remote.missions,
+                        locationLabel: remote.locationLabel
                     )
                     activities.append(session)
                 } catch {
@@ -461,7 +466,8 @@ final class ActivityRepository {
                 route: route,
                 xpBreakdown: remote.xpBreakdown,
                 territoryStats: remote.territoryStats,
-                missions: remote.missions
+                missions: remote.missions,
+                locationLabel: remote.locationLabel
             )
         } catch {
             print("[Activities] Failed to fetch activity \(activityId): \(error)")
@@ -475,6 +481,24 @@ final class ActivityRepository {
     /// Fetch territory cells associated to a specific activity.
     func fetchTerritoriesForActivity(activityId: String, expectedCount: Int? = nil) async -> [TerritoryCell] {
         await fetchTerritoryChunks(activityId: activityId, expectedCount: expectedCount)
+    }
+    
+    func fetchRouteForActivity(activityId: String) async -> [RoutePoint] {
+        // Assume adequate default or fetching all chunks if count unknown
+        await fetchRouteChunks(activityId: activityId, expectedCount: 0, fallbackRoute: nil)
+    }
+    
+    func updateLocationLabel(activityId: UUID, label: String) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            try await db.collection("activities").document(activityId.uuidString).updateData([
+                "locationLabel": label
+            ])
+            print("[ActivityRepository] Updated locationLabel for \(activityId)")
+        } catch {
+            print("[ActivityRepository] Failed to update locationLabel: \(error)")
+        }
+        #endif
     }
     
     private func chunkRoute(_ route: [RoutePoint], size: Int) -> [[RoutePoint]] {
@@ -520,6 +544,26 @@ final class ActivityRepository {
             }
         } else if let fallback = fallbackRoute {
             return fallback
+        } else {
+            // No expected count and no fallback -> Fetch all (Backfill scenario)
+            do {
+                let snapshot = try await routesRef.getDocuments()
+                // Sort by ID is usually enough if IDs are chunk_0, chunk_1, but better check 'order' field or doc ID numerical suffix
+                // doc IDs are "chunk_0", "chunk_1"... lexicographical sort might fail for chunk_10 vs chunk_2.
+                // Let's decode first then sort by order.
+                var chunks: [FirestoreRouteChunk] = []
+                for doc in snapshot.documents {
+                    if let chunk = try? doc.data(as: FirestoreRouteChunk.self) {
+                        chunks.append(chunk)
+                    }
+                }
+                chunks.sort { $0.order < $1.order }
+                for chunk in chunks {
+                    points.append(contentsOf: chunk.points)
+                }
+            } catch {
+                print("[ActivityRepository] Failed to fetch all route chunks for \(activityId): \(error)")
+            }
         }
         
         return points
@@ -548,7 +592,8 @@ final class ActivityRepository {
                     route: route,
                     xpBreakdown: remote.xpBreakdown,
                     territoryStats: remote.territoryStats,
-                    missions: remote.missions
+                    missions: remote.missions,
+                    locationLabel: remote.locationLabel
                 )
                 results.append(session)
             } catch { }

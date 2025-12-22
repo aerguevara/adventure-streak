@@ -80,8 +80,25 @@ struct SocialPostCard: View {
     @State private var pendingReaction: ReactionType? = nil
 
     private var title: String {
-        let typeName = translateActivityType(post.activityData.activityType.rawValue)
-        return "\(typeName) · +\(post.activityData.xpEarned) XP"
+        let placeName = post.activityData.locationLabel ?? translateActivityType(post.activityData.activityType.rawValue)
+        let xpString = "+\(post.activityData.xpEarned) XP"
+        
+        if post.activityData.defendedZonesCount > 0 {
+            return "Defensa completada en \(placeName) · \(xpString)"
+        } else if post.activityData.recapturedZonesCount > 0 {
+            return "Reconquista completada en \(placeName) · \(xpString)"
+        } else if post.activityData.newZonesCount > 0 {
+            return "Conquista completada en \(placeName) · \(xpString)"
+        } else {
+            // Actividad normal
+            // Si tenemos nombre de lugar, usamos "Actividad en Lugar"
+            // Si solo es el tipo (placeName == Correr), se queda como estaba
+            if post.activityData.locationLabel != nil {
+               return "\(translateActivityType(post.activityData.activityType.rawValue)) en \(placeName) · \(xpString)"
+            } else {
+               return "\(placeName) · \(xpString)"
+            }
+        }
     }
     
     // Helper to translate activity type
@@ -474,7 +491,7 @@ struct SocialPostDetailView: View {
     @State private var region: MKCoordinateRegion? = nil
     
     private var detailTitle: String {
-        let typeName = post.activityData.activityType.rawValue.capitalized
+        let typeName = post.activityData.locationLabel ?? post.activityData.activityType.rawValue.capitalized
         return "\(typeName) completada · +\(post.activityData.xpEarned) XP"
     }
     

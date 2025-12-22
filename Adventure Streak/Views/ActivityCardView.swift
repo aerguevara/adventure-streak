@@ -27,14 +27,16 @@ struct ActivityCardView: View {
     }
 
     private var highImpactTitle: String {
+        let placeSuffix = activity.activityData.locationLabel.map { " en \($0)" } ?? ""
+        
         if activity.activityData.recapturedZonesCount > 0 {
-            return "Territorio recapturado"
+            return "Territorio recapturado\(placeSuffix)"
         }
         if activity.activityData.newZonesCount > 0 {
-            return "Zona conquistada"
+            return "Zona conquistada\(placeSuffix)"
         }
         if activity.activityData.defendedZonesCount > 0 {
-            return "Defensa completada"
+            return "Defensa completada\(placeSuffix)"
         }
         if activity.eventType == .distanceRecord {
             return "Récord personal"
@@ -151,7 +153,7 @@ struct ActivityCardView: View {
                     levelBadge
                 }
 
-                Text("\(activity.activityData.activityType.displayName) · +\(activity.activityData.xpEarned) XP")
+                Text(activity.activityData.activityType.displayName)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.primary.opacity(0.8))
             }
@@ -199,12 +201,6 @@ struct ActivityCardView: View {
                 .padding(.horizontal, 10)
                 .background(style.fadedBackground)
                 .cornerRadius(12)
-                if let impactLine = territoryImpactLine {
-                    Text(impactLine)
-                        .font(.caption)
-                        .foregroundColor(.primary.opacity(0.65))
-                        .padding(.horizontal, 2)
-                }
             case .low:
                 HStack(spacing: 8) {
                     Image(systemName: "figure.run")
@@ -220,12 +216,6 @@ struct ActivityCardView: View {
                 .padding(10)
                 .background(style.fadedBackground)
                 .cornerRadius(10)
-                if let impactLine = territoryImpactLine {
-                    Text(impactLine)
-                        .font(.caption)
-                        .foregroundColor(.primary.opacity(0.65))
-                        .padding(.horizontal, 2)
-                }
             }
         }
     }
@@ -448,19 +438,7 @@ struct ActivityCardView: View {
         return nil
     }
 
-    private var territoryImpactLine: String? {
-        guard hasTerritoryImpact else { return nil }
-        if activity.activityData.recapturedZonesCount > 0 {
-            return "Esta actividad contribuyó a la reconquista de \(activity.activityData.recapturedZonesCount) zona\(activity.activityData.recapturedZonesCount == 1 ? "" : "s")."
-        }
-        if activity.activityData.newZonesCount > 0 {
-            return "Esta actividad ayudó a conquistar \(activity.activityData.newZonesCount) zona\(activity.activityData.newZonesCount == 1 ? "" : "s")."
-        }
-        if activity.activityData.defendedZonesCount > 0 {
-            return "Esta actividad fortaleció \(activity.activityData.defendedZonesCount) defensa\(activity.activityData.defendedZonesCount == 1 ? "" : "s")."
-        }
-        return nil
-    }
+
 }
 
 private struct MissionChipsView: View {
