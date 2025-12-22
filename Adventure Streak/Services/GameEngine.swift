@@ -7,7 +7,6 @@ class GameEngine {
     
     private let activityStore = ActivityStore.shared
     private let territoryService: TerritoryService
-    private let missionEngine = MissionEngine.shared
     private let gamificationService = GamificationService.shared
     private let feedRepository = FeedRepository.shared
     private let activityRepository = ActivityRepository.shared
@@ -69,19 +68,8 @@ class GameEngine {
         }
         let territoryStats = territoryResult.stats
         
-        // 4. Classify missions (Disabled - Moved to Cloud Function)
-        // let missions = try await missionEngine.classifyMissions(...)
-        print("ℹ️ Missions calculation delegated to Server")
-        
-        // 5. Calculate XP for the activity (Disabled - Moved to Cloud Function)
-        // let xpBreakdown = try await gamificationService.computeXP(...)
-        print("ℹ️ XP calculation delegated to Server")
-        
-        // 6. Update activity with results
-        // var updatedActivity = activity
-        // updatedActivity.xpBreakdown = xpBreakdown
-        // updatedActivity.territoryStats = territoryStats
-        // updatedActivity.missions = missions
+        // 4. Missions and XP logic are now handled server-side via Cloud Functions
+        print("ℹ️ XP and Missions calculation delegated to Server")
         
         // Just update territory stats for local consistency if needed
         var updatedActivity = activity
@@ -94,20 +82,7 @@ class GameEngine {
             await self.activityRepository.saveActivity(updatedActivity, territories: territoryResult.cells, userId: userId)
         }
         
-        // 7. Apply XP to user (Disabled - Server authoritative)
-        // try await gamificationService.applyXP(xpBreakdown, to: userId, at: activity.endDate)
-        
-
-        
-        // 9. Send workout_import notification
-        // Moved to Cloud Function 'processActivityTerritories'
-        /*
-        NotificationService.shared.createFirestoreNotification(
-            recipientId: userId,
-            type: .workout_import,
-            activityId: activity.id.uuidString
-        )
-        */
+        // 9. Workout import notification is now handled server-side
         
         print("🎉 GameEngine: Activity processing complete!")
         

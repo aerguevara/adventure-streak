@@ -703,17 +703,16 @@ struct NextGoalSuggestionsSheet: View {
 private enum NextGoalSuggestionBuilder {
     static func suggestions(for missingXP: Int, context: XPContext) async throws -> [NextGoalSuggestion] {
         let candidates = buildCandidates(missingXP: missingXP)
-        let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
         
         var evaluated: [NextGoalSuggestion] = []
         for session in candidates {
-            // Uses the real XP engine; swap this call if you have a dedicated recommendation service.
-            let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
+            // Uses estimation logic for UI suggestions
+            let xp = await GamificationService.shared.estimateXP(for: session, context: context)
             let suggestion = NextGoalSuggestion(
                 activityType: session.activityType,
                 distanceKm: session.distanceMeters / 1000.0,
                 durationMinutes: session.durationSeconds / 60.0,
-                xp: breakdown.total
+                xp: xp
             )
             evaluated.append(suggestion)
         }

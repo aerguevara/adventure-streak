@@ -82,7 +82,6 @@ class WorkoutsViewModel: ObservableObject {
             await MainActor.run {
                 self.loadWorkouts()
             }
-            await fixMissingXP()
         }
 
         // Recargar cuando el store de actividades cambie (ej. tras volver a iniciar sesión y sincronizar desde remoto)
@@ -712,42 +711,6 @@ class WorkoutsViewModel: ObservableObject {
         }
     }
     
-    private func fixMissingXP() async {
-        let activities = activityStore.fetchAllActivities()
-        let missingXP = activities.filter { $0.xpBreakdown == nil }
-        
-        guard !missingXP.isEmpty else { return }
-        print("Fixing XP for \(missingXP.count) activities...")
-        
-        guard let userId = AuthenticationService.shared.userId else {
-            print("Fix missing XP -> aborted: no authenticated user")
-            return
-        }
-        
-        do {
-            let context = try await GamificationRepository.shared.buildXPContext(for: userId)
-            
-            for session in missingXP {
-                // Compute XP (assuming 0 new territories for historical fix to avoid complexity)
-                let zeroStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
-                let breakdown = try await GamificationService.shared.computeXP(for: session, territoryStats: zeroStats, context: context)
-                
-                // Update session in store ONLY (do not apply to user total again)
-                var updatedSession = session
-                updatedSession.xpBreakdown = breakdown
-                activityStore.updateActivity(updatedSession)
-            }
-            
-            // Reload UI
-            await MainActor.run {
-                self.loadWorkouts()
-            }
-            print("XP Fix complete.")
-            
-        } catch {
-            print("Error fixing XP: \(error)")
-        }
-    }
     
     private func handlePendingRoute(
         workout: HKWorkout,
