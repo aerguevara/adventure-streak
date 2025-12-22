@@ -147,7 +147,7 @@ class TerritoryService {
             
             // Add start point cell
             if let first = activity.route.first {
-                let cell = existingCells[TerritoryGrid.cellId(x: TerritoryGrid.cellIndex(for: first.coordinate).x, y: TerritoryGrid.cellIndex(for: first.coordinate).y)] ?? TerritoryGrid.getCell(for: first.coordinate, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName, expirationDays: expirationDays, activityId: activity.id)
+                let cell = existingCells[TerritoryGrid.cellId(x: TerritoryGrid.cellIndex(for: first.coordinate).x, y: TerritoryGrid.cellIndex(for: first.coordinate).y)] ?? TerritoryGrid.getCell(for: first.coordinate, ownerUserId: ownerUserId, ownerDisplayName: ownerDisplayName, expirationDays: expirationDays, activityId: activity.id.uuidString)
                 processCell(cell, existingCells: existingCells, newCells: &batchNewCells, newConqueredCount: &newConqueredCount, defendedCount: &defendedCount, recapturedCount: &recapturedCount, events: &events, activity: activity, currentUserId: ownerUserId, currentUserName: ownerDisplayName, expirationDays: expirationDays)
             }
             
@@ -156,7 +156,7 @@ class TerritoryService {
                 let start = activity.route[i].coordinate
                 let end = activity.route[i+1].coordinate
                 
-                let interpolatedCells = TerritoryGrid.cellsBetween(start: start, end: end, expirationDays: expirationDays, activityId: activity.id)
+                let interpolatedCells = TerritoryGrid.cellsBetween(start: start, end: end, expirationDays: expirationDays, activityId: activity.id.uuidString)
                 
                 for cellTemplate in interpolatedCells {
                     // Check if already processed in this batch
@@ -232,7 +232,7 @@ class TerritoryService {
         mutableCell.ownerUserId = currentUserId
         mutableCell.ownerDisplayName = currentUserName
         mutableCell.ownerUploadedAt = activity.endDate
-        mutableCell.activityId = activity.id
+        mutableCell.activityId = activity.id.uuidString
         
         newCells.append(mutableCell)
     }

@@ -10,6 +10,7 @@ struct WorkoutItemViewData: Identifiable {
     let id: UUID
     let type: ActivityType
     let title: String
+    let date: Date // NEW: For recency check
     let dateString: String
     let duration: String
     let pace: String?
@@ -121,6 +122,7 @@ class WorkoutsViewModel: ObservableObject {
                     id: activity.id,
                     type: activity.activityType,
                     title: "\(titlePrefix) · \(formatDistance(activity.distanceMeters))",
+                    date: activity.endDate, // NEW
                     dateString: formatDate(activity.startDate),
                     duration: formatDuration(activity.durationSeconds),
                     pace: calculatePace(distance: activity.distanceMeters, duration: activity.durationSeconds, type: activity.activityType),

@@ -404,10 +404,20 @@ struct WorkoutsView: View {
                     ForEach(viewModel.workouts) { workout in
                         GamifiedWorkoutCard(workout: workout)
                             .padding(.horizontal)
+                            .glowPulse(isActive: isMostRecent(workout), color: .orange)
                     }
                 }
             }
         }
+    }
+    
+    // Helper for Glow logic
+    func isMostRecent(_ workout: WorkoutItemViewData) -> Bool {
+        guard let firstWorkout = viewModel.workouts.first else { return false }
+        guard workout.id == firstWorkout.id else { return false }
+        
+        // 1 Hour window
+        return Date().timeIntervalSince(workout.date) < 3600
     }
 }
 

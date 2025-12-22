@@ -29,6 +29,7 @@ struct SocialFeedView: View {
                                         reactionState: viewModel.reactionState(for: post),
                                         onReaction: { viewModel.react(to: post, with: $0) }
                                     )
+                                    .glowPulse(isActive: isMostRecent(post), color: .orange)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -45,19 +46,28 @@ struct SocialFeedView: View {
         }
     }
     
+    // Check if it's the top post AND recent (<1 hour)
+    func isMostRecent(_ post: SocialPost) -> Bool {
+        guard let firstPost = viewModel.displayPosts.first else { return false }
+        guard post.id == firstPost.id else { return false }
+        
+        // 1 Hour window
+        return Date().timeIntervalSince(post.date) < 3600
+    }
+    
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             Image(systemName: "person.2.slash")
-                .font(.system(size: 50))
-                .foregroundColor(.gray)
+            .font(.system(size: 50))
+            .foregroundColor(.gray)
             Text("No hay actividad reciente")
-                .font(.headline)
-                .foregroundColor(.white)
+            .font(.headline)
+            .foregroundColor(.white)
             Text("Sigue a otros aventureros para ver su progreso aquí.")
-                .font(.subheadline)
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+            .font(.subheadline)
+            .foregroundColor(.gray)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal)
         }
     }
 }

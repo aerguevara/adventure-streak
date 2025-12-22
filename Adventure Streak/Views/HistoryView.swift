@@ -40,6 +40,8 @@ struct HistoryView: View {
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
+                    .padding(.vertical, 4) // Add breathing room for the glow
+                    .glowPulse(isActive: isMostRecent(activity), color: .orange)
                 }
             }
             .navigationTitle("History")
@@ -57,6 +59,18 @@ struct HistoryView: View {
         formatter.allowedUnits = [.hour, .minute]
         formatter.unitsStyle = .abbreviated
         return formatter.string(from: duration) ?? ""
+    }
+    
+    func isMostRecent(_ activity: ActivitySession) -> Bool {
+        guard let firstActivity = viewModel.activities.first else { return false }
+        // Match the first activity in the list
+        guard activity.id == firstActivity.id else { return false }
+        
+        // Highlight if it happened within the last hour
+        // If user wants to see it "when I finish", assume it's fresh.
+        // If they open it 3 days later, maybe don't highlight? User said "no veo ese realce", implies confusion.
+        // Let's set 1 Hour window for "Glow".
+        return Date().timeIntervalSince(activity.endDate) < 3600
     }
     
     func missionColor(for rarity: MissionRarity) -> Color {
