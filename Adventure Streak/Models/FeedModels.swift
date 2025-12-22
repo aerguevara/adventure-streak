@@ -14,6 +14,30 @@ enum FeedEventType: String, Codable {
     case territoryLost = "territory_lost"
     case territoryRecaptured = "territory_recaptured"
     case distanceRecord = "distance_record"
+    
+    // Custom decoding to support both snake_case (legacy/backend) and camelCase (iOS generated)
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawString = try container.decode(String.self)
+        
+        switch rawString {
+        case "weekly_summary", "weeklySummary": self = .weeklySummary
+        case "streak_maintained", "streakMaintained": self = .streakMaintained
+        case "new_badge", "newBadge": self = .newBadge
+        case "level_up", "levelUp": self = .levelUp
+        case "territory_conquered", "territoryConquered": self = .territoryConquered
+        case "territory_lost", "territoryLost": self = .territoryLost
+        case "territory_recaptured", "territoryRecaptured": self = .territoryRecaptured
+        case "distance_record", "distanceRecord": self = .distanceRecord
+        default:
+            // Try to initialize with raw value, otherwise throw
+            if let type = FeedEventType(rawValue: rawString) {
+                self = type
+            } else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot initialize FeedEventType from invalid String value \(rawString)")
+            }
+        }
+    }
 }
 
 enum BadgeRarity: String, Codable {

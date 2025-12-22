@@ -22,6 +22,8 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
     var ownerUserId: String?
     var ownerDisplayName: String?
     var ownerUploadedAt: Date?
+    // NEW: Track which activity claimed this cell (critical for race condition handling)
+    var activityId: String?
     
     var centerCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: centerLatitude, longitude: centerLongitude)
@@ -33,7 +35,7 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
     
     // NEW: Explicit CodingKeys required for custom decoding
     enum CodingKeys: String, CodingKey {
-        case id, centerLatitude, centerLongitude, boundary, lastConqueredAt, expiresAt, ownerUserId, ownerDisplayName, ownerUploadedAt
+        case id, centerLatitude, centerLongitude, boundary, lastConqueredAt, expiresAt, ownerUserId, ownerDisplayName, ownerUploadedAt, activityId
     }
     
     // NEW: Custom decoding to handle legacy data without 'boundary'
@@ -47,6 +49,7 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
         ownerUserId = try container.decodeIfPresent(String.self, forKey: .ownerUserId)
         ownerDisplayName = try container.decodeIfPresent(String.self, forKey: .ownerDisplayName)
         ownerUploadedAt = try container.decodeIfPresent(Date.self, forKey: .ownerUploadedAt)
+        activityId = try container.decodeIfPresent(String.self, forKey: .activityId)
         
         // Try to decode boundary, or calculate it if missing (migration)
         if let storedBoundary = try container.decodeIfPresent([TerritoryPoint].self, forKey: .boundary) {
@@ -67,7 +70,7 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
     }
     
     // Default init for creating new cells
-    init(id: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], lastConqueredAt: Date, expiresAt: Date, ownerUserId: String? = nil, ownerDisplayName: String? = nil, ownerUploadedAt: Date? = nil) {
+    init(id: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], lastConqueredAt: Date, expiresAt: Date, ownerUserId: String? = nil, ownerDisplayName: String? = nil, ownerUploadedAt: Date? = nil, activityId: String? = nil) {
         self.id = id
         self.centerLatitude = centerLatitude
         self.centerLongitude = centerLongitude
@@ -77,5 +80,6 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
         self.ownerUserId = ownerUserId
         self.ownerDisplayName = ownerDisplayName
         self.ownerUploadedAt = ownerUploadedAt
+        self.activityId = activityId
     }
 }

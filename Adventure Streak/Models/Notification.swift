@@ -10,6 +10,7 @@ enum NotificationType: String, Codable {
     case achievement
     case territory_conquered
     case territory_stolen
+    case territory_stolen_success
     case territory_defended
     case workout_import
 }

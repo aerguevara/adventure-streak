@@ -148,6 +148,8 @@ struct NotificationRow: View {
             return "¡Has conquistado nuevos territorios!"
         case .territory_stolen:
             return "¡Cuidado! Alguien te ha robado un territorio"
+        case .territory_stolen_success:
+            return "¡Has robado territorios enemigos!"
         case .territory_defended:
             return "Has defendido tus territorios con éxito"
         case .workout_import:
@@ -158,8 +160,9 @@ struct NotificationRow: View {
     private func systemIcon(for type: NotificationType) -> String {
         switch type {
         case .achievement: return "trophy.fill"
-        case .territory_conquered: return "map.fill"
+        case .territory_conquered: return "flag.fill" // Updated from map.fill
         case .territory_stolen: return "exclamationmark.triangle.fill"
+        case .territory_stolen_success: return "flag.2.crossed.fill"
         case .territory_defended: return "shield.fill"
         case .workout_import: return "arrow.down.doc.fill"
         default: return "bell.fill"
@@ -171,6 +174,7 @@ struct NotificationRow: View {
         case .achievement: return .yellow
         case .territory_conquered: return .green
         case .territory_stolen: return .red
+        case .territory_stolen_success: return .orange
         case .territory_defended: return .blue
         case .workout_import: return .purple
         default: return .gray

@@ -71,6 +71,11 @@ class UserRepository: ObservableObject {
                     data["joinedAt"] = FieldValue.serverTimestamp()
                 }
 
+                // ALWAYS update email if we have one and it's missing or different (implicitly by merge)
+                if let email = user.email, !email.isEmpty {
+                    data["email"] = email
+                }
+
                 let existingName = (document.get("displayName") as? String)?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 

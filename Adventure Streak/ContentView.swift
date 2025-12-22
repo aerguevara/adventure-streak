@@ -43,7 +43,7 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemBackground))
                 } else if !authService.isAuthenticated {
-                    LoginView()
+                    PremiumLoginView()
                 } else if !onboardingViewModel.hasCompletedOnboarding {
                     OnboardingView(viewModel: onboardingViewModel)
                 } else {

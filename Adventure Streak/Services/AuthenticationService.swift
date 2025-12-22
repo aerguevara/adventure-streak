@@ -3,6 +3,7 @@ import AuthenticationServices
 import CryptoKit
 import FirebaseCore
 import FirebaseAuth
+import GoogleSignIn
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
@@ -125,12 +126,107 @@ class AuthenticationService: NSObject, ObservableObject {
     }
     
     func signInWithGoogle(completion: @escaping (Bool, Error?) -> Void) {
-        // Placeholder for Google Sign In
-        // Requires GoogleSignIn dependency
-        print("Google Sign In requested - Implementation pending dependency check")
-        // Simulate error for now or success if testing
-        let error = NSError(domain: "AdventureStreak", code: 404, userInfo: [NSLocalizedDescriptionKey: "Google Sign-In not fully configured yet."])
-        completion(false, error)
+        guard let clientID = FirebaseApp.app()?.options.clientID else {
+            completion(false, NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "No Client ID found in Firebase config"]))
+            return
+        }
+        
+        // Configure Google Sign In
+        let config = GIDConfiguration(clientID: clientID)
+        GIDSignIn.sharedInstance.configuration = config
+        
+        // Find the presenting window scene
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            completion(false, NSError(domain: "Auth", code: -2, userInfo: [NSLocalizedDescriptionKey: "No Root ViewController found"]))
+            return
+        }
+        
+        // Start the sign in flow
+        GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController) { [weak self] result, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("Error during Google Sign In: \(error.localizedDescription)")
+                completion(false, error)
+                return
+            }
+            
+            guard let user = result?.user,
+                  let idToken = user.idToken?.tokenString else {
+                completion(false, NSError(domain: "Auth", code: -3, userInfo: [NSLocalizedDescriptionKey: "Failed to get Google ID Token"]))
+                return
+            }
+            
+            let accessToken = user.accessToken.tokenString
+            let credential = GoogleAuthProvider.credential(withIDToken: idToken,
+                                                           accessToken: accessToken)
+            
+            // Authenticate with Firebase
+            Auth.auth().signIn(with: credential) { authResult, error in
+                if let error = error {
+                    print("Firebase Google Auth Error: \(error.localizedDescription)")
+                    completion(false, error)
+                    return
+                }
+                
+                guard let firebaseUser = authResult?.user else { return }
+                
+                Task { @MainActor in
+                    self.isAuthenticated = true
+                    self.userId = firebaseUser.uid
+                    self.userEmail = firebaseUser.email
+                    
+                    // Name Resolution
+                    let googleName = user.profile?.name
+                    let resolvedName = googleName ?? AuthenticationService.resolveDisplayName(for: firebaseUser) ?? "Aventurero"
+                    self.userName = resolvedName
+                    
+                    // Avatar Resolution (High Res if possible)
+                    if let profileURL = user.profile?.imageURL(withDimension: 200) {
+                        self.userAvatarURL = profileURL.absoluteString
+                    }
+                    
+                    NotificationService.shared.syncCachedFCMToken(for: firebaseUser.uid)
+                    NotificationService.shared.refreshFCMTokenIfNeeded(for: firebaseUser.uid)
+                    self.observeForceLogout(for: firebaseUser.uid)
+                    
+                    // Sync User Data
+                    UserRepository.shared.fetchUser(userId: firebaseUser.uid) { [weak self] remoteUser in
+                        guard let self = self else { return }
+                        
+                        let initialXP = 0
+                        let initialLevel = 1
+                        
+                        // Use remote name if it exists and is not empty, otherwise use Google name
+                        let finalName = (remoteUser?.displayName?.isEmpty == false) ? remoteUser!.displayName! : resolvedName
+                        self.userName = finalName
+                        
+                        // Sync with backend
+                        UserRepository.shared.syncUser(user: firebaseUser, name: finalName, initialXP: initialXP, initialLevel: initialLevel)
+                        
+                        // Update Gamification
+                        let isNewOrDummy = remoteUser == nil || (remoteUser?.xp == 0 && remoteUser?.joinedAt == nil)
+                        if isNewOrDummy {
+                            GamificationService.shared.syncState(xp: initialXP, level: initialLevel)
+                        } else if let remoteUser = remoteUser {
+                            GamificationService.shared.syncState(xp: remoteUser.xp, level: remoteUser.level)
+                        }
+                        
+                        // Sync Activities
+                        Task {
+                            self.isSyncingData = true
+                            await ActivityRepository.shared.ensureRemoteParity(userId: firebaseUser.uid, territoryStore: TerritoryStore.shared)
+                            self.isSyncingData = false
+                            
+                            ActivityStore.shared.startObserving(userId: firebaseUser.uid)
+                        }
+                        
+                        completion(true, nil)
+                    }
+                }
+            }
+        }
     }
     
     func signOut() {
