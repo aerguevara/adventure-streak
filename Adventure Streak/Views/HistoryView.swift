@@ -44,12 +44,12 @@ struct HistoryView: View {
                     .glowPulse(isActive: isMostRecent(activity), color: .orange)
                 }
             }
-            .navigationTitle("History")
+            .navigationTitle("Historial")
             .onAppear {
                 viewModel.loadActivities()
             }
             .alert(isPresented: $viewModel.showAlert) {
-                Alert(title: Text("Import Status"), message: Text(viewModel.alertMessage), dismissButton: .default(Text("OK")))
+                Alert(title: Text("Estado de importación"), message: Text(viewModel.alertMessage), dismissButton: .default(Text("OK")))
             }
         }
     }
@@ -103,14 +103,14 @@ struct ActivityDetailView: View {
                 }
                 
                 HStack {
-                    StatBox(title: "Distance", value: String(format: "%.2f km", activity.distanceMeters / 1000))
-                    StatBox(title: "Duration", value: formatDuration(activity.durationSeconds))
+                    StatBox(title: "Distancia", value: String(format: "%.2f km", activity.distanceMeters / 1000))
+                    StatBox(title: "Duración", value: formatDuration(activity.durationSeconds))
                 }
                 
                 HStack {
                     let baseName = activity.workoutName ?? activity.activityType.displayName
-                    StatBox(title: "Type", value: baseName)
-                    StatBox(title: "Date", value: activity.startDate.formatted(date: .numeric, time: .omitted))
+                    StatBox(title: "Tipo", value: baseName)
+                    StatBox(title: "Fecha", value: activity.startDate.formatted(date: .numeric, time: .omitted))
                 }
                 
                 // Missions Section

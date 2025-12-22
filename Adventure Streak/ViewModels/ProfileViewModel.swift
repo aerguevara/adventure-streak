@@ -16,7 +16,7 @@ import UIKit
 @MainActor
 class ProfileViewModel: ObservableObject {
     // MARK: - Published Properties
-    @Published var userDisplayName: String = "Adventurer"
+    @Published var userDisplayName: String = "Aventurero"
     @Published var avatarURL: URL? = nil
     @Published var level: Int = 1
     @Published var totalXP: Int = 0
@@ -32,13 +32,13 @@ class ProfileViewModel: ObservableObject {
     // MARK: - Computed Properties
     var userTitle: String {
         switch level {
-        case 1...5: return "Rookie Scout"
-        case 6...10: return "Pathfinder"
-        case 11...20: return "Trailblazer"
-        case 21...30: return "Explorer"
-        case 31...50: return "Conqueror"
-        case 51...99: return "Legend"
-        default: return "Novice"
+        case 1...5: return "Explorador Novato"
+        case 6...10: return "Rastreador"
+        case 11...20: return "Pionero"
+        case 21...30: return "Explorador"
+        case 31...50: return "Conquistador"
+        case 51...99: return "Leyenda"
+        default: return "Novato"
         }
     }
     

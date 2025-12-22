@@ -15,7 +15,7 @@ struct NextGoalSuggestion: Identifiable {
         if activityType == .indoor {
             return "\(activityType.displayName) (\(distanceText))"
         }
-        return "\(activityType.displayName) outdoor (\(distanceText))"
+        return "\(activityType.displayName) al aire libre (\(distanceText))"
     }
     
     var detailLabel: String {
@@ -149,7 +149,7 @@ struct RankingView: View {
     
     private var headerView: some View {
         VStack(spacing: 16) {
-            Text("Weekly Leaderboard")
+            Text("Ranking Semanal")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -167,8 +167,8 @@ struct RankingView: View {
                     }
                 )
             
-            Picker("Scope", selection: $viewModel.selectedScope) {
-                Text("This Week").tag(RankingScope.weekly)
+            Picker("Alcance", selection: $viewModel.selectedScope) {
+                Text("Esta Semana").tag(RankingScope.weekly)
                 Text("Global").tag(RankingScope.global)
             }
             .pickerStyle(SegmentedPickerStyle())
@@ -188,10 +188,10 @@ struct RankingView: View {
             Image(systemName: "list.number")
                 .font(.system(size: 50))
                 .foregroundColor(.gray)
-            Text("Not enough data yet")
+            Text("Aún no hay suficientes datos")
                 .font(.headline)
                 .foregroundColor(.white)
-            Text("Be the first to claim your spot on the leaderboard!")
+            Text("¡Sé el primero en aparecer en la clasificación!")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -205,10 +205,10 @@ struct RankingView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 40))
                 .foregroundColor(.orange)
-            Text("Something went wrong")
+            Text("Algo salió mal")
                 .font(.headline)
                 .foregroundColor(.white)
-            Button("Retry") {
+            Button("Reintentar") {
                 viewModel.fetchRanking()
             }
             .buttonStyle(.bordered)
@@ -415,7 +415,7 @@ struct RankingCard: View {
                             .foregroundColor(.white)
                         
                         if entry.isCurrentUser {
-                            Text("(You)")
+                            Text("(Tú)")
                                 .font(.caption2)
                                 .foregroundColor(Color(hex: "4C6FFF"))
                         }
@@ -498,9 +498,9 @@ struct RankingCard: View {
     
     var trendText: String {
         switch entry.trend {
-        case .up: return "Rising"
-        case .down: return "Falling"
-        case .neutral: return "Stable"
+        case .up: return "Subiendo"
+        case .down: return "Bajando"
+        case .neutral: return "Estable"
         }
     }
     

@@ -911,17 +911,17 @@ class WorkoutsViewModel: ObservableObject {
     
     nonisolated private func fallbackWorkoutName(for type: HKWorkoutActivityType) -> String {
         switch type {
-        case .running: return "Running"
-        case .walking: return "Walking"
-        case .cycling: return "Cycling"
-        case .hiking: return "Hiking"
-        case .traditionalStrengthTraining: return "Traditional Strength Training"
-        case .functionalStrengthTraining: return "Functional Strength Training"
+        case .running: return "Correr"
+        case .walking: return "Caminar"
+        case .cycling: return "Ciclismo"
+        case .hiking: return "Senderismo"
+        case .traditionalStrengthTraining: return "Fuerza Tradicional"
+        case .functionalStrengthTraining: return "Fuerza Funcional"
         case .highIntensityIntervalTraining: return "HIIT"
-        case .flexibility: return "Flexibility"
+        case .flexibility: return "Flexibilidad"
         case .yoga: return "Yoga"
         case .pilates: return "Pilates"
-        default: return "Workout"
+        default: return "Entrenamiento"
         }
     }
 }

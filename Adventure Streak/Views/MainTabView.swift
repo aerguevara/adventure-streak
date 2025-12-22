@@ -96,13 +96,13 @@ struct MainTabView: View {
                 .padding(.bottom, 24)
             }
             .tabItem {
-                Label("Map", systemImage: "map")
+                Label("Mapa", systemImage: "map")
             }
             
             // NEW: Added for multiplayer conquest feature
             SocialFeedView()
             .tabItem {
-                Label("Feed", systemImage: "person.2.fill")
+                Label("Social", systemImage: "person.2.fill")
             }
             
             NavigationView {

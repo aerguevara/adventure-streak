@@ -34,7 +34,7 @@ struct BadgesView: View {
             }
             .padding(.vertical)
         }
-        .navigationTitle("Badges & Achievements")
+        .navigationTitle("Medallas y Logros")
         .background(Color(UIColor.systemGroupedBackground))
         .sheet(item: $viewModel.selectedBadge) { badge in
             BadgeDetailView(badge: badge)
@@ -46,7 +46,7 @@ struct BadgesView: View {
     
     private var summaryView: some View {
         VStack(spacing: 8) {
-            Text("Your Achievements")
+            Text("Tus Logros")
                 .font(.headline)
                 .foregroundColor(.secondary)
             
@@ -54,7 +54,7 @@ struct BadgesView: View {
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(.primary)
             
-            Text("Badges Unlocked")
+            Text("Medallas Desbloqueadas")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -70,9 +70,9 @@ struct BadgesView: View {
             Image(systemName: "star.slash")
                 .font(.system(size: 50))
                 .foregroundColor(.gray)
-            Text("No badges yet")
+            Text("Aún no tienes medallas")
                 .font(.headline)
-            Text("Start exploring to unlock your first achievements!")
+            Text("¡Empieza a explorar para desbloquear tus primeros logros!")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -150,7 +150,7 @@ struct BadgeDetailView: View {
                         .fontWeight(.bold)
                     
                     if badge.isUnlocked {
-                        Text("UNLOCKED")
+                        Text("DESBLOQUEADO")
                             .font(.caption)
                             .fontWeight(.bold)
                             .padding(.horizontal, 12)
@@ -159,7 +159,7 @@ struct BadgeDetailView: View {
                             .foregroundColor(.green)
                             .cornerRadius(8)
                     } else {
-                        Text("LOCKED")
+                        Text("BLOQUEADO")
                             .font(.caption)
                             .fontWeight(.bold)
                             .padding(.horizontal, 12)
@@ -172,7 +172,7 @@ struct BadgeDetailView: View {
                 
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Description")
+                        Text("Descripción")
                             .font(.headline)
                         Text(badge.longDescription)
                             .font(.body)
@@ -182,7 +182,7 @@ struct BadgeDetailView: View {
                     Divider()
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("How to unlock")
+                        Text("Cómo desbloquear")
                             .font(.headline)
                         Text(badge.shortDescription) // Using short description as the condition
                             .font(.body)
@@ -199,7 +199,7 @@ struct BadgeDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Close") {
+                    Button("Cerrar") {
                         presentationMode.wrappedValue.dismiss()
                     }
                 }

@@ -80,8 +80,23 @@ struct SocialPostCard: View {
     @State private var pendingReaction: ReactionType? = nil
 
     private var title: String {
-        let typeName = post.activityData.activityType.rawValue.capitalized
+        let typeName = translateActivityType(post.activityData.activityType.rawValue)
         return "\(typeName) · +\(post.activityData.xpEarned) XP"
+    }
+    
+    // Helper to translate activity type
+    private func translateActivityType(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "run", "running": return "Correr"
+        case "walk", "walking": return "Caminar"
+        case "bike", "cycling": return "Ciclismo"
+        case "hike", "hiking": return "Senderismo"
+        case "workout": return "Entrenamiento"
+        case "yoga": return "Yoga"
+        case "pilates": return "Pilates"
+        case "hiit": return "HIIT"
+        default: return raw.capitalized
+        }
     }
 
     private var userReaction: ReactionType? {
@@ -349,7 +364,8 @@ struct SocialPostCard: View {
 
     private func timeAgo(from date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
+        formatter.unitsStyle = .full
+        formatter.locale = Locale(identifier: "es_ES")
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
@@ -700,7 +716,8 @@ struct SocialPostDetailView: View {
     
     private func timeAgo(from date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
+        formatter.unitsStyle = .full
+        formatter.locale = Locale(identifier: "es_ES")
         return formatter.localizedString(for: date, relativeTo: Date())
     }
     

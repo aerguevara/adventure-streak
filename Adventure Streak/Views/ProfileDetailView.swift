@@ -65,13 +65,13 @@ struct ProfileDetailView: View {
                                 .foregroundColor(.white)
                             
                             HStack(spacing: 8) {
-                                Label("Level \(profileViewModel.level)", systemImage: "bolt.fill")
+                                Label("Nivel \(profileViewModel.level)", systemImage: "bolt.fill")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
                                     .foregroundColor(Color(hex: "A259FF"))
                                 
                                 if profileViewModel.streakWeeks > 0 {
-                                    Label("\(profileViewModel.streakWeeks) week streak", systemImage: "flame.fill")
+                                    Label("\(profileViewModel.streakWeeks) semanas racha", systemImage: "flame.fill")
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundColor(.orange)
@@ -92,10 +92,10 @@ struct ProfileDetailView: View {
                     
                     // Stats Grid
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                        StatCard(title: "Total XP", value: "\(profileViewModel.totalXP)", icon: "sparkles", color: .purple)
-                        StatCard(title: "Total Zones", value: "\(profileViewModel.totalCellsConquered)", icon: "map.fill", color: .blue)
-                        StatCard(title: "This Week", value: "+\(profileViewModel.territoriesCount)", icon: "figure.run", color: .green)
-                        StatCard(title: "Activities", value: "\(profileViewModel.activitiesCount)", icon: "bolt.horizontal.fill", color: .yellow)
+                        StatCard(title: "XP Total", value: "\(profileViewModel.totalXP)", icon: "sparkles", color: .purple)
+                        StatCard(title: "Zonas Totales", value: "\(profileViewModel.totalCellsConquered)", icon: "map.fill", color: .blue)
+                        StatCard(title: "Esta Semana", value: "+\(profileViewModel.territoriesCount)", icon: "figure.run", color: .green)
+                        StatCard(title: "Actividades", value: "\(profileViewModel.activitiesCount)", icon: "bolt.horizontal.fill", color: .yellow)
                     }
                     .padding(.horizontal)
                     

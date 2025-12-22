@@ -11,14 +11,14 @@ struct NotificationsView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text("Notifications")
+                    Text("Notificaciones")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                     
                     Spacer()
                     
                     if service.unreadCount > 0 {
-                        Button("Mark all as read") {
+                        Button("Marcar todo como leído") {
                             service.markAllAsRead()
                         }
                         .font(.subheadline)
@@ -40,7 +40,7 @@ struct NotificationsView: View {
                         Image(systemName: "bell.slash")
                             .font(.system(size: 50))
                             .foregroundColor(.gray)
-                        Text("No notifications yet")
+                        Text("Aún no hay notificaciones")
                             .foregroundColor(.gray)
                     }
                     .frame(maxHeight: .infinity)
@@ -186,6 +186,7 @@ extension Date {
     func timeAgoDisplay() -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
+        formatter.locale = Locale(identifier: "es_ES")
         return formatter.localizedString(for: self, relativeTo: Date())
     }
 }

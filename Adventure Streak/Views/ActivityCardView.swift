@@ -379,7 +379,8 @@ struct ActivityCardView: View {
 
     private func timeAgo(from date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
+        formatter.unitsStyle = .full
+        formatter.locale = Locale(identifier: "es_ES")
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 

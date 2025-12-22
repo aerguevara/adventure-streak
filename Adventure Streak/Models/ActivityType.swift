@@ -12,12 +12,12 @@ enum ActivityType: String, Codable, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .run: return "Run"
-        case .walk: return "Walk"
-        case .bike: return "Bike"
-        case .hike: return "Hiking"
-        case .otherOutdoor: return "Outdoor"
-        case .indoor: return "Indoor"
+        case .run: return "Correr"
+        case .walk: return "Caminar"
+        case .bike: return "Ciclismo"
+        case .hike: return "Senderismo"
+        case .otherOutdoor: return "Aire Libre"
+        case .indoor: return "Interior"
         }
     }
     

@@ -204,7 +204,7 @@ struct WorkoutsView: View {
             // Level & Streak Header
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("LEVEL \(profileViewModel.level)")
+                    Text("NIVEL \(profileViewModel.level)")
                         .font(.system(size: 14, weight: .heavy, design: .monospaced))
                         .foregroundColor(.gray)
                         .tracking(1)
@@ -220,7 +220,7 @@ struct WorkoutsView: View {
                 HStack(spacing: 6) {
                     Text("🔥")
                         .font(.title3)
-                    Text("\(profileViewModel.streakWeeks) weeks")
+                    Text("\(profileViewModel.streakWeeks) semanas")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                 }
@@ -259,7 +259,7 @@ struct WorkoutsView: View {
                 .frame(height: 12)
                 
                 HStack {
-                    Text("Current Progress")
+                    Text("Progreso Actual")
                         .font(.caption)
                         .foregroundColor(.gray)
                     Spacer()
@@ -292,7 +292,7 @@ struct WorkoutsView: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Territory Control")
+                Text("Control de Territorio")
                     .font(.subheadline)
                     .foregroundColor(.gray)
                 
@@ -301,7 +301,7 @@ struct WorkoutsView: View {
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                     
-                    Text("zones")
+                    Text("zonas")
                         .font(.caption)
                         .foregroundColor(.gray)
                         .padding(.bottom, 4)
@@ -317,7 +317,7 @@ struct WorkoutsView: View {
                         .font(.headline)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                    Text("This Week")
+                    Text("Esta Semana")
                         .font(.caption2)
                         .foregroundColor(.gray)
                 }
@@ -331,7 +331,7 @@ struct WorkoutsView: View {
                         .font(.headline)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                    Text("Map")
+                    Text("Mapa Global")
                         .font(.caption2)
                         .foregroundColor(.gray)
                 }
@@ -347,14 +347,14 @@ struct WorkoutsView: View {
     var achievementsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Recent Achievements")
+                Text("Logros Recientes")
                     .font(.headline)
                     .foregroundColor(.white)
                 
                 Spacer()
                 
                 NavigationLink(destination: BadgesView()) {
-                    Text("View all")
+                    Text("Ver todo")
                         .font(.subheadline)
                         .foregroundColor(Color(hex: "A259FF"))
                 }
@@ -362,7 +362,7 @@ struct WorkoutsView: View {
             .padding(.horizontal)
             
             if badgesViewModel.badges.isEmpty {
-                Text("No achievements yet. Keep exploring!")
+                Text("Aún no tienes logros. ¡Sigue explorando!")
                     .font(.subheadline)
                     .foregroundColor(.gray)
                     .padding(.horizontal)
@@ -382,7 +382,7 @@ struct WorkoutsView: View {
     // MARK: - E) Feed
     var feedSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Activity Feed")
+            Text("Actividad Reciente")
                 .font(.headline)
                 .foregroundColor(.white)
                 .padding(.horizontal)
@@ -394,7 +394,7 @@ struct WorkoutsView: View {
                     Image(systemName: "figure.run")
                         .font(.largeTitle)
                         .foregroundColor(.gray)
-                    Text("No activities yet")
+                    Text("Aún no hay actividad")
                         .foregroundColor(.gray)
                 }
                 .frame(maxWidth: .infinity)
