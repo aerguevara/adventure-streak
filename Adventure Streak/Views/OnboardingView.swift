@@ -27,6 +27,14 @@ struct OnboardingView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
                 
+                if viewModel.currentStep == .discovery {
+                    ActivityDiscoveryView(
+                        activities: viewModel.discoveredActivities,
+                        isImporting: viewModel.isImporting
+                    )
+                    .transition(.opacity)
+                }
+                
                 Spacer()
                 
                 VStack(spacing: 12) {
@@ -57,27 +65,37 @@ struct OnboardingView: View {
                         Button(action: {
                             handleAction(for: viewModel.currentStep)
                         }) {
-                            Text(buttonTitle(for: viewModel.currentStep))
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(
-                                    LinearGradient(
-                                        colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .cornerRadius(12)
+                            if viewModel.isImporting {
+                                ProgressView()
+                                    .tint(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                            } else {
+                                Text(buttonTitle(for: viewModel.currentStep))
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                            }
                         }
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .cornerRadius(12)
+                        .disabled(viewModel.isImporting)
                         
-                        Button("Saltar este paso") {
-                            viewModel.advance()
+                        if viewModel.currentStep != .discovery {
+                            Button("Saltar este paso") {
+                                viewModel.advance()
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundColor(Color(hex: "4C6FFF"))
+                            .padding(.top, 4)
                         }
-                        .font(.subheadline.bold())
-                        .foregroundColor(Color(hex: "4C6FFF"))
-                        .padding(.top, 4)
                     }
                 }
                 .padding(.horizontal)
@@ -96,6 +114,8 @@ struct OnboardingView: View {
             viewModel.requestLocation()
         case .notifications:
             viewModel.requestNotifications()
+        case .discovery:
+            viewModel.importActivities()
         case .done:
             break
         }
@@ -107,6 +127,7 @@ struct OnboardingView: View {
         case .health: return "Permiso de Salud"
         case .location: return "Permiso de Ubicación"
         case .notifications: return "Notificaciones"
+        case .discovery: return "Entrenos detectados"
         case .done: return "¡Listo!"
         }
     }
@@ -121,6 +142,8 @@ struct OnboardingView: View {
             return "Usamos tu ubicación para trazar rutas y asignar territorios mientras entrenas."
         case .notifications:
             return "Te avisaremos cuando detectemos nuevos entrenos y para recordarte tus streaks."
+        case .discovery:
+            return "Hemos encontrado \(viewModel.discoveredActivities.count) entrenos con ruta GPS. Al continuar, se importarán para reclamar tus territorios y XP."
         case .done:
             return "Permisos configurados. ¡Empecemos la aventura!"
         }
@@ -132,6 +155,7 @@ struct OnboardingView: View {
         case .health: return "Permitir Salud"
         case .location: return "Permitir Ubicación"
         case .notifications: return "Permitir Notificaciones"
+        case .discovery: return "Importar Entrenos"
         case .done: return "Continuar"
         }
     }
@@ -142,6 +166,7 @@ struct OnboardingView: View {
         case .health: return "heart.circle.fill"
         case .location: return "location.circle.fill"
         case .notifications: return "bell.circle.fill"
+        case .discovery: return "map.circle.fill"
         case .done: return "checkmark.circle.fill"
         }
     }

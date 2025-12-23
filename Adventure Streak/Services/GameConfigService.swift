@@ -10,6 +10,7 @@ struct GameConfig: Equatable {
     var territoryExpirationDays: Int
     var routeExpectedBundles: [String]
     var routeOptionalBundles: [String]
+    var onboardingImportLimit: Int
     
     static let `default`: GameConfig = {
         let mainId = Bundle.main.bundleIdentifier ?? "com.adventurestreak"
@@ -19,7 +20,8 @@ struct GameConfig: Equatable {
             workoutLookbackDays: 7,
             territoryExpirationDays: 7,
             routeExpectedBundles: ["com.apple.", mainId, watchId],
-            routeOptionalBundles: []
+            routeOptionalBundles: [],
+            onboardingImportLimit: 10
         )
     }()
     
@@ -37,7 +39,8 @@ struct GameConfig: Equatable {
             workoutLookbackDays: clampedLookbackDays,
             territoryExpirationDays: clampedTerritoryExpiration,
             routeExpectedBundles: routeExpectedBundles,
-            routeOptionalBundles: routeOptionalBundles
+            routeOptionalBundles: routeOptionalBundles,
+            onboardingImportLimit: onboardingImportLimit
         )
     }
     
@@ -137,12 +140,18 @@ final class GameConfigService: ObservableObject {
                 let optionalBundles = data["routeOptionalBundles"] as? [String]
                     ?? loaded.routeOptionalBundles
                 
+                let importLimitSource = data["onboardingImportLimit"]
+                let importLimit = (importLimitSource as? Int)
+                    ?? (importLimitSource as? NSNumber)?.intValue
+                    ?? loaded.onboardingImportLimit
+                
                 loaded = GameConfig(
                     loadHistoricalWorkouts: loadHistorical,
                     workoutLookbackDays: lookback,
                     territoryExpirationDays: expiration,
                     routeExpectedBundles: expectedBundles,
-                    routeOptionalBundles: optionalBundles
+                    routeOptionalBundles: optionalBundles,
+                    onboardingImportLimit: importLimit
                 )
             }
         } catch {

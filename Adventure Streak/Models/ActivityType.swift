@@ -41,3 +41,54 @@ enum ActivityType: String, Codable, CaseIterable, Identifiable {
         }
     }
 }
+
+import HealthKit
+
+extension ActivityType {
+    init(hkType: HKWorkoutActivityType, isIndoor: Bool = false) {
+        if isIndoor {
+            self = .indoor
+            return
+        }
+        
+        switch hkType {
+        case .running: self = .run
+        case .walking: self = .walk
+        case .cycling: self = .bike
+        case .hiking: self = .hike
+        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
+            self = .indoor
+        default: self = .otherOutdoor
+        }
+    }
+}
+
+extension HKWorkout {
+    var activityType: ActivityType {
+        let isIndoor = (metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
+        return ActivityType(hkType: workoutActivityType, isIndoor: isIndoor)
+    }
+    
+    var workoutName: String {
+        if let title = metadata?["HKMetadataKeyWorkoutTitle"] as? String, !title.isEmpty {
+            return title
+        }
+        if let brand = metadata?[HKMetadataKeyWorkoutBrandName] as? String, !brand.isEmpty {
+            return brand
+        }
+        
+        switch workoutActivityType {
+        case .running: return "Correr"
+        case .walking: return "Caminar"
+        case .cycling: return "Ciclismo"
+        case .hiking: return "Senderismo"
+        case .traditionalStrengthTraining: return "Fuerza Tradicional"
+        case .functionalStrengthTraining: return "Fuerza Funcional"
+        case .highIntensityIntervalTraining: return "HIIT"
+        case .flexibility: return "Flexibilidad"
+        case .yoga: return "Yoga"
+        case .pilates: return "Pilates"
+        default: return "Entrenamiento"
+        }
+    }
+}
