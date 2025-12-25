@@ -194,7 +194,9 @@ class NotificationService: ObservableObject {
         senderName: String = "Adventure Streak",
         senderAvatarURL: String? = nil,
         reactionType: String? = nil,
-        activityId: String? = nil
+        activityId: String? = nil,
+        message: String? = nil,
+        locationLabel: String? = nil
     ) {
         #if canImport(FirebaseFirestore)
         let notification = AppNotification(
@@ -205,6 +207,8 @@ class NotificationService: ObservableObject {
             type: type,
             reactionType: reactionType,
             activityId: activityId,
+            message: message,
+            locationLabel: locationLabel,
             timestamp: Date(),
             isRead: false
         )
