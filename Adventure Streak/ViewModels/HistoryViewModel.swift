@@ -191,7 +191,10 @@ class HistoryViewModel: ObservableObject {
                                     }
                                     
                                 case .emptySeries:
-                                    if requiresRoute {
+                                    let gracePeriod: TimeInterval = 30 * 60
+                                    let timeSinceEnd = Date().timeIntervalSince(workout.endDate)
+                                    
+                                    if requiresRoute && timeSinceEnd < gracePeriod {
                                         await MainActor.run {
                                             self.handlePendingRoute(
                                                 workout: workout,
@@ -204,6 +207,10 @@ class HistoryViewModel: ObservableObject {
                                             )
                                         }
                                         return
+                                    }
+                                    
+                                    if requiresRoute {
+                                        print("⚠️ Pending route (history) -> Grace period expired for \(workout.uuid). Importing without GPS.")
                                     }
                                     
                                     pendingStore.remove(workoutId: workout.uuid)
@@ -224,7 +231,12 @@ class HistoryViewModel: ObservableObject {
                                     }
                                     
                                 case .error(let error):
-                                    if requiresRoute {
+                                    let gracePeriod: TimeInterval = 45 * 60 
+                                    let timeSinceEnd = Date().timeIntervalSince(workout.endDate)
+                                    let existing = pendingStore.find(workoutId: workout.uuid)
+                                    let retryCount = existing?.retryCount ?? 0
+                                    
+                                    if requiresRoute && timeSinceEnd < gracePeriod && retryCount < 3 {
                                         await MainActor.run {
                                             self.handlePendingRoute(
                                                 workout: workout,
@@ -239,8 +251,11 @@ class HistoryViewModel: ObservableObject {
                                         return
                                     }
                                     
+                                    if requiresRoute {
+                                        print("⚠️ Pending route (history) -> Error fallback (grace/retries expired) for \(workout.uuid): \(error.localizedDescription)")
+                                    }
+                                    
                                     pendingStore.remove(workoutId: workout.uuid)
-                                    print("⚠️ Route fetch error for optional source \(bundleId): \(error.localizedDescription)")
                                     
                                     let session = ActivitySession(
                                         id: workout.uuid,

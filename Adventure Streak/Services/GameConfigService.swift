@@ -102,11 +102,20 @@ final class GameConfigService: ObservableObject {
     }
     
     func cutoffDate(from reference: Date = Date()) -> Date {
-        Calendar.current.date(
+        let lookbackDate = Calendar.current.date(
             byAdding: .day,
             value: -config.clampedLookbackDays,
             to: reference
         ) ?? reference
+        
+        let completionTimestamp = UserDefaults.standard.double(forKey: "onboardingCompletionDate")
+        if completionTimestamp > 0 {
+            let completionDate = Date(timeIntervalSince1970: completionTimestamp)
+            // Use the most recent of the two dates to avoid importing anything before onboarding was finished
+            return max(lookbackDate, completionDate)
+        }
+        
+        return lookbackDate
     }
     
     private func fetchRemoteConfig() async -> GameConfig? {

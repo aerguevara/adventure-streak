@@ -13,6 +13,7 @@ enum PermissionStep: Int, CaseIterable {
 @MainActor
 class OnboardingViewModel: ObservableObject {
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
+    @AppStorage("onboardingCompletionDate") var onboardingCompletionDate: Double = 0
     @Published var currentStep: PermissionStep = .intro
     @Published var discoveredActivities: [ActivitySession] = []
     @Published var isImporting: Bool = false
@@ -143,6 +144,7 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func completeOnboarding() {
+        onboardingCompletionDate = Date().timeIntervalSince1970
         hasCompletedOnboarding = true
     }
     

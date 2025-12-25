@@ -577,7 +577,10 @@ class WorkoutsViewModel: ObservableObject {
                                     newSessions.append(session)
                                 }
                             case .emptySeries:
-                                if requiresRoute {
+                                let gracePeriod: TimeInterval = 30 * 60
+                                let timeSinceEnd = Date().timeIntervalSince(workout.endDate)
+                                
+                                if requiresRoute && timeSinceEnd < gracePeriod {
                                     Task { @MainActor in
                                         self.handlePendingRoute(
                                             workout: workout,
@@ -591,6 +594,12 @@ class WorkoutsViewModel: ObservableObject {
                                     }
                                     return
                                 }
+                                
+                                if requiresRoute {
+                                    print("⚠️ Pending route -> Grace period expired for \(workout.uuid). Importing without GPS.")
+                                }
+                                
+                                pendingStore.remove(workoutId: workout.uuid)
                                 
                                 let session = ActivitySession(
                                     id: workout.uuid,
@@ -607,7 +616,12 @@ class WorkoutsViewModel: ObservableObject {
                                     newSessions.append(session)
                                 }
                             case .error(let error):
-                                if requiresRoute {
+                                let gracePeriod: TimeInterval = 45 * 60 // Slightly longer for real errors
+                                let timeSinceEnd = Date().timeIntervalSince(workout.endDate)
+                                let existing = pendingStore.find(workoutId: workout.uuid)
+                                let retryCount = existing?.retryCount ?? 0
+                                
+                                if requiresRoute && timeSinceEnd < gracePeriod && retryCount < 3 {
                                     Task { @MainActor in
                                         self.handlePendingRoute(
                                             workout: workout,
@@ -622,7 +636,11 @@ class WorkoutsViewModel: ObservableObject {
                                     return
                                 }
                                 
-                                print("⚠️ Route fetch error for optional source \(bundleId): \(error.localizedDescription)")
+                                if requiresRoute {
+                                    print("⚠️ Pending route -> Error fallback (grace/retries expired) for \(workout.uuid): \(error.localizedDescription)")
+                                }
+                                
+                                pendingStore.remove(workoutId: workout.uuid)
                                 
                                 let session = ActivitySession(
                                     id: workout.uuid,
