@@ -67,6 +67,7 @@ class WorkoutsViewModel: ObservableObject {
     private let pendingRouteStore: PendingRouteStore
     private var cancellables = Set<AnyCancellable>()
     private var processingCancellable: AnyCancellable?
+    private var isCheckingForWorkouts = false
     
     @Published var isImporting = false
     
@@ -428,38 +429,66 @@ class WorkoutsViewModel: ObservableObject {
             .sink { [weak self] targetActivities in
                 guard let self = self else { return }
                 
-                // Check progress
-                let completed = targetActivities.filter { $0.processingStatus == .completed || $0.processingStatus == .error }
-                let pendingCount = activityIds.count - completed.count
-                
+                // Check progress - Trust XP presence as completion signal
+                let completed = targetActivities.filter { 
+                    ($0.processingStatus == .completed || $0.xpBreakdown != nil) || 
+                    $0.processingStatus == .error 
+                }
                 // Update imported count for progress bar
                 self.importProcessed = completed.count
                 
                 if completed.count == activityIds.count && !targetActivities.isEmpty {
                     print("✅ All monitored activities processed!")
                     
-                    // Aggregate stats
-                    var summary = GlobalImportSummary()
-                    for activity in completed {
-                        // Extract stats
-                        // Assuming newCellsCount etc are populated by server execution
-                        let stats = activity.territoryStats ?? TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
-                        let xp = activity.xpBreakdown?.total ?? 0
-                        let victims = activity.conqueredVictims ?? []
-                        let loc = activity.locationLabel
+                    // Aggregate stats asynchronously to fetch territories
+                    Task {
+                        var summary = GlobalImportSummary()
+                        for activity in completed {
+                            // Extract stats
+                            let stats = activity.territoryStats ?? TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+                            let xp = activity.xpBreakdown?.total ?? 0
+
+                            let victims = activity.conqueredVictims ?? []
+                            let loc = activity.locationLabel
+                            
+                            // Fetch actual territory geometries from repository
+                            let territories = await TerritoryRepository.shared.fetchConqueredTerritories(forActivityId: activity.id.uuidString)
+                            
+                            // Rarity Logic (Shared with ItemView)
+                            let rarity: String
+                            if xp >= 200 { rarity = "Épica" }
+                            else if xp >= 80 { rarity = "Rara" }
+                            else { rarity = "Común" }
+                            
+                            summary.add(
+                                stats: stats, 
+                                xp: xp, 
+                                victimNames: victims, 
+                                location: loc, 
+                                route: activity.route,
+                                missions: activity.missions,
+                                rarity: rarity,
+                                territories: territories
+                            )
+                        }
                         
-                        summary.add(stats: stats, xp: xp, victimNames: victims, location: loc, route: activity.route)
+                        await MainActor.run {
+                                self.processingSummaryData = summary
+                                self.showProcessingSummary = true
+                                
+                                // Stop monitoring this batch
+                                self.processingCancellable?.cancel()
+                                
+                                // FINAL RESET
+                                self.isImporting = false
+                                self.importTotal = 0
+                                self.importProcessed = 0
+                            }
+                        }
                     }
-                    
-                    self.processingSummaryData = summary
-                    self.showProcessingSummary = true
-                    
-                    // Stop monitoring this batch
-                    self.processingCancellable?.cancel()
-                    self.processingCancellable = nil
                 }
-            }
     }
+    
     func importFromHealthKit() {
         // Require authenticated user to avoid importing under "unknown_user"
         guard let _ = AuthenticationService.shared.userId else {
@@ -496,16 +525,15 @@ class WorkoutsViewModel: ObservableObject {
             return
         }
         
-        isImporting = true
-        isLoading = true
-        print("Starting automatic HealthKit import...")
+        print("Starting automatic HealthKit check (silent)...")
 
         // Watchdog: si en 12s no hubo progreso, resetea flags para permitir reintento
         DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
             guard let self = self else { return }
-            if self.isImporting && self.importProcessed == 0 && self.importTotal == 0 {
-                print("Import HK -> watchdog sin progreso, reseteando flags")
+            if (self.isImporting || self.isCheckingForWorkouts) && self.importProcessed == 0 && self.importTotal == 0 {
+                print("Import HK -> watchdog sin progreso, reseteando flags (checking/importing)")
                 self.isImporting = false
+                self.isCheckingForWorkouts = false
                 self.isLoading = false
             }
         }
@@ -514,9 +542,21 @@ class WorkoutsViewModel: ObservableObject {
         HealthKitManager.shared.requestPermissions { [weak self] success, error in
             guard let self = self else { return }
             
-            if !success {
-                print("HealthKit authorization failed or denied.")
+            // Prevent concurrent calls
+            guard !self.isImporting && !self.isCheckingForWorkouts else {
+                print("⚠️ Import or check already in progress. Skipping.")
+                return 
+            }
+            
+            self.isCheckingForWorkouts = true
+            
+            // We don't set isImporting = true here anymore to avoid UI flickering
+            // if we discover there are no new workouts.
+            
+            guard success else {
+                print("Error HealthKit Auth: \(String(describing: error?.localizedDescription))")
                 DispatchQueue.main.async {
+                    self.isCheckingForWorkouts = false
                     self.isImporting = false
                     self.isLoading = false
                     self.importTotal = 0
@@ -533,6 +573,7 @@ class WorkoutsViewModel: ObservableObject {
                 if let error = error {
                     print("Error fetching workouts: \(error.localizedDescription)")
                     DispatchQueue.main.async {
+                        self.isCheckingForWorkouts = false
                         self.isImporting = false
                         self.isLoading = false
                         self.importTotal = 0
@@ -544,6 +585,7 @@ class WorkoutsViewModel: ObservableObject {
                 guard let workouts = workouts, !workouts.isEmpty else {
                     print("No se encontraron entrenos en HealthKit.")
                     DispatchQueue.main.async {
+                        self.isCheckingForWorkouts = false
                         self.isImporting = false
                         self.isLoading = false
                         self.importTotal = 0
@@ -552,50 +594,67 @@ class WorkoutsViewModel: ObservableObject {
                     return
                 }
                 
-                // Log de entrada: cantidad y rango de fechas recibidas
-                let sortedByDate = workouts.sorted { $0.endDate < $1.endDate }
-                if let first = sortedByDate.first, let last = sortedByDate.last {
-                    print("HK import — recibidos \(workouts.count) entrenos. Rango endDate: \(self.formatDateTime(first.endDate)) -> \(self.formatDateTime(last.endDate))")
-                } else {
-                    print("HK import — recibidos \(workouts.count) entrenos. (sin fechas)")
-                }
+                // Log de entrada
+                print("HK import — recibidos \(workouts.count) entrenos.")
                 
-                // Filtrar duplicados y respetar ventana de lookback (usando endDate y UUID estable del HKWorkout)
+                // Fetch Remote IDs to check against existing cloud data (even if not synced locally yet)
                 let cutoffDate = self.configService.cutoffDate()
-                let existingIds = Set(self.activityStore.activities.map { $0.id })
+                let userId = AuthenticationService.shared.userId ?? "unknown_user"
                 
-                let newWorkouts = workouts.filter { workout in
-                    // 1. Dentro de la ventana (usar endDate por seguridad)
-                    guard workout.endDate >= cutoffDate else { return false }
+                // Async fetch inside MainActor context? 
+                // We are inside a closure. We should use Task to fetch remote IDs, then proceed.
+                Task {
+                    let remoteIds = await ActivityRepository.shared.fetchAllActivityIds(userId: userId)
+                    let localIds = Set(self.activityStore.activities.map { $0.id })
+                    let allExistingIds = localIds.union(remoteIds.compactMap { UUID(uuidString: $0) })
                     
-                    // 2. Duplicados por id (UUID estable de HealthKit)
-                    if existingIds.contains(workout.uuid) { return false }
+                    print("🔍 Check Silencioso: userId=\(userId), remote=\(remoteIds.count), local=\(localIds.count)")
                     
-                    return true
-                }
-                
-                print("HK import — total:\(workouts.count) nuevos:\(newWorkouts.count) cutoff endDate>=\(self.formatDateTime(cutoffDate))")
-                
-                guard !newWorkouts.isEmpty else {
-                    print("No new workouts to import.")
-                    DispatchQueue.main.async {
+                    let newWorkouts = workouts.filter { workout in
+                        // 1. Dentro de la ventana (usar endDate por seguridad)
+                        guard workout.endDate >= cutoffDate else { return false }
+                        
+                        // 2. Duplicados por id (UUID estable de HealthKit)
+                        if allExistingIds.contains(workout.uuid) { return false }
+                        
+                        return true
+                    }
+                    
+                    print("HK import — total:\(workouts.count) nuevos:\(newWorkouts.count) (vs \(remoteIds.count) remotos)")
+                    
+                    guard !newWorkouts.isEmpty else {
+                        print("No new workouts to import.")
+                        self.isCheckingForWorkouts = false
                         self.isImporting = false
                         self.isLoading = false
                         self.importTotal = 0
                         self.importProcessed = 0
+                        return
                     }
-                    return
+                    
+                    // ONLY NOW trigger the UI
+                    self.isCheckingForWorkouts = false // Done checking, now importing
+                    self.isImporting = true
+                    self.isLoading = true
+                    
+                    print("Found \(newWorkouts.count) new workouts. Processing in background...")
+                    
+                    // Proceed with background processing
+                    self.processNewWorkouts(newWorkouts, userId: userId)
                 }
+            } // End of HK fetch closure
+        }
+    }
+    
+    // Extracted for clarity and async handling
+    private func processNewWorkouts(_ newWorkouts: [HKWorkout], userId: String) {
+        let config = self.configService.config
+        let pendingStore = self.pendingRouteStore
                 
-                print("Found \(newWorkouts.count) new workouts. Processing in background...")
-                
-                // Process in background
-                let config = self.configService.config
-                let pendingStore = self.pendingRouteStore
-                DispatchQueue.global(qos: .utility).async {
-                    var newSessions: [ActivitySession] = []
-                    let group = DispatchGroup()
-                    let semaphore = DispatchSemaphore(value: 1) // Process 1 at a time to save memory
+        DispatchQueue.global(qos: .utility).async {
+            var newSessions: [ActivitySession] = []
+            let group = DispatchGroup()
+            let semaphore = DispatchSemaphore(value: 1)
 
                     
                     for workout in newWorkouts {
@@ -724,7 +783,8 @@ class WorkoutsViewModel: ObservableObject {
                                     distanceMeters: distanceMeters,
                                     durationSeconds: durationSeconds,
                                     workoutName: name,
-                                    route: []
+                                    route: [],
+                                    processingStatus: .processing // Wait for GameEngine
                                 )
                                 
                                 DispatchQueue.global(qos: .utility).sync {
@@ -737,76 +797,69 @@ class WorkoutsViewModel: ObservableObject {
                     group.wait() // Wait for all to finish
                     
                     // Save all at once on Main Thread
-                DispatchQueue.main.async {
-                    if !newSessions.isEmpty {
-                        // Sort by date ascending to ensure correct historical replay
-                        let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
-                        
-                        // NEW: Set up monitoring only for VALID sessions that are RECENT (last 2 hours)
-                        // This prevents re-imported historical/deleted workouts from showing the summary modal annoyingly.
-                        self.importTotal = sortedSessions.count
-                        self.importProcessed = 0
-                        
-                        let recentIds = sortedSessions
-                            .filter { $0.endDate.timeIntervalSinceNow > -7200 } // 2 hours window
-                            .map { $0.id }
-                        
-                        if !recentIds.isEmpty {
-                            self.monitorProcessing(for: recentIds)
-                        } else {
-                            // If no recent items to monitor, just close the import overlay
-                            self.isImporting = false
-                            self.isLoading = false
-                        }
-                        
-                        print("Saving \(sortedSessions.count) imported activities...")
+                    // Save all at once on Main Thread
+                    DispatchQueue.main.async {
+                        if !newSessions.isEmpty {
+                            // Sort by date ascending to ensure correct historical replay
+                            let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
                             
-                            // 1. Save Activities - REMOVED: GameEngine handles saving individually
-                            // self.activityStore.saveActivities(sortedSessions)
+                            self.importTotal = sortedSessions.count
+                            self.importProcessed = 0
                             
-                        // 2. Process through GameEngine (Individually for accuracy)
-                        Task {
-                            guard let userId = AuthenticationService.shared.userId else {
-                                print("HK import -> aborted: user logged out during processing")
-                                Task { @MainActor in
-                                    self.isImporting = false
-                                    self.isLoading = false
-                                }
-                                return
-                            }
-                            let userName = AuthenticationService.shared.userName
+                            print("Saving \(sortedSessions.count) imported activities...")
                             
-                            var totalNewCells = 0
-                            defer {
-                                // Reset progress when finished (success or failure)
-                                Task { @MainActor in
-                                    self.importTotal = 0
-                                    self.importProcessed = 0
-                                }
-                            }
-                            
-                            do {
-                                for session in sortedSessions {
-                                    // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
-                                    // Use GameEngine to process each imported activity
-                                    let stats = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
-                                    
-                                    // Track total for summary
-                                    totalNewCells += stats.newCellsCount
+                            // 2. Process through GameEngine (Individually for accuracy)
+                            Task {
+                                guard let userId = AuthenticationService.shared.userId else {
+                                    print("HK import -> aborted: user logged out during processing")
                                     await MainActor.run {
-                                        self.importProcessed += 1
+                                        self.isImporting = false
+                                        self.isLoading = false
+                                    }
+                                    return
+                                }
+                                let userName = AuthenticationService.shared.userName
+                                
+                                var activitiesToMonitor: [UUID] = []
+                                
+                                do {
+                                    for session in sortedSessions {
+                                        // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
+                                        // Use GameEngine to process each imported activity
+                                        let result = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
+                                        
+                                        // Track total for UI progress
+                                        await MainActor.run {
+                                            self.importProcessed += 1
+                                        }
+                                        
+                                        // Only monitor sessions that were newly processed
+                                        if case .processed = result {
+                                            activitiesToMonitor.append(session.id)
+                                        }
+                                    }
+                                    
+                                } catch {
+                                    print("Error processing import: \(error)")
+                                }
+                                
+                                // Clean up and Monitor
+                                await MainActor.run {
+                                    // Refresh UI
+                                    self.isLoading = false
+                                    print("Import/Processing complete. Now monitoring...")
+                                    
+                                    if !activitiesToMonitor.isEmpty {
+                                        // Only monitor TRULY new processed activities
+                                        self.monitorProcessing(for: activitiesToMonitor)
+                                    } else {
+                                        print("✅ Import complete. No new activities to monitor for summary.")
+                                        // Reset counters and hide bar
+                                        self.isImporting = false
+                                        self.importTotal = 0
+                                        self.importProcessed = 0
                                     }
                                 }
-                                
-                            } catch {
-                                print("Error processing import: \(error)")
-                            }
-                                
-                                // Refresh UI
-                                self.loadWorkouts()
-                                self.isImporting = false
-                                self.isLoading = false
-                                print("Import complete.")
                             }
                         } else {
                             self.isImporting = false
@@ -814,9 +867,7 @@ class WorkoutsViewModel: ObservableObject {
                             self.importTotal = 0
                             self.importProcessed = 0
                         }
-                    }
                 }
-            }
         }
     }
     

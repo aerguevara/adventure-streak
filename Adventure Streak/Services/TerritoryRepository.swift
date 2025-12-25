@@ -95,6 +95,29 @@ class TerritoryRepository: ObservableObject {
         #endif
     }
     
+    // NEW: Fetch all territories conquered by a specific activity
+    func fetchConqueredTerritories(forActivityId activityId: String) async -> [RemoteTerritory] {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore, !activityId.isEmpty else { return [] }
+        do {
+            let snapshot = try await db.collection("remote_territories")
+                .whereField("activityId", isEqualTo: activityId)
+                .getDocuments()
+            
+            return snapshot.documents.compactMap { doc -> RemoteTerritory? in
+                var territory = try? doc.data(as: RemoteTerritory.self)
+                territory?.id = doc.documentID
+                return territory
+            }
+        } catch {
+            print("❌ Error fetching activity territories: \(error)")
+            return []
+        }
+        #else
+        return []
+        #endif
+    }
+    
     // NEW: Save conquered cells to Firestore
     func saveCells(_ cells: [TerritoryCell], userId: String, activityId: String? = nil) {
         #if canImport(FirebaseFirestore)

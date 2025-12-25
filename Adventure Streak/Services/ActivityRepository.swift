@@ -187,6 +187,26 @@ final class ActivityRepository {
         #endif
     }
     
+    /// Efficiently fetch all activity IDs for a user (Metadata check)
+    func fetchAllActivityIds(userId: String) async -> Set<String> {
+        #if canImport(FirebaseFirestore)
+        do {
+            let snapshot = try await db.collection("activities")
+                .whereField("userId", isEqualTo: userId)
+                .getDocuments() // Query is shallowish but we only need IDs
+            // Note: Firestore doesn't support "keys-only" query easily without projection,
+            // but fetching logic remains same.
+            
+            return Set(snapshot.documents.map { $0.documentID })
+        } catch {
+            print("Error fetching activity IDs: \(error)")
+            return []
+        }
+        #else
+        return []
+        #endif
+    }
+    
     /// Observe activities for a user (real-time).
     func observeActivities(userId: String, completion: @escaping ([ActivitySession]) -> Void) -> ListenerRegistration? {
         #if canImport(FirebaseFirestore)

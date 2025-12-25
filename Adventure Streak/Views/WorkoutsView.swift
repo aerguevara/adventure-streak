@@ -108,7 +108,7 @@ struct WorkoutsView: View {
             }
 
             .overlay(alignment: .bottom) {
-                if viewModel.isImporting || (viewModel.importTotal > 0 && viewModel.importProcessed < viewModel.importTotal) {
+                if viewModel.isImporting {
                     processingStatusBar
                 }
             }

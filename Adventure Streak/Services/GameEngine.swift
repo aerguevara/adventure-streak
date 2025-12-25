@@ -15,14 +15,19 @@ class GameEngine {
         self.territoryService = TerritoryService(territoryStore: TerritoryStore.shared)
     }
     
+    enum ProcessingResult {
+        case processed(TerritoryStats)
+        case skipped
+    }
+    
     /// Main orchestrator: processes a completed activity through the entire game system
-    /// Returns the territory stats for tracking purposes
+    /// Returns the processing result to distinguish new imports from restored ones
     @discardableResult
-    func completeActivity(_ activity: ActivitySession, for userId: String, userName: String? = nil) async throws -> TerritoryStats {
+    func completeActivity(_ activity: ActivitySession, for userId: String, userName: String? = nil) async throws -> ProcessingResult {
         // GUARD: Never process activity for "unknown_user"
         guard userId != "unknown_user" && !userId.isEmpty else {
             print("⚠️ [GameEngine] Aborting completeActivity: Invalid userId '\(userId)'")
-            return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+            return .skipped
         }
         
         print("🎮 GameEngine: Processing activity \(activity.id)")
@@ -43,7 +48,7 @@ class GameEngine {
             if let remoteActivity = await activityRepository.fetchActivity(activityId: activity.id, userId: userId) {
                 activityStore.updateActivity(remoteActivity)
             }
-            return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+            return .skipped
         }
         
         // 2. Classify missions (Disabled - Moved to Cloud Function)
@@ -86,7 +91,7 @@ class GameEngine {
         
         print("🎉 GameEngine: Activity processing complete!")
         
-        return territoryStats
+        return .processed(territoryStats)
     }
     
 
