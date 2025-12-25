@@ -58,11 +58,15 @@ class WorkoutsViewModel: ObservableObject {
     @Published var importTotal: Int = 0
     @Published var importProcessed: Int = 0
     
+    @Published var showProcessingSummary: Bool = false
+    @Published var processingSummaryData: GlobalImportSummary?
+    
     private let activityStore: ActivityStore
     private let territoryService: TerritoryService
     private let configService: GameConfigService
     private let pendingRouteStore: PendingRouteStore
     private var cancellables = Set<AnyCancellable>()
+    private var processingCancellable: AnyCancellable?
     
     @Published var isImporting = false
     
@@ -106,6 +110,17 @@ class WorkoutsViewModel: ObservableObject {
                 self?.loadWorkouts()
             }
             .store(in: &cancellables)
+            
+        // NEW: Trigger import safely only after initial Firestore sync
+        self.activityStore.$isSynced
+            .receive(on: RunLoop.main)
+            .filter { $0 } // Only when true
+            .first() // Only the first time it becomes true
+            .sink { [weak self] _ in
+                print("🔄 ActivityStore synced -> Triggering initial HealthKit check...")
+                self?.importFromHealthKit()
+            }
+            .store(in: &cancellables)
     }
     
     func loadWorkouts() {
@@ -117,6 +132,7 @@ class WorkoutsViewModel: ObservableObject {
             .sorted(by: { $0.startDate > $1.startDate })
             .map { activity in
                 let titlePrefix = activity.workoutName ?? activity.activityType.displayName
+                // Filter out non-outdoor/processed activities from "Stolen" logic if needed, but for now map direct
                 return WorkoutItemViewData(
                     id: activity.id,
                     type: activity.activityType,
@@ -390,12 +406,73 @@ class WorkoutsViewModel: ObservableObject {
         }
     }
     
+    // Monitor specific activities for server-side completion
+    private func monitorProcessing(for activityIds: [UUID]) {
+        guard !activityIds.isEmpty else { return }
+        
+        print("⏳ Monitoring processing for \(activityIds.count) activities...")
+        
+        // Reset summary
+        self.processingSummaryData = GlobalImportSummary()
+        self.showProcessingSummary = false
+        
+        // Cancel previous monitoring
+        processingCancellable?.cancel()
+        
+        // Create a dedicated publisher to watch these specific IDs
+        processingCancellable = activityStore.$activities
+            .receive(on: RunLoop.main)
+            .map { allActivities in
+                allActivities.filter { activityIds.contains($0.id) }
+            }
+            .sink { [weak self] targetActivities in
+                guard let self = self else { return }
+                
+                // Check progress
+                let completed = targetActivities.filter { $0.processingStatus == .completed || $0.processingStatus == .error }
+                let pendingCount = activityIds.count - completed.count
+                
+                // Update imported count for progress bar
+                self.importProcessed = completed.count
+                
+                if completed.count == activityIds.count && !targetActivities.isEmpty {
+                    print("✅ All monitored activities processed!")
+                    
+                    // Aggregate stats
+                    var summary = GlobalImportSummary()
+                    for activity in completed {
+                        // Extract stats
+                        // Assuming newCellsCount etc are populated by server execution
+                        let stats = activity.territoryStats ?? TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+                        let xp = activity.xpBreakdown?.total ?? 0
+                        let victims = activity.conqueredVictims ?? []
+                        let loc = activity.locationLabel
+                        
+                        summary.add(stats: stats, xp: xp, victimNames: victims, location: loc, route: activity.route)
+                    }
+                    
+                    self.processingSummaryData = summary
+                    self.showProcessingSummary = true
+                    
+                    // Stop monitoring this batch
+                    self.processingCancellable?.cancel()
+                    self.processingCancellable = nil
+                }
+            }
+    }
     func importFromHealthKit() {
         // Require authenticated user to avoid importing under "unknown_user"
         guard let _ = AuthenticationService.shared.userId else {
             print("Import HK -> aborted: no authenticated user")
             return
         }
+        
+        // NEW: Prevent race condition (importing against empty local store before sync)
+        guard activityStore.isSynced else {
+            print("⏳ HK Import deferred: Waiting for ActivityStore sync.")
+            return
+        }
+
         // Recuperación: si quedó marcado importando pero sin progreso, reiniciar flags
         if isImporting && importTotal == 0 && importProcessed == 0 {
             print("Import HK -> recuperando estado (importing=true pero sin progreso), reseteando flags")
@@ -512,17 +589,14 @@ class WorkoutsViewModel: ObservableObject {
                 
                 print("Found \(newWorkouts.count) new workouts. Processing in background...")
                 
-                // Process in background to avoid blocking Main Thread
-                DispatchQueue.main.async {
-                    self.importTotal = newWorkouts.count
-                    self.importProcessed = 0
-                }
+                // Process in background
                 let config = self.configService.config
                 let pendingStore = self.pendingRouteStore
                 DispatchQueue.global(qos: .utility).async {
                     var newSessions: [ActivitySession] = []
                     let group = DispatchGroup()
                     let semaphore = DispatchSemaphore(value: 1) // Process 1 at a time to save memory
+
                     
                     for workout in newWorkouts {
                         semaphore.wait() // Wait for slot
@@ -667,6 +741,23 @@ class WorkoutsViewModel: ObservableObject {
                     if !newSessions.isEmpty {
                         // Sort by date ascending to ensure correct historical replay
                         let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
+                        
+                        // NEW: Set up monitoring only for VALID sessions that are RECENT (last 2 hours)
+                        // This prevents re-imported historical/deleted workouts from showing the summary modal annoyingly.
+                        self.importTotal = sortedSessions.count
+                        self.importProcessed = 0
+                        
+                        let recentIds = sortedSessions
+                            .filter { $0.endDate.timeIntervalSinceNow > -7200 } // 2 hours window
+                            .map { $0.id }
+                        
+                        if !recentIds.isEmpty {
+                            self.monitorProcessing(for: recentIds)
+                        } else {
+                            // If no recent items to monitor, just close the import overlay
+                            self.isImporting = false
+                            self.isLoading = false
+                        }
                         
                         print("Saving \(sortedSessions.count) imported activities...")
                             

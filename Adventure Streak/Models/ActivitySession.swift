@@ -21,7 +21,19 @@ struct ActivitySession: Identifiable, Codable {
     // NEW: Smart Location Label (e.g., "Retiro Park", "Gran Via")
     var locationLabel: String?
     
-    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, workoutName: String? = nil, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil, territoryStats: TerritoryStats? = nil, missions: [Mission]? = nil, calories: Double? = nil, averageHeartRate: Int? = nil, locationLabel: String? = nil) {
+    // NEW: Processing Status for UI Feedback
+    var processingStatus: ProcessingStatus = .completed
+    // NEW: List of users who lost territory to this activity (for Summary)
+    var conqueredVictims: [String]?
+    
+    enum ProcessingStatus: String, Codable {
+        case pending
+        case processing
+        case completed
+        case error
+    }
+    
+    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, workoutName: String? = nil, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil, territoryStats: TerritoryStats? = nil, missions: [Mission]? = nil, calories: Double? = nil, averageHeartRate: Int? = nil, locationLabel: String? = nil, processingStatus: ProcessingStatus = .completed, conqueredVictims: [String]? = nil) {
         self.id = id
         self.startDate = startDate
         self.endDate = endDate
@@ -36,5 +48,7 @@ struct ActivitySession: Identifiable, Codable {
         self.calories = calories
         self.averageHeartRate = averageHeartRate
         self.locationLabel = locationLabel
+        self.processingStatus = processingStatus
+        self.conqueredVictims = conqueredVictims
     }
 }

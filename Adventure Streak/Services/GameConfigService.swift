@@ -108,6 +108,8 @@ final class GameConfigService: ObservableObject {
             to: reference
         ) ?? reference
         
+
+        
         let completionTimestamp = UserDefaults.standard.double(forKey: "onboardingCompletionDate")
         if completionTimestamp > 0 {
             let completionDate = Date(timeIntervalSince1970: completionTimestamp)

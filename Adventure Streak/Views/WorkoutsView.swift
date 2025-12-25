@@ -95,6 +95,23 @@ struct WorkoutsView: View {
                 .sheet(isPresented: $showNotifications) {
                     NotificationsView()
                 }
+                .sheet(isPresented: $viewModel.showProcessingSummary) {
+                if let summary = viewModel.processingSummaryData {
+                    ProcessingSummaryModal(summary: summary, isPresented: $viewModel.showProcessingSummary)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                Task {
+                    print("App entered foreground -> auto-refreshing workouts health data...")
+                    await viewModel.refresh()
+                }
+            }
+
+            .overlay(alignment: .bottom) {
+                if viewModel.isImporting || (viewModel.importTotal > 0 && viewModel.importProcessed < viewModel.importTotal) {
+                    processingStatusBar
+                }
+            }
                 .onAppear {
                     Task {
                         await viewModel.refresh()

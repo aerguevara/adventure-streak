@@ -8,6 +8,7 @@ class ActivityStore: ObservableObject {
     
     private let store = JSONStore<ActivitySession>(filename: "activities.json")
     @Published var activities: [ActivitySession] = []
+    @Published var isSynced: Bool = false
     
     #if canImport(FirebaseFirestore)
     private var activityListener: ListenerRegistration?
@@ -15,6 +16,11 @@ class ActivityStore: ObservableObject {
     
     private init() {
         self.activities = store.load()
+        // If we have cached data, we consider it "synced" enough to prevent duplicate imports
+        // until the real sync arrives.
+        if !activities.isEmpty {
+            self.isSynced = true
+        }
         print("🗄️ ActivityStore loaded \(activities.count) activities")
         if let first = activities.first {
             print("   First activity missions: \(first.missions?.count ?? 0)")
@@ -52,6 +58,7 @@ class ActivityStore: ObservableObject {
             DispatchQueue.main.async {
                 self.saveActivities(updatedActivities)
                 self.backfillSmartNames(for: updatedActivities)
+                self.isSynced = true
             }
         }
         #endif
