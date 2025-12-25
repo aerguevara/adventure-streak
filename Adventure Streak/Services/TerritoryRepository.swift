@@ -141,4 +141,44 @@ class TerritoryRepository: ObservableObject {
         db.collection("remote_territories").document(id).delete()
         #endif
     }
+    
+    // NEW: Sync user's territories from Firestore to local store
+    func syncUserTerritories(userId: String, store: TerritoryStore) async {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        
+        print("[Territories] Syncing territories for user \(userId)...")
+        do {
+            let snapshot = try await db.collection("remote_territories")
+                .whereField("userId", isEqualTo: userId)
+                .getDocuments()
+            
+            let territories = snapshot.documents.compactMap { doc -> TerritoryCell? in
+                guard let remote = try? doc.data(as: RemoteTerritory.self) else { return nil }
+                // Convert RemoteTerritory to TerritoryCell
+                return TerritoryCell(
+                    id: doc.documentID,
+                    centerLatitude: remote.centerLatitude,
+                    centerLongitude: remote.centerLongitude,
+                    boundary: remote.boundary,
+                    lastConqueredAt: remote.activityEndAt,
+                    expiresAt: remote.expiresAt,
+                    ownerUserId: remote.userId,
+                    ownerDisplayName: nil, // Will be filled locally if needed
+                    ownerUploadedAt: remote.uploadedAt?.dateValue(),
+                    activityId: remote.activityId
+                )
+            }
+            
+            if !territories.isEmpty {
+                await MainActor.run {
+                    store.upsertCells(territories)
+                }
+                print("[Territories] Pulled \(territories.count) territories from Firestore.")
+            }
+        } catch {
+            print("[Territories] Error syncing user territories: \(error)")
+        }
+        #endif
+    }
 }

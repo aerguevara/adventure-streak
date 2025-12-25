@@ -13,6 +13,13 @@ import FirebaseFirestore
 import UIKit
 #endif
 
+struct TerritoryInventoryItem: Identifiable {
+    let id: String // activityId
+    let locationLabel: String
+    let territories: [TerritoryCell]
+    let expiresAt: Date
+}
+
 @MainActor
 class ProfileViewModel: ObservableObject {
     // MARK: - Published Properties
@@ -26,6 +33,7 @@ class ProfileViewModel: ObservableObject {
     @Published var territoriesCount: Int = 0
     @Published var activitiesCount: Int = 0
     @Published var totalCellsConquered: Int = 0
+    @Published var territoryInventory: [TerritoryInventoryItem] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     
@@ -198,6 +206,26 @@ class ProfileViewModel: ObservableObject {
         
         // Total Cells Owned (Historical/Current Total)
         self.totalCellsConquered = territoryStore.conqueredCells.count
+        
+        // territoryInventory: Group by activityId
+        let cells = territoryStore.conqueredCells.values
+        let grouped = Dictionary(grouping: cells) { $0.activityId ?? "unknown" }
+        
+        var inventory: [TerritoryInventoryItem] = []
+        for (activityId, groupCells) in grouped where activityId != "unknown" {
+            let label = activityStore.activities.first { $0.id.uuidString == activityId }?.locationLabel ?? "Exploración"
+            let expiry = groupCells.map { $0.expiresAt }.min() ?? Date()
+            
+            inventory.append(TerritoryInventoryItem(
+                id: activityId,
+                locationLabel: label,
+                territories: groupCells,
+                expiresAt: expiry
+            ))
+        }
+        
+        // Sort by expiry date (closer first) to remind user to defend
+        self.territoryInventory = inventory.sorted { $0.expiresAt < $1.expiresAt }
         
         // Guardar agregados en Firestore (user document)
         if let userId = authService.userId {

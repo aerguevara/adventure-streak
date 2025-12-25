@@ -35,10 +35,13 @@ struct WorkoutsView: View {
                         // C) Territory Summary
                         territorySummary
                         
-                        // D) Achievements
+                        // D) Territory Inventory
+                        territoryInventorySection
+                        
+                        // E) Achievements
                         achievementsSection
                         
-                        // E) Feed
+                        // F) Feed
                         feedSection
                         
                     }
@@ -343,7 +346,42 @@ struct WorkoutsView: View {
         .padding(.horizontal)
     }
     
-    // MARK: - D) Achievements
+    // MARK: - D) Territory Inventory
+    var territoryInventorySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Tus Territorios")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Text("\(profileViewModel.territoryInventory.count) activos")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal)
+            
+            if profileViewModel.territoryInventory.isEmpty {
+                Text("No tienes territorios activos. ¡Sal a explorar!")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(profileViewModel.territoryInventory) { item in
+                            TerritoryInventoryCard(item: item)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
+    }
+    
+    // MARK: - E) Achievements
     var achievementsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -379,7 +417,7 @@ struct WorkoutsView: View {
         }
     }
     
-    // MARK: - E) Feed
+    // MARK: - F) Feed
     var feedSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Actividad Reciente")

@@ -49,6 +49,7 @@ class AuthenticationService: NSObject, ObservableObject {
             Task {
                 self.isSyncingData = true
                 await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                await TerritoryRepository.shared.syncUserTerritories(userId: user.uid, store: TerritoryStore.shared)
                 self.isSyncingData = false
                 
                 // Iniciar observación en tiempo real
@@ -111,6 +112,7 @@ class AuthenticationService: NSObject, ObservableObject {
                     
                     self.isSyncingData = true
                     await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                    await TerritoryRepository.shared.syncUserTerritories(userId: user.uid, store: TerritoryStore.shared)
                     self.isSyncingData = false
                     
                     ActivityStore.shared.startObserving(userId: user.uid)
@@ -217,6 +219,7 @@ class AuthenticationService: NSObject, ObservableObject {
                         Task {
                             self.isSyncingData = true
                             await ActivityRepository.shared.ensureRemoteParity(userId: firebaseUser.uid, territoryStore: TerritoryStore.shared)
+                            await TerritoryRepository.shared.syncUserTerritories(userId: firebaseUser.uid, store: TerritoryStore.shared)
                             self.isSyncingData = false
                             
                             ActivityStore.shared.startObserving(userId: firebaseUser.uid)
@@ -476,6 +479,7 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                         Task {
                             self.isSyncingData = true
                             await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
+                            await TerritoryRepository.shared.syncUserTerritories(userId: user.uid, store: TerritoryStore.shared)
                             self.isSyncingData = false
                             
                             ActivityStore.shared.startObserving(userId: user.uid)
