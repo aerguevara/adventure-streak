@@ -395,18 +395,18 @@ struct WorkoutsView: View {
     
     // MARK: - Territory Stats Grid
     var territoryStatsGrid: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Estadísticas de Exploración")
-                .font(.headline)
-                .foregroundColor(.white)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white.opacity(0.7))
                 .padding(.horizontal)
             
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 16),
-                GridItem(.flexible(), spacing: 16)
-            ], spacing: 16) {
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10)
+            ], spacing: 10) {
                 TerritoryStatCard(
-                    title: "Conquistados",
+                    title: "Zonas Descubiertas",
                     value: "\(profileViewModel.totalHistoricalConquered)",
                     icon: "flag.fill",
                     color: Color(hex: "4C6FFF")
@@ -445,35 +445,35 @@ struct TerritoryStatCard: View {
     let color: Color
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(color)
-                    .padding(8)
-                    .background(color.opacity(0.15))
-                    .clipShape(Circle())
-                
-                Spacer()
-            }
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(color)
+                .padding(6)
+                .background(color.opacity(0.15))
+                .clipShape(Circle())
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(value)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                 
                 Text(title)
-                    .font(.caption)
+                    .font(.system(size: 10))
                     .fontWeight(.medium)
                     .foregroundColor(.gray)
+                    .lineLimit(1)
             }
+            
+            Spacer(minLength: 0)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
         .background(Color(hex: "18181C"))
-        .cornerRadius(20)
+        .cornerRadius(12)
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(0.05), lineWidth: 1)
         )
     }
