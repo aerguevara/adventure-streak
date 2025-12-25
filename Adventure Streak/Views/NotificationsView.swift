@@ -137,23 +137,43 @@ struct NotificationRow: View {
     }
     
     private func messageFor(_ notification: AppNotification) -> String {
+        if let customMessage = notification.message, !customMessage.isEmpty {
+            return customMessage
+        }
+        
         switch notification.type {
         case .reaction:
             return "reaccionó a tu actividad"
         case .follow:
             return "empezó a seguirte"
         case .achievement:
+            if let badge = notification.activityId, badge.contains("level_up") {
+                let level = badge.split(separator: "_").last ?? ""
+                return "¡Has alcanzado el Nivel \(level)!"
+            }
             return "desbloqueó un nuevo logro"
         case .territory_conquered:
+            if let label = notification.locationLabel {
+                return "¡Has conquistado terrenos en \(label)!"
+            }
             return "¡Has conquistado nuevos territorios!"
         case .territory_stolen:
-            return "¡Cuidado! Alguien te ha robado un territorio"
+            if let label = notification.locationLabel {
+                return "Te ha robado un territorio en \(label)"
+            }
+            return "Te ha robado un territorio. ¡Recupéralo!"
         case .territory_stolen_success:
+            if let label = notification.locationLabel {
+                return "¡Has robado territorios en \(label)!"
+            }
             return "¡Has robado territorios enemigos!"
         case .territory_defended:
+            if let label = notification.locationLabel {
+                return "Has defendido tu zona en \(label)"
+            }
             return "Has defendido tus territorios con éxito"
         case .workout_import:
-            return "Entrenamiento importado correctamente"
+            return "Tu entrenamiento se ha procesado correctamente"
         }
     }
     

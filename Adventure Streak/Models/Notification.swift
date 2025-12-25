@@ -24,6 +24,8 @@ struct AppNotification: Identifiable, Codable {
     let type: NotificationType
     let reactionType: String? // e.g. "fire", "trophy"
     let activityId: String?
+    let message: String?
+    let locationLabel: String?
     let timestamp: Date
     var isRead: Bool
     
@@ -36,6 +38,8 @@ struct AppNotification: Identifiable, Codable {
         case type
         case reactionType
         case activityId
+        case message
+        case locationLabel
         case timestamp
         case isRead
     }
