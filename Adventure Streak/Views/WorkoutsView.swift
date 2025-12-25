@@ -462,7 +462,7 @@ struct TerritoryStatCard: View {
                     .font(.system(size: 10))
                     .fontWeight(.medium)
                     .foregroundColor(.gray)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             
             Spacer(minLength: 0)

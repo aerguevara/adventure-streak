@@ -46,8 +46,8 @@ final class ReactionRepository: ObservableObject {
                     let stats = snapshot.flatMap { try? $0.data(as: ReactionStats.self) }
                     var state = self.reactionStates[id] ?? .empty
                     state.fireCount = stats?.fireCount ?? 0
-                    state.trophyCount = stats?.trophyCount ?? 0
-                    state.devilCount = stats?.devilCount ?? 0
+                    state.swordCount = stats?.swordCount ?? 0
+                    state.shieldCount = stats?.shieldCount ?? 0
                     self.reactionStates[id] = state
                 }
             }
@@ -114,8 +114,8 @@ final class ReactionRepository: ObservableObject {
                 }
                 
                 // Update timestamps for specific types
-                if type == .trophy { statsFields["competitiveTaggedAt"] = FieldValue.serverTimestamp() }
-                if type == .devil { statsFields["rivalryTaggedAt"] = FieldValue.serverTimestamp() }
+                if type == .sword { statsFields["competitiveTaggedAt"] = FieldValue.serverTimestamp() }
+                if type == .shield { statsFields["rivalryTaggedAt"] = FieldValue.serverTimestamp() }
 
                 transaction.setData(statsFields, forDocument: statsRef, merge: true)
 
@@ -173,10 +173,10 @@ final class ReactionRepository: ObservableObject {
                 switch reaction {
                 case .fire:
                     fields["fireCount"] = FieldValue.increment(Int64(-1))
-                case .trophy:
-                    fields["trophyCount"] = FieldValue.increment(Int64(-1))
-                case .devil:
-                    fields["devilCount"] = FieldValue.increment(Int64(-1))
+                case .sword:
+                    fields["swordCount"] = FieldValue.increment(Int64(-1))
+                case .shield:
+                    fields["shieldCount"] = FieldValue.increment(Int64(-1))
                 }
 
                 transaction.updateData(fields, forDocument: statsRef)
@@ -222,8 +222,8 @@ final class ReactionRepository: ObservableObject {
             var state = states[record.activityId] ?? .empty
             switch record.reactionType {
             case .fire: state.fireCount += 1
-            case .trophy: state.trophyCount += 1
-            case .devil: state.devilCount += 1
+            case .sword: state.swordCount += 1
+            case .shield: state.shieldCount += 1
             }
             if record.reactedUserId == AuthenticationService.shared.userId {
                 state.currentUserReaction = record.reactionType
@@ -245,7 +245,7 @@ final class ReactionRepository: ObservableObject {
 #if canImport(FirebaseFirestore)
 private struct ReactionStats: Codable {
     let fireCount: Int
-    let trophyCount: Int
-    let devilCount: Int
+    let swordCount: Int
+    let shieldCount: Int
 }
 #endif

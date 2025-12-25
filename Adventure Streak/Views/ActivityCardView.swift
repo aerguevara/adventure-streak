@@ -9,14 +9,16 @@ struct ActivityCardView: View {
     let onReaction: (ReactionType) -> Void
 
     @State private var pendingReaction: ReactionType? = nil
+    @State private var territoryCells: [TerritoryCell] = []
+    @State private var isLoadingTerritories = false
 
     private var mergedReactionState: ActivityReactionState {
         var state = reactionState
 
-        if state.fireCount == 0 && state.trophyCount == 0 && state.devilCount == 0 {
+        if state.swordCount == 0 && state.shieldCount == 0 && state.fireCount == 0 {
+            state.swordCount = activity.activityData.swordCount
+            state.shieldCount = activity.activityData.shieldCount
             state.fireCount = activity.activityData.fireCount
-            state.trophyCount = activity.activityData.trophyCount
-            state.devilCount = activity.activityData.devilCount
         }
 
         if state.currentUserReaction == nil {
@@ -26,25 +28,39 @@ struct ActivityCardView: View {
         return state
     }
 
-    private var highImpactTitle: String {
-        let placeSuffix = activity.activityData.locationLabel.map { " en \($0)" } ?? ""
+    private var narrativeTitle: String {
+        let userName = activity.user.displayName
+        let location = activity.activityData.locationLabel ?? "una nueva zona"
+        let isOutdoor = activity.activityData.activityType.isOutdoor
         
         if activity.activityData.recapturedZonesCount > 0 {
-            return "Territorio recapturado\(placeSuffix)"
+            return "¡\(userName) ha recapturado \(location)!"
         }
         if activity.activityData.newZonesCount > 0 {
-            return "Zona conquistada\(placeSuffix)"
+            return "¡\(userName) ha descubierto \(location)!"
         }
         if activity.activityData.defendedZonesCount > 0 {
-            return "Defensa completada\(placeSuffix)"
+            return "¡\(userName) ha defendido su territorio en \(location)!"
         }
-        if activity.eventType == .distanceRecord {
-            return "Récord personal"
+        
+        // Default activity
+        let activityVerb = translateActivityVerb(activity.activityData.activityType)
+        if isOutdoor {
+            return "¡\(userName) ha salido a \(activityVerb) por \(location)!"
+        } else {
+            return "¡\(userName) ha completado un entrenamiento de \(activityVerb)!"
         }
-        if activity.hasSignificantXP {
-            return "Impacto alto en XP"
+    }
+
+    private func translateActivityVerb(_ type: ActivityType) -> String {
+        switch type {
+        case .run: return "correr"
+        case .walk: return "caminar"
+        case .bike: return "rodar"
+        case .hike: return "explorar"
+        case .indoor: return "Interior"
+        case .otherOutdoor: return "entrenar al aire libre"
         }
-        return activity.eventTitle ?? "Actividad destacada"
     }
 
     private var style: ActivityCardStyle {
@@ -56,12 +72,6 @@ struct ActivityCardView: View {
                 borderWidth: 1.2,
                 verticalPadding: 14,
                 verticalSpacing: 10,
-                headerPadding: 4,
-                bannerBackground: LinearGradient(
-                    colors: [Color(hex: "F2C94C"), Color(hex: "E29500")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
                 fadedBackground: Color(hex: "E0AA3E").opacity(0.12)
             )
         case .medium:
@@ -71,12 +81,6 @@ struct ActivityCardView: View {
                 borderWidth: 1,
                 verticalPadding: 12,
                 verticalSpacing: 8,
-                headerPadding: 0,
-                bannerBackground: LinearGradient(
-                    colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
                 fadedBackground: Color.white.opacity(0.06)
             )
         case .low:
@@ -86,12 +90,6 @@ struct ActivityCardView: View {
                 borderWidth: 1,
                 verticalPadding: 8,
                 verticalSpacing: 6,
-                headerPadding: 0,
-                bannerBackground: LinearGradient(
-                    colors: [Color.clear, Color.clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
                 fadedBackground: Color.white.opacity(0.03)
             )
         }
@@ -101,23 +99,30 @@ struct ActivityCardView: View {
         let currentStyle = style
 
         VStack(alignment: .leading, spacing: currentStyle.verticalSpacing) {
-            if showImpactHeader {
-                impactHeader(style: currentStyle)
-            }
-
             userActivityHeader
-                .padding(.top, currentStyle.headerPadding)
 
-            if !missionNames.isEmpty {
-                missionSection
-                    .padding(.top, 4)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(narrativeTitle)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.trailing, 4)
+                    
+                    if !missionNames.isEmpty {
+                        MissionChipsView(missions: missionNames)
+                    }
+                }
+                
+                Spacer()
+                
+                if hasTerritoryImpact {
+                    miniMapThumbnail
+                }
             }
+            .padding(.vertical, 4)
 
             metricsSection
-
-            if hasTerritoryImpact {
-                territoryImpactSection
-            }
 
             ReactionBarView(
                 state: mergedReactionState,
@@ -139,6 +144,40 @@ struct ActivityCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: Color.black.opacity(0.3), radius: 10, y: 6)
         .padding(.horizontal, 12)
+        .task {
+            if hasTerritoryImpact && territoryCells.isEmpty {
+                await loadTerritories()
+            }
+        }
+    }
+
+    private var miniMapThumbnail: some View {
+        ZStack {
+            if isLoadingTerritories {
+                ProgressView().scaleEffect(0.6)
+            } else if !territoryCells.isEmpty {
+                TerritoryMinimapView(territories: territoryCells)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .frame(width: 80, height: 80)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            }
+        }
+        .frame(width: 80, height: 80)
+        .background(Color.black.opacity(0.2))
+        .cornerRadius(10)
+    }
+
+    private func loadTerritories() async {
+        guard let activityId = activity.activityId else { return }
+        isLoadingTerritories = true
+        let cells = await ActivityRepository.shared.fetchTerritoriesForActivity(activityId: activityId)
+        await MainActor.run {
+            self.territoryCells = cells
+            self.isLoadingTerritories = false
+        }
     }
 
     private var userActivityHeader: some View {
@@ -172,52 +211,38 @@ struct ActivityCardView: View {
     }
 
     private var metricsSection: some View {
-        Group {
-            switch activity.impactLevel {
-            case .high, .medium:
-                HStack(spacing: 12) {
-                    let hasDistance = activity.activityData.distanceKm > 0.05
-                    let isIndoor = activity.activityData.activityType == .indoor
-                    
-                    if isIndoor && !hasDistance {
-                        if let calories = activity.activityData.calories, calories > 0 {
-                            metric(icon: "flame.fill", label: "Kcal", value: "\(Int(calories))", valueColor: .orange)
-                        } else if let hr = activity.activityData.averageHeartRate, hr > 0 {
-                            metric(icon: "heart.fill", label: "FC Media", value: "\(hr) bpm", valueColor: .red)
-                        } else {
-                            metric(icon: "clock", label: "Tiempo", value: formatDuration(activity.activityData.durationSeconds))
-                        }
-                    } else {
-                        metric(icon: "figure.run", label: "Distancia", value: String(format: "%.1f km", activity.activityData.distanceKm))
-                    }
-                    
-                    if activity.activityData.activityType != .indoor || hasDistance {
-                        metric(icon: "clock", label: "Tiempo", value: formatDuration(activity.activityData.durationSeconds))
-                    }
-
-                    metric(icon: "star.fill", label: "XP", value: "+\(activity.activityData.xpEarned)", valueColor: Color(hex: "A259FF"))
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 10)
-                .background(style.fadedBackground)
-                .cornerRadius(12)
-            case .low:
-                HStack(spacing: 8) {
-                    Image(systemName: "figure.run")
-                        .foregroundColor(.primary.opacity(0.5))
-                    Text("\(activity.activityData.activityType.displayName) · \(formatDuration(activity.activityData.durationSeconds))")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(.primary.opacity(0.75))
-                    Spacer()
-                    Text("+\(activity.activityData.xpEarned) XP")
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(Color(hex: "A259FF"))
-                }
-                .padding(10)
-                .background(style.fadedBackground)
-                .cornerRadius(10)
+        HStack(spacing: 8) {
+            compactMetric(icon: "figure.run", value: String(format: "%.1f km", activity.activityData.distanceKm))
+            compactMetric(icon: "clock", value: formatDuration(activity.activityData.durationSeconds))
+            compactMetric(icon: "star.fill", value: "+\(activity.activityData.xpEarned) XP", color: Color(hex: "A259FF"))
+            
+            Spacer()
+            
+            if activity.activityData.newZonesCount > 0 {
+                Text("+\(activity.activityData.newZonesCount) zonas")
+                    .font(.caption2.bold())
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: "32D74B").opacity(0.8))
+                    .cornerRadius(4)
             }
         }
+        .padding(.top, 4)
+    }
+
+    private func compactMetric(icon: String, value: String, color: Color = .white.opacity(0.7)) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+            Text(value)
+                .font(.system(size: 11, weight: .bold))
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(6)
     }
 
     private var territoryImpactSection: some View {
@@ -315,32 +340,6 @@ struct ActivityCardView: View {
             .cornerRadius(8)
     }
 
-    private func impactHeader(style: ActivityCardStyle) -> some View {
-        HStack(spacing: 12) {
-            Text("🏅")
-                .font(.title3)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(highImpactTitle)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(.black)
-                if let subtitle = impactSubtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundColor(.black.opacity(0.75))
-                        .lineLimit(2)
-                }
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(style.bannerBackground)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.black.opacity(0.1), lineWidth: 1)
-        )
-    }
 
     private func handleReaction(_ reaction: ReactionType) {
         guard activity.activityId != nil else { return }
@@ -404,39 +403,11 @@ struct ActivityCardView: View {
             }
     }
 
-    private var showImpactHeader: Bool {
-        hasTerritoryImpact || activity.impactLevel == .high
-    }
 
     private var hasTerritoryImpact: Bool {
         activity.activityData.newZonesCount > 0 || activity.activityData.defendedZonesCount > 0 || activity.activityData.recapturedZonesCount > 0
     }
 
-    private var impactSubtitle: String? {
-        let recaptured = activity.activityData.recapturedZonesCount
-        let newZones = activity.activityData.newZonesCount
-        let defended = activity.activityData.defendedZonesCount
-
-        var parts: [String] = []
-        if recaptured > 0 {
-            parts.append("Has recuperado \(recaptured) zona\(recaptured == 1 ? "" : "s")")
-        }
-        if newZones > 0 {
-            parts.append("y has conquistado \(newZones) nueva\(newZones == 1 ? "" : "s")")
-        }
-        if defended > 0 {
-            let defendedWord = defended == 1 ? "vez" : "veces"
-            parts.append("defendiste \(defended) \(defendedWord)")
-        }
-
-        let sentence = parts.joined(separator: " ")
-        if !sentence.isEmpty { return sentence }
-        // Avoid bringing back long "Misiones" text into the header if already parsed for chips
-        if missionNames.isEmpty {
-            return activity.eventSubtitle
-        }
-        return nil
-    }
 
 
 }
@@ -469,9 +440,9 @@ struct ReactionBarView: View {
     private func count(for reaction: ReactionType) -> Int {
         var base: Int
         switch reaction {
+        case .sword: base = state.swordCount
+        case .shield: base = state.shieldCount
         case .fire: base = state.fireCount
-        case .trophy: base = state.trophyCount
-        case .devil: base = state.devilCount
         }
 
         if pendingReaction == reaction && state.currentUserReaction == nil {
@@ -535,7 +506,5 @@ private struct ActivityCardStyle {
     let borderWidth: CGFloat
     let verticalPadding: CGFloat
     let verticalSpacing: CGFloat
-    let headerPadding: CGFloat
-    let bannerBackground: LinearGradient
     let fadedBackground: Color
 }

@@ -33,9 +33,9 @@ struct SocialActivityData: Codable, Hashable {
     
     // Reactions
     var currentUserReaction: ReactionType?
+    var swordCount: Int
+    var shieldCount: Int
     var fireCount: Int
-    var trophyCount: Int
-    var devilCount: Int
     var latestReactorNames: [String]? // NEW: For "UserA and 2 others reacted"
     
     // Map Snapshot (Optional string to store a map image URL or data)
@@ -52,9 +52,9 @@ struct SocialActivityData: Codable, Hashable {
         case newZonesCount
         case defendedZonesCount
         case recapturedZonesCount
+        case swordCount
+        case shieldCount
         case fireCount
-        case trophyCount
-        case devilCount
         case currentUserReaction
         case calories
         case averageHeartRate
@@ -74,9 +74,9 @@ struct SocialActivityData: Codable, Hashable {
          newZonesCount: Int,
          defendedZonesCount: Int,
          recapturedZonesCount: Int,
+         swordCount: Int = 0,
+         shieldCount: Int = 0,
          fireCount: Int = 0,
-         trophyCount: Int = 0,
-         devilCount: Int = 0,
          currentUserReaction: ReactionType? = nil,
          latestReactorNames: [String]? = nil,
          mapSnapshotURL: String? = nil,
@@ -90,9 +90,9 @@ struct SocialActivityData: Codable, Hashable {
         self.newZonesCount = newZonesCount
         self.defendedZonesCount = defendedZonesCount
         self.recapturedZonesCount = recapturedZonesCount
+        self.swordCount = swordCount
+        self.shieldCount = shieldCount
         self.fireCount = fireCount
-        self.trophyCount = trophyCount
-        self.devilCount = devilCount
         self.currentUserReaction = currentUserReaction
         self.latestReactorNames = latestReactorNames
         self.mapSnapshotURL = mapSnapshotURL
@@ -114,9 +114,9 @@ struct SocialActivityData: Codable, Hashable {
         recapturedZonesCount = try container.decode(Int.self, forKey: .recapturedZonesCount)
         
         // Optional/Newer fields with defaults
+        swordCount = try container.decodeIfPresent(Int.self, forKey: .swordCount) ?? 0
+        shieldCount = try container.decodeIfPresent(Int.self, forKey: .shieldCount) ?? 0
         fireCount = try container.decodeIfPresent(Int.self, forKey: .fireCount) ?? 0
-        trophyCount = try container.decodeIfPresent(Int.self, forKey: .trophyCount) ?? 0
-        devilCount = try container.decodeIfPresent(Int.self, forKey: .devilCount) ?? 0
         
         currentUserReaction = try container.decodeIfPresent(ReactionType.self, forKey: .currentUserReaction)
         latestReactorNames = try container.decodeIfPresent([String].self, forKey: .latestReactorNames)

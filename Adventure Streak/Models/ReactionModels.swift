@@ -1,26 +1,26 @@
 import Foundation
 
 enum ReactionType: String, Codable, CaseIterable, Hashable {
-    case fire
-    case trophy
-    case devil
+    case sword   // Respect / Attack
+    case shield  // Defense
+    case fire    // Motivation
 
     var emoji: String {
         switch self {
+        case .sword: return "⚔️"
+        case .shield: return "🛡️"
         case .fire: return "🔥"
-        case .trophy: return "🏆"
-        case .devil: return "😈"
         }
     }
 }
 
 struct ActivityReactionState: Equatable {
+    var swordCount: Int
+    var shieldCount: Int
     var fireCount: Int
-    var trophyCount: Int
-    var devilCount: Int
     var currentUserReaction: ReactionType?
 
-    static let empty = ActivityReactionState(fireCount: 0, trophyCount: 0, devilCount: 0, currentUserReaction: nil)
+    static let empty = ActivityReactionState(swordCount: 0, shieldCount: 0, fireCount: 0, currentUserReaction: nil)
 }
 
 struct ActivityReactionRecord: Identifiable, Codable, Equatable {

@@ -115,9 +115,9 @@ class SocialService: ObservableObject {
                 newZonesCount: 0,
                 defendedZonesCount: 0,
                 recapturedZonesCount: 0,
+                swordCount: 0,
+                shieldCount: 0,
                 fireCount: 0,
-                trophyCount: 0,
-                devilCount: 0,
                 currentUserReaction: nil,
                 locationLabel: nil, // Fallback
                 calories: 0,

@@ -81,6 +81,7 @@ struct GamifiedWorkoutCard: View {
                         Text("\(workout.type.displayName) · \(workout.title.components(separatedBy: " · ").last ?? "") · \(workout.duration)")
                             .font(.subheadline)
                             .foregroundColor(.white.opacity(0.8))
+                            .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "timer")
                             .foregroundColor(.gray)
