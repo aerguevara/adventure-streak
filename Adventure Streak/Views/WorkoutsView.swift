@@ -32,9 +32,6 @@ struct WorkoutsView: View {
                         // B) Main Progress Card
                         progressCard
                         
-                        // C) Territory Summary
-                        territorySummary
-                        
                         // D) Territory Inventory
                         territoryInventorySection
                         
@@ -280,71 +277,6 @@ struct WorkoutsView: View {
         .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
     }
     
-    // MARK: - C) Territory Summary
-    var territorySummary: some View {
-        HStack(spacing: 16) {
-            // Icon
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(hex: "32D74B").opacity(0.15))
-                    .frame(width: 60, height: 60)
-                
-                Image(systemName: "map.fill")
-                    .font(.title2)
-                    .foregroundColor(Color(hex: "32D74B"))
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Control de Territorio")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                
-                HStack(alignment: .lastTextBaseline, spacing: 4) {
-                    Text("\(profileViewModel.totalCellsConquered)")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                    
-                    Text("zonas")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .padding(.bottom, 4)
-                }
-            }
-            
-            Spacer()
-            
-            // Stats
-            HStack(spacing: 16) {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("+\(profileViewModel.territoriesCount)")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    Text("Esta Semana")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-                
-                Divider()
-                    .frame(height: 30)
-                    .background(Color.white.opacity(0.1))
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("12%") // Placeholder for % control if not available
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    Text("Mapa Global")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-            }
-        }
-        .padding(20)
-        .background(Color(hex: "18181C"))
-        .cornerRadius(24)
-        .padding(.horizontal)
-    }
     
     // MARK: - D) Territory Inventory
     var territoryInventorySection: some View {
