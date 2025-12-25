@@ -25,6 +25,9 @@ struct User: Identifiable, Codable {
     // Aggregated territory stats (propagados desde la app)
     var totalCellsOwned: Int?
     var recentTerritories: Int?
+    var totalConqueredTerritories: Int?
+    var totalStolenTerritories: Int?
+    var totalDefendedTerritories: Int?
     
     // Extended Profile Info
     var prestige: Int?
@@ -44,6 +47,9 @@ struct User: Identifiable, Codable {
          level: Int = 1,
          totalCellsOwned: Int? = nil,
          recentTerritories: Int? = nil,
+         totalConqueredTerritories: Int? = nil,
+         totalStolenTerritories: Int? = nil,
+         totalDefendedTerritories: Int? = nil,
          prestige: Int? = nil,
          currentStreakWeeks: Int? = nil,
          bestWeeklyDistanceKm: Double? = nil,
@@ -58,6 +64,9 @@ struct User: Identifiable, Codable {
         self.level = level
         self.totalCellsOwned = totalCellsOwned
         self.recentTerritories = recentTerritories
+        self.totalConqueredTerritories = totalConqueredTerritories
+        self.totalStolenTerritories = totalStolenTerritories
+        self.totalDefendedTerritories = totalDefendedTerritories
         self.prestige = prestige
         self.currentStreakWeeks = currentStreakWeeks
         self.bestWeeklyDistanceKm = bestWeeklyDistanceKm
@@ -74,6 +83,9 @@ struct User: Identifiable, Codable {
         case level
         case totalCellsOwned
         case recentTerritories
+        case totalConqueredTerritories
+        case totalStolenTerritories
+        case totalDefendedTerritories
         case prestige
         case currentStreakWeeks
         case bestWeeklyDistanceKm
@@ -99,6 +111,9 @@ struct User: Identifiable, Codable {
         
         totalCellsOwned = try container.decodeIfPresent(Int.self, forKey: .totalCellsOwned)
         recentTerritories = try container.decodeIfPresent(Int.self, forKey: .recentTerritories)
+        totalConqueredTerritories = try container.decodeIfPresent(Int.self, forKey: .totalConqueredTerritories)
+        totalStolenTerritories = try container.decodeIfPresent(Int.self, forKey: .totalStolenTerritories)
+        totalDefendedTerritories = try container.decodeIfPresent(Int.self, forKey: .totalDefendedTerritories)
         prestige = try container.decodeIfPresent(Int.self, forKey: .prestige)
         currentStreakWeeks = try container.decodeIfPresent(Int.self, forKey: .currentStreakWeeks)
         bestWeeklyDistanceKm = try container.decodeIfPresent(Double.self, forKey: .bestWeeklyDistanceKm)

@@ -33,6 +33,9 @@ class ProfileViewModel: ObservableObject {
     @Published var territoriesCount: Int = 0
     @Published var activitiesCount: Int = 0
     @Published var totalCellsConquered: Int = 0
+    @Published var totalHistoricalConquered: Int = 0
+    @Published var totalStolen: Int = 0
+    @Published var totalDefended: Int = 0
     @Published var territoryInventory: [TerritoryInventoryItem] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
@@ -242,6 +245,10 @@ class ProfileViewModel: ObservableObject {
         if let urlString = user.avatarURL, let url = URL(string: urlString) {
             self.avatarURL = url
         }
+        
+        self.totalHistoricalConquered = user.totalConqueredTerritories ?? 0
+        self.totalStolen = user.totalStolenTerritories ?? 0
+        self.totalDefended = user.totalDefendedTerritories ?? 0
         
         // Sync GamificationService with fetched data
         // This will trigger the observers above to update the UI properties

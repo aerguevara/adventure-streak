@@ -35,6 +35,9 @@ struct WorkoutsView: View {
                         // D) Territory Inventory
                         territoryInventorySection
                         
+                        // New Territory Stats Grid
+                        territoryStatsGrid
+                        
                         // E) Achievements
                         achievementsSection
                         
@@ -388,6 +391,91 @@ struct WorkoutsView: View {
         
         // 1 Hour window
         return Date().timeIntervalSince(workout.date) < 3600
+    }
+    
+    // MARK: - Territory Stats Grid
+    var territoryStatsGrid: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Estadísticas de Exploración")
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding(.horizontal)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 16),
+                GridItem(.flexible(), spacing: 16)
+            ], spacing: 16) {
+                StatCard(
+                    title: "Conquistados",
+                    value: "\(profileViewModel.totalHistoricalConquered)",
+                    icon: "flag.fill",
+                    color: Color(hex: "4C6FFF")
+                )
+                
+                StatCard(
+                    title: "Robados",
+                    value: "\(profileViewModel.totalStolen)",
+                    icon: "shredder.fill", // Usando un icono agresivo para robos
+                    color: Color(hex: "FF453A")
+                )
+                
+                StatCard(
+                    title: "Defendidos",
+                    value: "\(profileViewModel.totalDefended)",
+                    icon: "shield.fill",
+                    color: Color(hex: "32D74B")
+                )
+                
+                StatCard(
+                    title: "Total Activos",
+                    value: "\(profileViewModel.totalCellsConquered)",
+                    icon: "map.fill",
+                    color: Color(hex: "A259FF")
+                )
+            }
+            .padding(.horizontal)
+        }
+    }
+}
+
+struct StatCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(color)
+                    .padding(8)
+                    .background(color.opacity(0.15))
+                    .clipShape(Circle())
+                
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(value)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: "18181C"))
+        .cornerRadius(20)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+        )
     }
 }
 
