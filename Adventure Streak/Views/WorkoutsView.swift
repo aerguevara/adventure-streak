@@ -405,28 +405,28 @@ struct WorkoutsView: View {
                 GridItem(.flexible(), spacing: 16),
                 GridItem(.flexible(), spacing: 16)
             ], spacing: 16) {
-                StatCard(
+                TerritoryStatCard(
                     title: "Conquistados",
                     value: "\(profileViewModel.totalHistoricalConquered)",
                     icon: "flag.fill",
                     color: Color(hex: "4C6FFF")
                 )
                 
-                StatCard(
+                TerritoryStatCard(
                     title: "Robados",
                     value: "\(profileViewModel.totalStolen)",
                     icon: "shredder.fill", // Usando un icono agresivo para robos
                     color: Color(hex: "FF453A")
                 )
                 
-                StatCard(
+                TerritoryStatCard(
                     title: "Defendidos",
                     value: "\(profileViewModel.totalDefended)",
                     icon: "shield.fill",
                     color: Color(hex: "32D74B")
                 )
                 
-                StatCard(
+                TerritoryStatCard(
                     title: "Total Activos",
                     value: "\(profileViewModel.totalCellsConquered)",
                     icon: "map.fill",
@@ -438,7 +438,7 @@ struct WorkoutsView: View {
     }
 }
 
-struct StatCard: View {
+struct TerritoryStatCard: View {
     let title: String
     let value: String
     let icon: String
