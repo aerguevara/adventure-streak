@@ -11,6 +11,21 @@ struct DebugSimulationView: View {
                 Color.black.ignoresSafeArea()
                 
                 List {
+                    Section(header: Text("Background Integration")) {
+                        Button(action: {
+                            HealthKitManager.shared.simulateBackgroundFetch(delay: 10)
+                            dismiss()
+                        }) {
+                            HStack {
+                                Image(systemName: "timer")
+                                Text("Simulate Background Fetch (10s)")
+                            }
+                        }
+                        Text("Tap this, then go to Home Screen immediately. Wait 10s for notification.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
                     Section(header: Text("HealthKit Simulation").foregroundColor(.gray)) {
                         Toggle("Modo Simulación", isOn: $hkManager.isSimulationMode)
                             .tint(.purple)

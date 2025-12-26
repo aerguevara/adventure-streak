@@ -1,0 +1,7 @@
+{
+    "Simulator Target Bundle": "com.aerguevara.Adventure-Streak",
+    "aps": {
+        "content-available": 1
+    },
+    "type": "mock_import_trigger"
+}

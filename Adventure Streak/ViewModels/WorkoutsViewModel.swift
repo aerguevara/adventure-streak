@@ -252,8 +252,8 @@ class WorkoutsViewModel: ObservableObject {
                         group.enter()
                         
                         let type = self.activityType(for: workout)
-                        let bundleId = workout.sourceRevision.source.bundleIdentifier
-                        let sourceName = workout.sourceRevision.source.name
+                        let bundleId = workout.sourceBundleIdentifier
+                        let sourceName = workout.sourceName
                         let requiresRoute = config.requiresRoute(for: bundleId) && type.isOutdoor
                         
                         HealthKitManager.shared.fetchRoute(for: workout) { result in
@@ -262,7 +262,7 @@ class WorkoutsViewModel: ObservableObject {
                                 semaphore.signal()
                             }
                             
-                            let distanceMeters = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
+                            let distanceMeters = workout.totalDistanceMeters ?? 0
                             let durationSeconds = workout.duration
                             let name = self.workoutName(for: workout)
                             
@@ -498,7 +498,9 @@ class WorkoutsViewModel: ObservableObject {
                                 self.processingCancellable?.cancel()
                                 
                                 // FINAL RESET
-                                self.isImporting = false
+                                // FINAL RESET
+                                // isImporting = false removed to keep bar visible until sheet covers it
+                                // It will be set to false by showProcessingSummary.didSet when sheet dismisses
                                 self.importTotal = 0
                                 self.importProcessed = 0
                             }
@@ -548,12 +550,8 @@ class WorkoutsViewModel: ObservableObject {
         // Watchdog: si en 12s no hubo progreso, resetea flags para permitir reintento
         DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
             guard let self = self else { return }
-            if (self.isImporting || self.isCheckingForWorkouts) && self.importProcessed == 0 && self.importTotal == 0 {
-                print("Import HK -> watchdog sin progreso, reseteando flags (checking/importing)")
-                self.isImporting = false
-                self.isCheckingForWorkouts = false
-                self.isLoading = false
-            }
+
+            // Watchdog block removed to prevent premature dismissal during race conditions
         }
         
         // Request permissions first
@@ -643,6 +641,8 @@ class WorkoutsViewModel: ObservableObject {
                     guard !newWorkouts.isEmpty else {
                         print("No new workouts to import.")
                         self.isCheckingForWorkouts = false
+                        print("No new workouts to import.")
+                        self.isCheckingForWorkouts = false
                         self.isImporting = false
                         self.isLoading = false
                         self.importTotal = 0
@@ -672,7 +672,10 @@ class WorkoutsViewModel: ObservableObject {
         DispatchQueue.global(qos: .utility).async {
             var newSessions: [ActivitySession] = []
             let group = DispatchGroup()
-            let semaphore = DispatchSemaphore(value: 1)
+            let semaphore = DispatchSemaphore(value: 1) // Throttle to prevent overloading CoreData/CloudKit
+            let isolationQueue = DispatchQueue(label: "com.adventurestreak.importIsolation")
+
+            var activitiesToMonitor: [UUID] = []
 
                     
                     for workout in newWorkouts {
@@ -725,8 +728,9 @@ class WorkoutsViewModel: ObservableObject {
                                     processingStatus: .processing
                                 )
                                 
-                                DispatchQueue.global(qos: .utility).sync {
+                                isolationQueue.sync {
                                     newSessions.append(session)
+                                    activitiesToMonitor.append(session.id)
                                 }
                             case .emptySeries:
                                 let gracePeriod: TimeInterval = 30 * 60
@@ -765,8 +769,9 @@ class WorkoutsViewModel: ObservableObject {
                                     processingStatus: .processing
                                 )
                                 
-                                DispatchQueue.global(qos: .utility).sync {
+                                isolationQueue.sync {
                                     newSessions.append(session)
+                                    activitiesToMonitor.append(session.id)
                                 }
                             case .error(let error):
                                 let gracePeriod: TimeInterval = 45 * 60 // Slightly longer for real errors
@@ -804,35 +809,37 @@ class WorkoutsViewModel: ObservableObject {
                                     durationSeconds: durationSeconds,
                                     workoutName: name,
                                     route: [],
-                                    processingStatus: .processing // Wait for GameEngine
+                                    processingStatus: .processing
                                 )
                                 
-                                DispatchQueue.global(qos: .utility).sync {
+                                isolationQueue.sync {
                                     newSessions.append(session)
+                                    activitiesToMonitor.append(session.id)
                                 }
                             }
                         }
                     }
                     
-                    group.wait() // Wait for all to finish
+                    group.wait()
                     
-                    // Save all at once on Main Thread
-                    // Save all at once on Main Thread
+                    print("Discovered \(newSessions.count) actual sessions to be processed.")
+                    
+                    // Create immutable copies to avoid capturing mutable vars in concurrent closures (Swift 6 warning fix)
+                    let finalSessions = newSessions
+                    let finalActivitiesToMonitor = activitiesToMonitor
+                    
                     DispatchQueue.main.async {
-                        if !newSessions.isEmpty {
-                            // Sort by date ascending to ensure correct historical replay
-                            let sortedSessions = newSessions.sorted { $0.endDate < $1.endDate }
-                            
-                            self.importTotal = sortedSessions.count
+                        if !finalSessions.isEmpty {
+                            // Update total to real number of sessions
+                            self.importTotal = finalSessions.count
                             self.importProcessed = 0
                             
-                            print("Saving \(sortedSessions.count) imported activities...")
+                            let sortedSessions = finalSessions.sorted { $0.endDate < $1.endDate }
                             
-                            // 2. Process through GameEngine (Individually for accuracy)
                             Task {
                                 guard let userId = AuthenticationService.shared.userId else {
-                                    print("HK import -> aborted: user logged out during processing")
-                                    await MainActor.run {
+                                    print("Import HK -> aborted: user logged out during fetch")
+                                    Task { @MainActor in
                                         self.isImporting = false
                                         self.isLoading = false
                                     }
@@ -840,47 +847,35 @@ class WorkoutsViewModel: ObservableObject {
                                 }
                                 let userName = AuthenticationService.shared.userName
                                 
-                                var activitiesToMonitor: [UUID] = []
-                                                                   for session in sortedSessions {
-                                        do {
-                                            // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
-                                            // Use GameEngine to process each imported activity
-                                            let result = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
-                                            
-                                            // Track total for UI progress
-                                            await MainActor.run {
-                                                self.importProcessed += 1
-                                            }
-                                            
-                                            // Only monitor sessions that were newly processed
-                                            if case .processed = result {
-                                                activitiesToMonitor.append(session.id)
-                                            }
-                                        } catch {
-                                            print("❌ Failed to process individual activity \(session.id): \(error)")
-                                            // Increment processed count anyway so the progress bar moves
-                                            await MainActor.run {
-                                                self.importProcessed += 1
-                                            }
+                                do {
+                                    // Process sessions one by one
+                                    // But since validation happens in Cloud, GameEngine.completeActivity 
+                                    // mainly saves initial request. The actual heavy lifting is server-side.
+                                    for session in sortedSessions {
+                                        let stats = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
+                                        // We don't increment IMPORTED here, we wait for SERVER processing
+                                        print("Processed request for \(session.id). Status: \(stats)")
+                                    }
+                                    
+                                    // Once all requests are sent, start monitoring
+                                    // Wait for activityStore to reflect the new activities (synced from local write)
+                                    
+                                    await MainActor.run {
+                                        // Check if monitoring is needed
+                                        if !finalActivitiesToMonitor.isEmpty {
+                                            // Only monitor TRULY new processed activities
+                                            self.monitorProcessing(for: finalActivitiesToMonitor)
+                                        } else {
+                                            print("✅ Import complete. No new activities to monitor for summary.")
+                                            // Reset counters and hide bar
+                                            self.isImporting = false
+                                            self.importTotal = 0
+                                            self.importProcessed = 0
                                         }
                                     }
-                                
-                                // Clean up and Monitor
-                                await MainActor.run {
-                                    // Refresh UI
-                                    self.isLoading = false
-                                    print("Import/Processing complete. Now monitoring...")
-                                    
-                                    if !activitiesToMonitor.isEmpty {
-                                        // Only monitor TRULY new processed activities
-                                        self.monitorProcessing(for: activitiesToMonitor)
-                                    } else {
-                                        print("✅ Import complete. No new activities to monitor for summary.")
-                                        // Reset counters and hide bar
-                                        self.isImporting = false
-                                        self.importTotal = 0
-                                        self.importProcessed = 0
-                                    }
+                                } catch {
+                                    print("❌ Failed processing batch: \(error)")
+                                    self.isImporting = false
                                 }
                             }
                         } else {
@@ -893,18 +888,64 @@ class WorkoutsViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Helper mappings
+    nonisolated private func activityType(for workout: WorkoutProtocol) -> ActivityType {
+        // Use updated protocol attributes
+        let isIndoor = (workout.metadata?["HKIndoorWorkout"] as? Bool) ?? false
+        
+        switch workout.workoutActivityType {
+        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
+            return .indoor
+        case .running:
+            return isIndoor ? .indoor : .run
+        case .walking:
+            return isIndoor ? .indoor : .walk
+        case .cycling:
+            return isIndoor ? .indoor : .bike
+        case .hiking:
+            return .hike
+        default:
+            return isIndoor ? .indoor : .otherOutdoor
+        }
+    }
     
+    nonisolated private func workoutName(for workout: WorkoutProtocol) -> String {
+        // Just derive a basic name or return empty to let View handle "running", etc.
+        // Or if you store custom titles in metadata
+        if let title = workout.metadata?["HKWorkoutTitle"] as? String {
+            return title
+        }
+        return fallbackWorkoutName(for: workout.workoutActivityType)
+    }
+    
+    nonisolated private func fallbackWorkoutName(for type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .running: return "Correr"
+        case .walking: return "Caminar"
+        case .cycling: return "Ciclismo"
+        case .hiking: return "Senderismo"
+        case .traditionalStrengthTraining: return "Fuerza Tradicional"
+        case .functionalStrengthTraining: return "Fuerza Funcional"
+        case .highIntensityIntervalTraining: return "HIIT"
+        case .flexibility: return "Flexibilidad"
+        case .yoga: return "Yoga"
+        case .pilates: return "Pilates"
+        default: return "Entrenamiento"
+        }
+    }
+    
+    // NEW: Handle pending route logic
     private func handlePendingRoute(
-        workout: HKWorkout,
+        workout: WorkoutProtocol,
         type: ActivityType,
-        workoutName: String?,
+        workoutName: String,
         sourceBundleId: String,
         sourceName: String,
         status: PendingRouteStatus,
         errorDescription: String?
     ) {
         let id = workout.uuid
-        let distanceMeters = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
+        let distanceMeters = workout.totalDistanceMeters ?? 0
         let existing = pendingRouteStore.find(workoutId: workout.uuid)
         let retryCount = (existing?.retryCount ?? 0) + 1
         let pending = PendingRouteImport(
@@ -912,7 +953,7 @@ class WorkoutsViewModel: ObservableObject {
             startDate: workout.startDate,
             endDate: workout.endDate,
             activityType: type,
-            distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
+            distanceMeters: distanceMeters,
             durationSeconds: workout.duration,
             workoutName: workoutName,
             sourceBundleId: sourceBundleId,
@@ -948,7 +989,7 @@ class WorkoutsViewModel: ObservableObject {
     
 #if canImport(FirebaseCrashlytics)
     private func recordRouteNonFatal(
-        workout: HKWorkout,
+        workout: WorkoutProtocol,
         type: ActivityType,
         sourceBundleId: String,
         sourceName: String,
@@ -967,7 +1008,7 @@ class WorkoutsViewModel: ObservableObject {
         crashlytics.setCustomValue(retryCount, forKey: "route_retry_count")
         crashlytics.setCustomValue(errorDescription ?? "", forKey: "route_error_description")
         crashlytics.setCustomValue(userId, forKey: "route_user_id")
-        let distanceKm = (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000.0
+        let distanceKm = (workout.totalDistanceMeters ?? 0) / 1000.0
         crashlytics.setCustomValue(String(format: "%.2f", distanceKm), forKey: "route_distance_km")
         crashlytics.setCustomValue(workout.duration, forKey: "route_duration_seconds")
         
@@ -1020,53 +1061,5 @@ class WorkoutsViewModel: ObservableObject {
         let minutes = Int(paceSecondsPerKm / 60)
         let seconds = Int(paceSecondsPerKm.truncatingRemainder(dividingBy: 60))
         return String(format: "%d:%02d/km", minutes, seconds)
-    }
-
-    nonisolated private func activityType(for workout: WorkoutProtocol) -> ActivityType {
-        let isIndoor = (workout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
-        
-        switch workout.workoutActivityType {
-        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
-            return .indoor
-        case .running:
-            return isIndoor ? .indoor : .run
-        case .walking:
-            return isIndoor ? .indoor : .walk
-        case .cycling:
-            return isIndoor ? .indoor : .bike
-        case .hiking:
-            return .hike
-        default:
-            return isIndoor ? .indoor : .otherOutdoor
-        }
-    }
-    
-    nonisolated private func workoutName(for workout: WorkoutProtocol) -> String {
-        // Usa el título que viene de HealthKit si existe
-        if let title = workout.metadata?["HKMetadataKeyWorkoutTitle"] as? String, !title.isEmpty {
-            return title
-        }
-        if let brand = workout.metadata?[HKMetadataKeyWorkoutBrandName] as? String, !brand.isEmpty {
-            return brand
-        }
-        
-        // Fallback: nombre por tipo en inglés (sin traducciones)
-        return fallbackWorkoutName(for: workout.workoutActivityType)
-    }
-    
-    nonisolated private func fallbackWorkoutName(for type: HKWorkoutActivityType) -> String {
-        switch type {
-        case .running: return "Correr"
-        case .walking: return "Caminar"
-        case .cycling: return "Ciclismo"
-        case .hiking: return "Senderismo"
-        case .traditionalStrengthTraining: return "Fuerza Tradicional"
-        case .functionalStrengthTraining: return "Fuerza Funcional"
-        case .highIntensityIntervalTraining: return "HIIT"
-        case .flexibility: return "Flexibilidad"
-        case .yoga: return "Yoga"
-        case .pilates: return "Pilates"
-        default: return "Entrenamiento"
-        }
     }
 }

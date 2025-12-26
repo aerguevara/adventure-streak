@@ -2,6 +2,7 @@ import Foundation
 import HealthKit
 import CoreLocation
 import UserNotifications
+import UIKit
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
@@ -17,13 +18,6 @@ protocol WorkoutProtocol: Sendable {
     var metadata: [String : Any]? { get }
     var sourceBundleIdentifier: String { get }
     var sourceName: String { get }
-}
-
-/// Result of fetching points for a route
-enum RouteFetchResult {
-    case success([RoutePoint])
-    case emptySeries
-    case error(Error)
 }
 
 /// Provider interface to allow mocking HealthKit data
@@ -75,7 +69,6 @@ class HealthKitManager: ObservableObject {
             return
         }
 
-        // Si ya está autorizado para workouts, evitar pedir de nuevo y continuar
         let workoutType = HKObjectType.workoutType()
         let currentStatus = healthStore.authorizationStatus(for: workoutType)
         if currentStatus == .sharingAuthorized {
@@ -104,7 +97,6 @@ class HealthKitManager: ObservableObject {
             }
         }
 
-        // Watchdog: si en 5s no recibimos callback, avisa en consola
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
             guard let self else { return }
             if self.isAuthorized == false {
@@ -113,9 +105,7 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    // MARK: - Background delivery
     func startBackgroundObservers() {
-        // Asegura permisos de HealthKit
         requestPermissions { success, error in
             guard success else {
                 if let error { print("HK permisos rechazados: \(error)") }
@@ -162,6 +152,128 @@ class HealthKitManager: ObservableObject {
     
     func fetchRoute(for workout: WorkoutProtocol, completion: @escaping (RouteFetchResult) -> Void) {
         provider.fetchRoute(for: workout, completion: completion)
+    }
+
+    // MARK: - Anchored query para detectar nuevos entrenos
+    private func handleWorkoutUpdates(completion: @escaping () -> Void) {
+        let anchor = loadAnchor()
+        let query = HKAnchoredObjectQuery(type: .workoutType(), predicate: nil, anchor: anchor, limit: HKObjectQueryNoLimit) { [weak self] _, samplesOrNil, _, newAnchor, error in
+            guard let self else {
+                completion()
+                return
+            }
+            
+            if let error {
+                print("❌ HKAnchoredObjectQuery error: \(error)")
+                completion()
+                return
+            }
+            
+            let workouts = (samplesOrNil as? [HKWorkout]) ?? []
+            if let newAnchor { self.saveAnchor(newAnchor) }
+            
+            guard !workouts.isEmpty else {
+                completion()
+                return
+            }
+            
+            self.notifyNewWorkouts(workouts as [WorkoutProtocol])
+            completion()
+        }
+        
+        healthStore.execute(query)
+    }
+    
+    private func notifyNewWorkouts(_ workouts: [WorkoutProtocol]) {
+        let notified = Set(userDefaults.stringArray(forKey: notifiedWorkoutsKey) ?? [])
+        var newNotified = notified
+        
+        for workout in workouts {
+            let id = workout.uuid.uuidString
+            if newNotified.contains(id) { continue }
+            newNotified.insert(id)
+            
+            let hoursSinceEnd = Date().timeIntervalSince(workout.endDate) / 3600
+            if hoursSinceEnd > 24 {
+                continue
+            }
+            
+            let content = UNMutableNotificationContent()
+            content.title = "Nuevo entreno detectado"
+            let distance = workout.totalDistanceMeters ?? 0
+            let km = distance / 1000
+            let formattedDistance = km > 0 ? String(format: "%.1f km", km) : ""
+            content.body = formattedDistance.isEmpty
+                ? "🔥 ¡Nuevo entreno detectado! Entra para conquistar territorios y subir de nivel."
+                : "🔥 ¡Has recorrido \(formattedDistance)! Entra ahora para reclamar tus territorios y XP."
+            content.sound = .default
+            
+            let request = UNNotificationRequest(identifier: "workout_\(id)", content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(request)
+        }
+        
+        userDefaults.set(Array(newNotified), forKey: notifiedWorkoutsKey)
+    }
+    
+    private func loadAnchor() -> HKQueryAnchor? {
+        guard let data = userDefaults.data(forKey: workoutAnchorKey) else { return nil }
+        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
+    }
+    
+    private func saveAnchor(_ anchor: HKQueryAnchor) {
+        if let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) {
+            userDefaults.set(data, forKey: workoutAnchorKey)
+        }
+    }
+
+    
+    // Public wrapper for simulation
+    func triggerNotificationCheck(for workouts: [WorkoutProtocol]) {
+        self.notifyNewWorkouts(workouts)
+    }
+    
+    // Simulate background fetch with delay
+    func simulateBackgroundFetch(delay: TimeInterval = 10.0) {
+        print("🕒 [Simulation] Starting background task simulation...")
+        
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            
+            var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+            backgroundTask = UIApplication.shared.beginBackgroundTask {
+                UIApplication.shared.endBackgroundTask(backgroundTask)
+                backgroundTask = .invalid
+            }
+            
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            
+            print("🚀 [Simulation] Firing delayed fetch...")
+            
+            // Force Simulation Mode for this debug trigger
+            #if DEBUG
+            if !self.isSimulationMode {
+                print("⚠️ [Simulation] Auto-enabling Simulation Mode due to trigger")
+                self.isSimulationMode = true
+            }
+            #endif
+
+            self.provider.fetchWorkouts { [weak self] workouts, error in
+                guard let self = self, let workouts = workouts else {
+                    UIApplication.shared.endBackgroundTask(backgroundTask)
+                    backgroundTask = .invalid
+                    return
+                }
+                
+                // 1. Notify (Simulates 'HKObserverQuery' detecting new data)
+                self.notifyNewWorkouts(workouts as [WorkoutProtocol])
+                
+                // 2. End task
+                Task { @MainActor in
+                    UIApplication.shared.endBackgroundTask(backgroundTask)
+                    backgroundTask = .invalid
+                }
+            }
+        }
     }
 }
 
@@ -245,7 +357,7 @@ final class RealHealthKitProvider: HealthKitProvider {
 
 // MARK: - Mock Implementation
 final class MockHealthKitProvider: HealthKitProvider {
-    struct MockWorkout: WorkoutProtocol {
+    struct MockWorkout: WorkoutProtocol, @unchecked Sendable {
         var uuid: UUID
         var startDate: Date
         var endDate: Date
@@ -263,7 +375,7 @@ final class MockHealthKitProvider: HealthKitProvider {
     func fetchWorkouts(completion: @escaping ([WorkoutProtocol]?, Error?) -> Void) {
         #if canImport(FirebaseFirestore)
         print("🧪 [MockProvider] Fetching from Firestore collection 'debug_mock_workouts'...")
-        Firestore.firestore().collection("debug_mock_workouts").getDocuments { snapshot, error in
+        Firestore.shared.collection("debug_mock_workouts").getDocuments { snapshot, error in
             if let error = error {
                 print("❌ [MockProvider] Error: \(error.localizedDescription)")
                 completion(nil, error)
@@ -275,14 +387,17 @@ final class MockHealthKitProvider: HealthKitProvider {
                 guard let idString = data["id"] as? String,
                       let uuid = UUID(uuidString: idString),
                       let start = (data["startDate"] as? Timestamp)?.dateValue(),
-                      let end = (data["endDate"] as? Timestamp)?.dateValue() else { return nil }
+                      let end = (data["endDate"] as? Timestamp)?.dateValue() else {
+                    print("⚠️ [MockProvider] Skipping invalid doc: \(doc.data())")
+                    return nil
+                }
                 
                 let typeRaw = (data["type"] as? UInt) ?? HKWorkoutActivityType.running.rawValue
                 
                 // Parse route if present
                 var routePoints: [RoutePoint]? = nil
                 if let routeData = data["route"] as? [[String: Any]] {
-                    routePoints = routeData.compactMap { p in
+                    routePoints = routeData.compactMap { p -> RoutePoint? in
                         guard let lat = p["latitude"] as? Double,
                               let lon = p["longitude"] as? Double else { return nil }
                         
@@ -319,81 +434,6 @@ final class MockHealthKitProvider: HealthKitProvider {
             completion(.success(points))
         } else {
             completion(.emptySeries)
-        }
-    }
-}
-    
-    // MARK: - Anchored query para detectar nuevos entrenos
-    private func handleWorkoutUpdates(completion: @escaping () -> Void) {
-        let anchor = loadAnchor()
-        let query = HKAnchoredObjectQuery(type: .workoutType(), predicate: nil, anchor: anchor, limit: HKObjectQueryNoLimit) { [weak self] _, samplesOrNil, _, newAnchor, error in
-            guard let self else {
-                completion()
-                return
-            }
-            
-            if let error {
-                print("❌ HKAnchoredObjectQuery error: \(error)")
-                completion()
-                return
-            }
-            
-            let workouts = (samplesOrNil as? [HKWorkout]) ?? []
-            if let newAnchor { self.saveAnchor(newAnchor) }
-            
-            guard !workouts.isEmpty else {
-                completion()
-                return
-            }
-            
-            notifyNewWorkouts(workouts)
-            completion()
-        }
-        
-        healthStore.execute(query)
-    }
-    
-    private func notifyNewWorkouts(_ workouts: [HKWorkout]) {
-        let notified = Set(userDefaults.stringArray(forKey: notifiedWorkoutsKey) ?? [])
-        var newNotified = notified
-        
-        for workout in workouts {
-            let id = workout.uuid.uuidString
-            if newNotified.contains(id) { continue }
-            newNotified.insert(id)
-            
-            // Suppress notifications for historic workouts (> 24 hours old)
-            // This prevents spam during initial import.
-            let hoursSinceEnd = Date().timeIntervalSince(workout.endDate) / 3600
-            if hoursSinceEnd > 24 {
-                continue
-            }
-            
-            let content = UNMutableNotificationContent()
-            content.title = "Nuevo entreno detectado"
-            let distance = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
-            let km = distance / 1000
-            let formattedDistance = km > 0 ? String(format: "%.1f km", km) : ""
-            content.body = formattedDistance.isEmpty
-                ? "🔥 ¡Nuevo entreno detectado! Entra para conquistar territorios y subir de nivel."
-                : "🔥 ¡Has recorrido \(formattedDistance)! Entra ahora para reclamar tus territorios y XP."
-            content.sound = .default
-            
-            let request = UNNotificationRequest(identifier: "workout_\(id)", content: content, trigger: nil)
-            UNUserNotificationCenter.current().add(request)
-        }
-        
-        userDefaults.set(Array(newNotified), forKey: notifiedWorkoutsKey)
-    }
-    
-    private func loadAnchor() -> HKQueryAnchor? {
-        guard let data = userDefaults.data(forKey: workoutAnchorKey) else { return nil }
-        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
-    }
-    
-    private func saveAnchor(_ anchor: HKQueryAnchor) {
-        if let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) {
-            userDefaults.set(data, forKey: workoutAnchorKey)
         }
     }
 }

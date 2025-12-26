@@ -67,6 +67,20 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
   func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
       return [.banner, .sound, .badge]
   }
+
+  // Handle Notification Tap (User Interaction)
+  func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+      let userInfo = response.notification.request.content.userInfo
+      
+      if let type = userInfo["type"] as? String, type == "mock_import_trigger" {
+          print("👆 [Notification] User tapped simulation trigger. Starting fetch...")
+          #if DEBUG
+          HealthKitManager.shared.simulateBackgroundFetch(delay: 0.5)
+          #endif
+      }
+      
+      completionHandler()
+  }
 }
 
 @main
