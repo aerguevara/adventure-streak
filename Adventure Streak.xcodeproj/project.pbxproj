@@ -292,7 +292,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "GSP_PATH=\"${PROJECT_DIR}/GoogleService-Info.plist\"\nif [ -f \"$GSP_PATH\" ]; then\n  \"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\" -gsp \"$GSP_PATH\" -dsym \"${DWARF_DSYM_FOLDER_PATH}\" --skip-dsym-validation\n  echo \"Crashlytics upload completed\" > \"${DERIVED_FILE_DIR}/crashlytics-upload.log\"\nelse\n  echo \"[Crashlytics] Skipping: GoogleService-Info.plist not found at $GSP_PATH\" > \"${DERIVED_FILE_DIR}/crashlytics-upload.log\"\nfi\n";
+			shellScript = "GSP_PATH=\"${PROJECT_DIR}/Adventure Streak/GoogleService-Info.plist\"\nif [ -f \"$GSP_PATH\" ]; then\n  \"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols\" --build-phase -gsp \"$GSP_PATH\" -dsym \"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}\" > \"${DERIVED_FILE_DIR}/crashlytics-upload.log\" 2>&1 &\nelse\n  echo \"[Crashlytics] Skipping: GoogleService-Info.plist not found at $GSP_PATH\" > \"${DERIVED_FILE_DIR}/crashlytics-upload.log\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
