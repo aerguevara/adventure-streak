@@ -125,7 +125,7 @@ final class GameConfigService: ObservableObject {
         
         #if canImport(FirebaseFirestore)
         do {
-            let snapshot = try await Firestore.firestore()
+            let snapshot = try await Firestore.shared
                 .collection("config")
                 .document("gameplay")
                 .getDocument()

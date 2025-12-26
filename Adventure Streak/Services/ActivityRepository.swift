@@ -90,7 +90,7 @@ final class ActivityRepository {
     
     private init() {
         #if canImport(FirebaseFirestore)
-        self.db = Firestore.firestore()
+        self.db = Firestore.shared
         #endif
     }
     

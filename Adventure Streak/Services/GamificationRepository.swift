@@ -10,7 +10,7 @@ class GamificationRepository: ObservableObject {
     
     nonisolated private let db: Any? = {
         #if canImport(FirebaseFirestore)
-        return Firestore.firestore()
+        return Firestore.shared
         #else
         return nil
         #endif

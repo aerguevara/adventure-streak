@@ -58,7 +58,18 @@ class WorkoutsViewModel: ObservableObject {
     @Published var importTotal: Int = 0
     @Published var importProcessed: Int = 0
     
-    @Published var showProcessingSummary: Bool = false
+    @Published var showProcessingSummary: Bool = false {
+        didSet {
+            if !showProcessingSummary {
+                // Cleanup: prevents accumulation and stale data
+                self.processingSummaryData = nil
+                self.isSummaryTriggered = false
+                self.importTotal = 0
+                self.importProcessed = 0
+                self.isImporting = false
+            }
+        }
+    }
     @Published var processingSummaryData: GlobalImportSummary?
     
     private let activityStore: ActivityStore

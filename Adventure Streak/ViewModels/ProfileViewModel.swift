@@ -268,7 +268,7 @@ class ProfileViewModel: ObservableObject {
             let url = try await storageRef.downloadURL()
             
             // Update Firestore user document
-            let userRef = Firestore.firestore().collection("users").document(userId)
+            let userRef = Firestore.shared.collection("users").document(userId)
             try await userRef.setData(["avatarURL": url.absoluteString], merge: true)
             
             await MainActor.run {

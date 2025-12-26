@@ -19,7 +19,7 @@ class NotificationService: ObservableObject {
     private let cachedTokenKey = "fcm_cached_token"
     
     #if canImport(FirebaseFirestore)
-    private var db = Firestore.firestore()
+    private var db = Firestore.shared
     private var listenerRegistration: ListenerRegistration?
     #endif
     

@@ -14,7 +14,7 @@ final class ReactionRepository: ObservableObject {
     @Published private(set) var reactionStates: [String: ActivityReactionState] = [:]
 
     #if canImport(FirebaseFirestore)
-    nonisolated private let db = Firestore.firestore()
+    nonisolated private let db = Firestore.shared
     private var statListeners: [String: ListenerRegistration] = [:]
     private var userListeners: [String: ListenerRegistration] = [:]
     #endif

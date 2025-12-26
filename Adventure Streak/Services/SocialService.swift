@@ -23,7 +23,7 @@ class SocialService: ObservableObject {
     // MARK: - Dependencies
     nonisolated private let db: Any? = {
         #if canImport(FirebaseFirestore)
-        return Firestore.firestore()
+        return Firestore.shared
         #else
         return nil
         #endif

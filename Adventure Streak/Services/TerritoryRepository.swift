@@ -19,7 +19,7 @@ class TerritoryRepository: ObservableObject {
     
     init() {
         #if canImport(FirebaseFirestore)
-        db = Firestore.firestore()
+        db = Firestore.shared
         #endif
     }
     

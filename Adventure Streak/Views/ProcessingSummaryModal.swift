@@ -44,7 +44,7 @@ struct ProcessingSummaryModal: View {
                     }
                     
                     // Mini Map
-                    if !summary.routeCoordinates.isEmpty {
+                    if !summary.territoryPolygons.isEmpty {
                         MiniMapSummaryView(routes: summary.routeCoordinates, territories: summary.territoryPolygons)
                             .frame(height: 200)
                             .cornerRadius(12)
@@ -235,7 +235,7 @@ struct MiniMapSummaryView: UIViewRepresentable {
         
         // Union routes
         for route in routes {
-            let rect = MKPolygon(coordinates: route, count: route.count).boundingMapRect
+            let rect = MKPolyline(coordinates: route, count: route.count).boundingMapRect
             mapRect = mapRect.isNull ? rect : mapRect.union(rect)
         }
         

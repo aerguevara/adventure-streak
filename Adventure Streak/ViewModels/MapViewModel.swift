@@ -388,7 +388,7 @@ class MapViewModel: ObservableObject {
         
         #if canImport(FirebaseFirestore)
         do {
-            let db = Firestore.firestore()
+            let db = Firestore.shared
             let doc = try await db.collection("users").document(userId).getDocument()
             if let urlString = doc.get("avatarURL") as? String,
                let url = URL(string: urlString) {
@@ -407,7 +407,7 @@ class MapViewModel: ObservableObject {
     private func fetchOwnerProfile(userId: String) async {
         #if canImport(FirebaseFirestore)
         do {
-            let db = Firestore.firestore()
+            let db = Firestore.shared
             let doc = try await db.collection("users").document(userId).getDocument()
             let displayName = (doc.get("displayName") as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             let xpValue = doc.get("xp") as? Int
