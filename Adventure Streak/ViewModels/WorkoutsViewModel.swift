@@ -830,9 +830,7 @@ class WorkoutsViewModel: ObservableObject {
                                 let userName = AuthenticationService.shared.userName
                                 
                                 var activitiesToMonitor: [UUID] = []
-                                
-                                do {
-                                    for session in sortedSessions {
+                                                                   for session in sortedSessions {
                                         do {
                                             // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
                                             // Use GameEngine to process each imported activity
@@ -855,9 +853,6 @@ class WorkoutsViewModel: ObservableObject {
                                             }
                                         }
                                     }
-                                } catch {
-                                    print("Fatal error processing import: \(error)")
-                                }
                                 
                                 // Clean up and Monitor
                                 await MainActor.run {
