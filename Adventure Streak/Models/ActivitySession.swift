@@ -22,18 +22,19 @@ struct ActivitySession: Identifiable, Codable {
     var locationLabel: String?
     
     // NEW: Processing Status for UI Feedback
-    var processingStatus: ProcessingStatus = .completed
+    var processingStatus: ProcessingStatus = .pending
     // NEW: List of users who lost territory to this activity (for Summary)
     var conqueredVictims: [String]?
     
     enum ProcessingStatus: String, Codable {
-        case pending
-        case processing
-        case completed
-        case error
+        case uploading = "uploading"
+        case pending = "pending"
+        case processing = "processing"
+        case completed = "completed"
+        case error = "error"
     }
     
-    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, workoutName: String? = nil, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil, territoryStats: TerritoryStats? = nil, missions: [Mission]? = nil, calories: Double? = nil, averageHeartRate: Int? = nil, locationLabel: String? = nil, processingStatus: ProcessingStatus = .completed, conqueredVictims: [String]? = nil) {
+    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, workoutName: String? = nil, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil, territoryStats: TerritoryStats? = nil, missions: [Mission]? = nil, calories: Double? = nil, averageHeartRate: Int? = nil, locationLabel: String? = nil, processingStatus: ProcessingStatus = .pending, conqueredVictims: [String]? = nil) {
         self.id = id
         self.startDate = startDate
         self.endDate = endDate

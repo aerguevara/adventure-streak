@@ -408,6 +408,8 @@ class WorkoutsViewModel: ObservableObject {
     }
     
     // Monitor specific activities for server-side completion
+    private var isSummaryTriggered = false 
+
     private func monitorProcessing(for activityIds: [UUID]) {
         guard !activityIds.isEmpty else { return }
         
@@ -416,6 +418,7 @@ class WorkoutsViewModel: ObservableObject {
         // Reset summary
         self.processingSummaryData = GlobalImportSummary()
         self.showProcessingSummary = false
+        self.isSummaryTriggered = false
         
         // Cancel previous monitoring
         processingCancellable?.cancel()
@@ -429,19 +432,23 @@ class WorkoutsViewModel: ObservableObject {
             .sink { [weak self] targetActivities in
                 guard let self = self else { return }
                 
-                // Check progress - Trust XP presence as completion signal
+                // Check progress - wait for status COMPLETED + XP + TERRITORY STATS
                 let completed = targetActivities.filter { 
-                    ($0.processingStatus == .completed || $0.xpBreakdown != nil) || 
+                    ($0.processingStatus == .completed && $0.xpBreakdown != nil && $0.territoryStats != nil) || 
                     $0.processingStatus == .error 
                 }
                 // Update imported count for progress bar
                 self.importProcessed = completed.count
                 
-                if completed.count == activityIds.count && !targetActivities.isEmpty {
-                    print("✅ All monitored activities processed!")
+                if completed.count == activityIds.count && !targetActivities.isEmpty && !self.isSummaryTriggered {
+                    print("✅ [Monitor] All activities processed! Waiting 1s for consistency...")
+                    self.isSummaryTriggered = true
                     
                     // Aggregate stats asynchronously to fetch territories
                     Task {
+                        // Safety delay to allow Firestore subcollections to propagate
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                        
                         var summary = GlobalImportSummary()
                         for activity in completed {
                             // Extract stats
@@ -703,7 +710,8 @@ class WorkoutsViewModel: ObservableObject {
                                     distanceMeters: distanceMeters,
                                     durationSeconds: durationSeconds,
                                     workoutName: name,
-                                    route: routePoints
+                                    route: routePoints,
+                                    processingStatus: .processing
                                 )
                                 
                                 DispatchQueue.global(qos: .utility).sync {
@@ -742,7 +750,8 @@ class WorkoutsViewModel: ObservableObject {
                                     distanceMeters: distanceMeters,
                                     durationSeconds: durationSeconds,
                                     workoutName: name,
-                                    route: []
+                                    route: [],
+                                    processingStatus: .processing
                                 )
                                 
                                 DispatchQueue.global(qos: .utility).sync {
@@ -824,23 +833,30 @@ class WorkoutsViewModel: ObservableObject {
                                 
                                 do {
                                     for session in sortedSessions {
-                                        // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
-                                        // Use GameEngine to process each imported activity
-                                        let result = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
-                                        
-                                        // Track total for UI progress
-                                        await MainActor.run {
-                                            self.importProcessed += 1
-                                        }
-                                        
-                                        // Only monitor sessions that were newly processed
-                                        if case .processed = result {
-                                            activitiesToMonitor.append(session.id)
+                                        do {
+                                            // IMPLEMENTATION: ADVENTURE STREAK GAME SYSTEM
+                                            // Use GameEngine to process each imported activity
+                                            let result = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
+                                            
+                                            // Track total for UI progress
+                                            await MainActor.run {
+                                                self.importProcessed += 1
+                                            }
+                                            
+                                            // Only monitor sessions that were newly processed
+                                            if case .processed = result {
+                                                activitiesToMonitor.append(session.id)
+                                            }
+                                        } catch {
+                                            print("❌ Failed to process individual activity \(session.id): \(error)")
+                                            // Increment processed count anyway so the progress bar moves
+                                            await MainActor.run {
+                                                self.importProcessed += 1
+                                            }
                                         }
                                     }
-                                    
                                 } catch {
-                                    print("Error processing import: \(error)")
+                                    print("Fatal error processing import: \(error)")
                                 }
                                 
                                 // Clean up and Monitor

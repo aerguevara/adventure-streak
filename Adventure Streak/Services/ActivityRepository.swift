@@ -51,7 +51,7 @@ private struct FirestoreActivity: Codable {
         self.routeChunkCount = routeChunkCount
         self.territoryPointsCount = nil
         self.territoryChunkCount = territoryChunkCount
-        self.processingStatus = includeProcessingStatus ? "pending" : nil
+        self.processingStatus = includeProcessingStatus ? "uploading" : nil
         self.lastUpdatedAt = Date()
         self.locationLabel = activity.locationLabel
     }
@@ -95,7 +95,7 @@ final class ActivityRepository {
     }
     
     /// Saves or updates an activity in the top-level `activities` collection keyed by user.
-    func saveActivity(_ activity: ActivitySession, territories: [TerritoryCell]? = nil, userId: String) async {
+    func saveActivity(_ activity: ActivitySession, territories: [TerritoryCell]? = nil, userId: String) async throws {
         #if canImport(FirebaseFirestore)
         let docId = activity.id.uuidString
         let docRef = db.collection("activities").document(docId)
@@ -110,7 +110,7 @@ final class ActivityRepository {
             let existing = try await docRef.getDocument()
             if existing.exists,
                let status = existing.data()?["processingStatus"] as? String,
-               !status.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+               (status == "completed" || status == "error") {
                 includeProcessingStatus = false
             } else {
                 includeProcessingStatus = true
@@ -144,7 +144,7 @@ final class ActivityRepository {
             print("[Activities] Saved metadata for \(docId)")
         } catch {
             print("[Activities] Failed to save metadata for \(docId): \(error.localizedDescription)")
-            return
+            throw error
         }
         
         // 2) Save route chunks in subcollection
@@ -158,6 +158,7 @@ final class ActivityRepository {
                     .setData(from: chunkPayload, merge: true)
             } catch {
                 print("[Activities] Failed to save route chunk \(index) for \(docId): \(error.localizedDescription)")
+                throw error
             }
         }
         
@@ -172,6 +173,7 @@ final class ActivityRepository {
                     .setData(from: chunkPayload, merge: true)
             } catch {
                 print("[Activities] Failed to save territory chunk \(index) for \(docId): \(error.localizedDescription)")
+                throw error
             }
         }
 
@@ -182,6 +184,7 @@ final class ActivityRepository {
                 print("[Activities] Finalized upload for \(docId). Status set to PENDING.")
             } catch {
                 print("[Activities] Failed to set status to pending for \(docId): \(error.localizedDescription)")
+                throw error
             }
         }
         #endif
@@ -238,7 +241,8 @@ final class ActivityRepository {
                             xpBreakdown: remote.xpBreakdown,
                             territoryStats: remote.territoryStats,
                             missions: remote.missions,
-                            locationLabel: remote.locationLabel
+                            locationLabel: remote.locationLabel,
+                            processingStatus: ActivitySession.ProcessingStatus(rawValue: remote.processingStatus ?? "") ?? .pending
                         )
                     } catch {
                         print("Error decoding firestore activity \(doc.documentID):")
@@ -283,7 +287,11 @@ final class ActivityRepository {
                 if doc.exists { continue }
             } catch { }
             #endif
-            await saveActivity(activity, userId: userId)
+            do {
+                try await saveActivity(activity, userId: userId)
+            } catch {
+                print("[Activities] Failed to save activity \(activity.id.uuidString) in batch: \(error.localizedDescription)")
+            }
         }
     }
     

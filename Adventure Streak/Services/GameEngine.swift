@@ -82,9 +82,16 @@ class GameEngine {
         updatedActivity.locationLabel = smartLocation
         activityStore.updateActivity(updatedActivity)
         
-        // 7b. Persist remotely in dedicated collection (non-blocking) - Triggers Cloud Function
-        Task {
-            await self.activityRepository.saveActivity(updatedActivity, territories: territoryResult.cells, userId: userId)
+        // 7b. Persist remotely in dedicated collection (Blocking) - Triggers Cloud Function
+        do {
+            try await self.activityRepository.saveActivity(updatedActivity, territories: territoryResult.cells, userId: userId)
+        } catch {
+            print("❌ [GameEngine] Failed to save activity remotely: \(error)")
+            // Update local status to error so the UI can proceed/show error
+            var errorActivity = updatedActivity
+            errorActivity.processingStatus = .error
+            activityStore.updateActivity(errorActivity)
+            throw error // Rethrow to inform VM
         }
         
         // 9. Workout import notification is now handled server-side
