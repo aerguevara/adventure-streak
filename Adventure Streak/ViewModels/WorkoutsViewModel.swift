@@ -665,7 +665,7 @@ class WorkoutsViewModel: ObservableObject {
     }
     
     // Extracted for clarity and async handling
-    private func processNewWorkouts(_ newWorkouts: [HKWorkout], userId: String) {
+    private func processNewWorkouts(_ newWorkouts: [WorkoutProtocol], userId: String) {
         let config = self.configService.config
         let pendingStore = self.pendingRouteStore
                 
@@ -680,8 +680,8 @@ class WorkoutsViewModel: ObservableObject {
                         group.enter()
                         
                         let type = self.activityType(for: workout)
-                        let bundleId = workout.sourceRevision.source.bundleIdentifier
-                        let sourceName = workout.sourceRevision.source.name
+                        let bundleId = workout.sourceBundleIdentifier
+                        let sourceName = workout.sourceName
                         let requiresRoute = config.requiresRoute(for: bundleId) && type.isOutdoor
                         
                         HealthKitManager.shared.fetchRoute(for: workout) { result in
@@ -690,7 +690,7 @@ class WorkoutsViewModel: ObservableObject {
                                 semaphore.signal() // Release slot
                             }
 
-                            let distanceMeters = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
+                            let distanceMeters = workout.totalDistanceMeters ?? 0
                             let durationSeconds = workout.duration
                             let name = self.workoutName(for: workout)
                             
@@ -1022,7 +1022,7 @@ class WorkoutsViewModel: ObservableObject {
         return String(format: "%d:%02d/km", minutes, seconds)
     }
 
-    nonisolated private func activityType(for workout: HKWorkout) -> ActivityType {
+    nonisolated private func activityType(for workout: WorkoutProtocol) -> ActivityType {
         let isIndoor = (workout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
         
         switch workout.workoutActivityType {
@@ -1041,7 +1041,7 @@ class WorkoutsViewModel: ObservableObject {
         }
     }
     
-    nonisolated private func workoutName(for workout: HKWorkout) -> String {
+    nonisolated private func workoutName(for workout: WorkoutProtocol) -> String {
         // Usa el título que viene de HealthKit si existe
         if let title = workout.metadata?["HKMetadataKeyWorkoutTitle"] as? String, !title.isEmpty {
             return title

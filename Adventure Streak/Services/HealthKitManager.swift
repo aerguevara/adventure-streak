@@ -2,6 +2,47 @@ import Foundation
 import HealthKit
 import CoreLocation
 import UserNotifications
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+
+/// Abstract workout representation to support both HealthKit and Simulated data
+protocol WorkoutProtocol: Sendable {
+    var uuid: UUID { get }
+    var startDate: Date { get }
+    var endDate: Date { get }
+    var duration: TimeInterval { get }
+    var workoutActivityType: HKWorkoutActivityType { get }
+    var totalDistanceMeters: Double? { get }
+    var metadata: [String : Any]? { get }
+    var sourceBundleIdentifier: String { get }
+    var sourceName: String { get }
+}
+
+/// Result of fetching points for a route
+enum RouteFetchResult {
+    case success([RoutePoint])
+    case emptySeries
+    case error(Error)
+}
+
+/// Provider interface to allow mocking HealthKit data
+protocol HealthKitProvider: Sendable {
+    func fetchWorkouts(completion: @escaping ([WorkoutProtocol]?, Error?) -> Void)
+    func fetchRoute(for workout: WorkoutProtocol, completion: @escaping (RouteFetchResult) -> Void)
+}
+
+extension HKWorkout: WorkoutProtocol {
+    var totalDistanceMeters: Double? {
+        return self.totalDistance?.doubleValue(for: .meter())
+    }
+    var sourceBundleIdentifier: String {
+        return self.sourceRevision.source.bundleIdentifier
+    }
+    var sourceName: String {
+        return self.sourceRevision.source.name
+    }
+}
 
 class HealthKitManager: ObservableObject {
     static let shared = HealthKitManager()
@@ -9,6 +50,19 @@ class HealthKitManager: ObservableObject {
     let healthStore = HKHealthStore()
     
     @Published var isAuthorized = false
+    @Published var isSimulationMode = false
+    
+    // Providers
+    private let realProvider = RealHealthKitProvider()
+    private var mockProvider: MockHealthKitProvider?
+    
+    var provider: HealthKitProvider {
+        if isSimulationMode {
+            if mockProvider == nil { mockProvider = MockHealthKitProvider() }
+            return mockProvider!
+        }
+        return realProvider
+    }
     
     private let workoutAnchorKey = "hk_workout_anchor"
     private let notifiedWorkoutsKey = "hk_notified_workouts"
@@ -102,30 +156,38 @@ class HealthKitManager: ObservableObject {
         healthStore.execute(query)
     }
     
-    func fetchWorkouts(completion: @escaping ([HKWorkout]?, Error?) -> Void) {
-        // We want all workouts (indoor y outdoor), so we pass nil as predicate and filter later
-        let predicate: NSPredicate? = nil
-        // Nota: ya no filtramos a solo actividades outdoor, la clasificación se hace en el ViewModel.
-        
+    func fetchWorkouts(completion: @escaping ([WorkoutProtocol]?, Error?) -> Void) {
+        provider.fetchWorkouts(completion: completion)
+    }
+    
+    func fetchRoute(for workout: WorkoutProtocol, completion: @escaping (RouteFetchResult) -> Void) {
+        provider.fetchRoute(for: workout, completion: completion)
+    }
+}
+
+// MARK: - Real Implementation
+final class RealHealthKitProvider: HealthKitProvider {
+    private let healthStore = HKHealthStore()
+
+    func fetchWorkouts(completion: @escaping ([WorkoutProtocol]?, Error?) -> Void) {
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
-        
-        print("HK fetchWorkouts — lanzando consulta a HealthKit...")
-        let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: 100, sortDescriptors: [sortDescriptor]) { _, samples, error in
+        let query = HKSampleQuery(sampleType: .workoutType(), predicate: nil, limit: 100, sortDescriptors: [sortDescriptor]) { _, samples, error in
             guard let workouts = samples as? [HKWorkout], error == nil else {
-                if let error { print("HK fetchWorkouts — error: \(error.localizedDescription)") }
                 completion(nil, error)
                 return
             }
-            
-            print("HK fetchWorkouts — recibidos \(workouts.count) workouts")
             completion(workouts, nil)
         }
-        
         healthStore.execute(query)
     }
-    
-    func fetchRoute(for workout: HKWorkout, completion: @escaping (RouteFetchResult) -> Void) {
-        let runningObjectQuery = HKQuery.predicateForObjects(from: workout)
+
+    func fetchRoute(for workout: WorkoutProtocol, completion: @escaping (RouteFetchResult) -> Void) {
+        guard let hkWorkout = workout as? HKWorkout else {
+            completion(.error(NSError(domain: "HealthKitManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid HKWorkout object"])))
+            return
+        }
+        
+        let runningObjectQuery = HKQuery.predicateForObjects(from: hkWorkout)
         let routeQuery = HKAnchoredObjectQuery(
             type: HKSeriesType.workoutRoute(),
             predicate: runningObjectQuery,
@@ -134,20 +196,15 @@ class HealthKitManager: ObservableObject {
         ) { (_, samples, _, _, error) in
 
             if let error {
-                let bundle = workout.sourceRevision.source.bundleIdentifier
-                print("HK fetchRoute — error for \(workout.uuid): \(error.localizedDescription) source:\(bundle) type:\(workout.workoutActivityType.rawValue)")
                 completion(.error(error))
                 return
             }
 
             guard let routes = samples as? [HKWorkoutRoute], !routes.isEmpty else {
-                let bundle = workout.sourceRevision.source.bundleIdentifier
-                print("HK fetchRoute — empty series for \(workout.uuid) source:\(bundle) type:\(workout.workoutActivityType.rawValue)")
                 completion(.emptySeries)
                 return
             }
 
-            // Unir todas las series asociadas al workout (algunos entrenos vienen segmentados)
             let group = DispatchGroup()
             let lockQueue = DispatchQueue(label: "com.adventurestreak.routecollector")
             var allLocations: [CLLocation] = []
@@ -157,37 +214,24 @@ class HealthKitManager: ObservableObject {
                 group.enter()
                 let query = HKWorkoutRouteQuery(route: route) { (_, locationsOrNil, done, errorOrNil) in
                     if let errorOrNil {
-                        print("HK fetchRoute — route segment error for \(workout.uuid): \(errorOrNil.localizedDescription)")
-                        lockQueue.sync {
-                            if firstError == nil { firstError = errorOrNil }
-                        }
+                        lockQueue.sync { if firstError == nil { firstError = errorOrNil } }
                     }
-
                     if let locations = locationsOrNil {
                         lockQueue.sync { allLocations.append(contentsOf: locations) }
                     }
-
-                    // Algunos errores no marcan `done`; evitamos deadlocks dejando el grupo en ambos casos
-                    if done {
-                        group.leave()
-                    } else if errorOrNil != nil {
+                    if done || errorOrNil != nil {
                         group.leave()
                     }
                 }
-
-                self.healthStore.execute(query)
+                HKHealthStore().execute(query)
             }
 
             group.notify(queue: .main) {
                 if let error = firstError {
-                    print("HK fetchRoute — final error for \(workout.uuid): \(error.localizedDescription) points:\(allLocations.count)")
                     completion(.error(error))
                     return
                 }
-
                 let routePoints = allLocations.map { RoutePoint(location: $0) }
-                let bundle = workout.sourceRevision.source.bundleIdentifier
-                print("HK fetchRoute — completed \(workout.uuid) points:\(routePoints.count) source:\(bundle) type:\(workout.workoutActivityType.rawValue)")
                 if routePoints.isEmpty {
                     completion(.emptySeries)
                 } else {
@@ -195,9 +239,89 @@ class HealthKitManager: ObservableObject {
                 }
             }
         }
-
-        healthStore.execute(routeQuery)
+        HKHealthStore().execute(routeQuery)
     }
+}
+
+// MARK: - Mock Implementation
+final class MockHealthKitProvider: HealthKitProvider {
+    struct MockWorkout: WorkoutProtocol {
+        var uuid: UUID
+        var startDate: Date
+        var endDate: Date
+        var duration: TimeInterval
+        var workoutActivityType: HKWorkoutActivityType
+        var totalDistanceMeters: Double?
+        var metadata: [String : Any]?
+        var sourceBundleIdentifier: String
+        var sourceName: String
+        
+        // Custom field for mock routes
+        var mockRoute: [RoutePoint]?
+    }
+
+    func fetchWorkouts(completion: @escaping ([WorkoutProtocol]?, Error?) -> Void) {
+        #if canImport(FirebaseFirestore)
+        print("🧪 [MockProvider] Fetching from Firestore collection 'debug_mock_workouts'...")
+        Firestore.firestore().collection("debug_mock_workouts").getDocuments { snapshot, error in
+            if let error = error {
+                print("❌ [MockProvider] Error: \(error.localizedDescription)")
+                completion(nil, error)
+                return
+            }
+            
+            let mocks = snapshot?.documents.compactMap { doc -> MockWorkout? in
+                let data = doc.data()
+                guard let idString = data["id"] as? String,
+                      let uuid = UUID(uuidString: idString),
+                      let start = (data["startDate"] as? Timestamp)?.dateValue(),
+                      let end = (data["endDate"] as? Timestamp)?.dateValue() else { return nil }
+                
+                let typeRaw = (data["type"] as? UInt) ?? HKWorkoutActivityType.running.rawValue
+                
+                // Parse route if present
+                var routePoints: [RoutePoint]? = nil
+                if let routeData = data["route"] as? [[String: Any]] {
+                    routePoints = routeData.compactMap { p in
+                        guard let lat = p["latitude"] as? Double,
+                              let lon = p["longitude"] as? Double else { return nil }
+                        
+                        let timestamp = (p["timestamp"] as? Timestamp)?.dateValue() ?? Date()
+                        let altitude = p["altitude"] as? Double ?? 0
+                        
+                        return RoutePoint(latitude: lat, longitude: lon, timestamp: timestamp, altitude: altitude)
+                    }
+                }
+                
+                return MockWorkout(
+                    uuid: uuid,
+                    startDate: start,
+                    endDate: end,
+                    duration: end.timeIntervalSince(start),
+                    workoutActivityType: HKWorkoutActivityType(rawValue: typeRaw) ?? .running,
+                    totalDistanceMeters: data["distanceMeters"] as? Double,
+                    metadata: data["metadata"] as? [String: Any],
+                    sourceBundleIdentifier: (data["sourceBundleIdentifier"] as? String) ?? "com.apple.Health",
+                    sourceName: (data["sourceName"] as? String) ?? "Mock Health",
+                    mockRoute: routePoints
+                )
+            }
+            print("✅ [MockProvider] Found \(mocks?.count ?? 0) mock workouts")
+            completion(mocks, nil)
+        }
+        #else
+        completion([], nil)
+        #endif
+    }
+
+    func fetchRoute(for workout: WorkoutProtocol, completion: @escaping (RouteFetchResult) -> Void) {
+        if let mock = workout as? MockWorkout, let points = mock.mockRoute {
+            completion(.success(points))
+        } else {
+            completion(.emptySeries)
+        }
+    }
+}
     
     // MARK: - Anchored query para detectar nuevos entrenos
     private func handleWorkoutUpdates(completion: @escaping () -> Void) {

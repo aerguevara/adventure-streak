@@ -60,6 +60,7 @@ struct WorkoutsView: View {
                     NavigationStack {
                         ProfileDetailView(
                             profileViewModel: profileViewModel,
+                            workoutsViewModel: viewModel,
                             relationsViewModel: SocialRelationsViewModel()
                         )
                     }

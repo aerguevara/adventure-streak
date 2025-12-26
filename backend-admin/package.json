@@ -1,0 +1,13 @@
+{
+    "name": "adventure-streak-backend-admin",
+    "version": "1.0.0",
+    "description": "Administrative tools and tests for Adventure Streak",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "dependencies": {
+        "firebase-admin": "^13.6.0"
+    },
+    "private": true
+}

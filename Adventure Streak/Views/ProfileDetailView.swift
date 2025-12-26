@@ -6,7 +6,10 @@ import UIKit
 
 struct ProfileDetailView: View {
     @ObservedObject var profileViewModel: ProfileViewModel
+    @ObservedObject var workoutsViewModel: WorkoutsViewModel
     @StateObject var relationsViewModel: SocialRelationsViewModel
+    
+    @State private var showDebugMenu = false
     
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: RelationTab = .following
@@ -165,6 +168,44 @@ struct ProfileDetailView: View {
                         }
                     }
                     
+                    #if DEBUG
+                    VStack(spacing: 12) {
+                        Button {
+                            showDebugMenu = true
+                        } label: {
+                            HStack {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color.orange.opacity(0.15))
+                                        .frame(width: 36, height: 36)
+                                    
+                                    Image(systemName: "ladybug.fill")
+                                        .foregroundColor(.orange)
+                                }
+                                
+                                Text("Simulación HealthKit")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.white)
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding()
+                            .background(Color(hex: "18181C"))
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                            )
+                        }
+                    }
+                    .padding(.horizontal)
+                    #endif
+                    
                     Spacer(minLength: 40)
                 }
             }
@@ -214,6 +255,9 @@ struct ProfileDetailView: View {
             Button("Cancelar", role: .cancel) {}
         } message: {
             Text("¿Estás seguro de que quieres cerrar sesión?")
+        }
+        .sheet(isPresented: $showDebugMenu) {
+            DebugSimulationView(workoutsViewModel: workoutsViewModel)
         }
     }
     

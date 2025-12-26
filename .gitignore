@@ -6,6 +6,7 @@ DerivedData/
 
 # CocoaPods
 Pods/
+node_modules/
 
 # Secrets and Credentials
 *service-account.json
@@ -15,3 +16,7 @@ Pods/
 
 # OS junk
 .DS_Store
+
+# Backend Admin
+backend-admin/node_modules/
+backend-admin/secrets/
