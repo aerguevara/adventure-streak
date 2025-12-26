@@ -135,12 +135,12 @@ class HistoryViewModel: ObservableObject {
                         group.enter()
                         
                         let type = self.activityType(for: workout)
-                        let bundleId = workout.sourceRevision.source.bundleIdentifier
-                        let sourceName = workout.sourceRevision.source.name
+                        let bundleId = workout.sourceBundleIdentifier
+                        let sourceName = workout.sourceName
                         let requiresRoute = config.requiresRoute(for: bundleId) && type.isOutdoor
                         
                         HealthKitManager.shared.fetchRoute(for: workout) { result in
-                            let distanceMeters = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
+                            let distanceMeters = workout.totalDistanceMeters ?? 0
                             let durationSeconds = workout.duration
                             let name = self.workoutName(for: workout)
                             
@@ -278,19 +278,21 @@ class HistoryViewModel: ObservableObject {
                     
                     group.wait() // Wait for all to finish
                     
+                    let finalSessions = newSessions
+                    
                     // Save all at once on Main Thread
                     DispatchQueue.main.async {
-                        if !newSessions.isEmpty {
-                            print("Saving \(newSessions.count) imported activities...")
+                        if !finalSessions.isEmpty {
+                            print("Saving \(finalSessions.count) imported activities...")
                             
                             // 1. Save Activities locally
-                            self.activityStore.saveActivities(newSessions)
+                            self.activityStore.saveActivities(finalSessions)
                             
                             // 2. Persist remotely (Triggers Cloud Functions for XP and Territories)
                             if let userId = AuthenticationService.shared.userId {
                                 Task {
-                                    await ActivityRepository.shared.saveActivities(newSessions, userId: userId)
-                                    print("Batch Import: Sent \(newSessions.count) activities to Server for processing.")
+                                    await ActivityRepository.shared.saveActivities(finalSessions, userId: userId)
+                                    print("Batch Import: Sent \(finalSessions.count) activities to Server for processing.")
                                     
                                     // Refresh UI after server delegation is kicked off
                                     await MainActor.run {
@@ -308,7 +310,7 @@ class HistoryViewModel: ObservableObject {
     }
     
     private func handlePendingRoute(
-        workout: HKWorkout,
+        workout: WorkoutProtocol,
         type: ActivityType,
         workoutName: String?,
         sourceBundleId: String,
@@ -317,7 +319,7 @@ class HistoryViewModel: ObservableObject {
         errorDescription: String?
     ) {
         let id = workout.uuid
-        let distance = workout.totalDistance?.doubleValue(for: .meter()) ?? 0
+        let distance = workout.totalDistanceMeters ?? 0
         let existing = pendingRouteStore.find(workoutId: workout.uuid)
         let retryCount = (existing?.retryCount ?? 0) + 1
         let pending = PendingRouteImport(
@@ -325,7 +327,8 @@ class HistoryViewModel: ObservableObject {
             startDate: workout.startDate,
             endDate: workout.endDate,
             activityType: type,
-            distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
+
+            distanceMeters: workout.totalDistanceMeters ?? 0,
             durationSeconds: workout.duration,
             workoutName: workoutName,
             sourceBundleId: sourceBundleId,
@@ -365,7 +368,7 @@ class HistoryViewModel: ObservableObject {
     
 #if canImport(FirebaseCrashlytics)
     private func recordRouteNonFatal(
-        workout: HKWorkout,
+        workout: WorkoutProtocol,
         type: ActivityType,
         sourceBundleId: String,
         sourceName: String,
@@ -384,7 +387,8 @@ class HistoryViewModel: ObservableObject {
         crashlytics.setCustomValue(retryCount, forKey: "route_retry_count")
         crashlytics.setCustomValue(errorDescription ?? "", forKey: "route_error_description")
         crashlytics.setCustomValue(userId, forKey: "route_user_id")
-        let distanceKm = (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000.0
+        crashlytics.setCustomValue(userId, forKey: "route_user_id")
+        let distanceKm = (workout.totalDistanceMeters ?? 0) / 1000.0
         crashlytics.setCustomValue(String(format: "%.2f", distanceKm), forKey: "route_distance_km")
         crashlytics.setCustomValue(workout.duration, forKey: "route_duration_seconds")
         
@@ -402,8 +406,8 @@ class HistoryViewModel: ObservableObject {
     }
 #endif
     
-    nonisolated private func activityType(for workout: HKWorkout) -> ActivityType {
-        let isIndoor = (workout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
+    nonisolated private func activityType(for workout: WorkoutProtocol) -> ActivityType {
+        let isIndoor = (workout.metadata?["HKIndoorWorkout"] as? Bool) ?? false
         
         switch workout.workoutActivityType {
         case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
@@ -421,11 +425,11 @@ class HistoryViewModel: ObservableObject {
         }
     }
     
-    nonisolated private func workoutName(for workout: HKWorkout) -> String {
-        if let title = workout.metadata?["HKMetadataKeyWorkoutTitle"] as? String, !title.isEmpty {
+    nonisolated private func workoutName(for workout: WorkoutProtocol) -> String {
+        if let title = workout.metadata?["HKWorkoutTitle"] as? String, !title.isEmpty {
             return title
         }
-        if let brand = workout.metadata?[HKMetadataKeyWorkoutBrandName] as? String, !brand.isEmpty {
+        if let brand = workout.metadata?["HKWorkoutBrandName"] as? String, !brand.isEmpty {
             return brand
         }
         

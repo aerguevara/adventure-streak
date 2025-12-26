@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import HealthKit
 
 enum PermissionStep: Int, CaseIterable {
     case intro
@@ -103,14 +104,17 @@ class OnboardingViewModel: ObservableObject {
                         
                         // Filter strictly for activities with GPS route
                         if !points.isEmpty {
+                            let activityType = self.activityType(for: workout)
+                            let workoutName = self.workoutName(for: workout)
+                            
                             let session = ActivitySession(
                                 id: workout.uuid,
                                 startDate: workout.startDate,
                                 endDate: workout.endDate,
-                                activityType: workout.activityType,
-                                distanceMeters: workout.totalDistance?.doubleValue(for: .meter()) ?? 0,
+                                activityType: activityType,
+                                distanceMeters: workout.totalDistanceMeters ?? 0,
                                 durationSeconds: workout.duration,
-                                workoutName: workout.workoutName,
+                                workoutName: workoutName,
                                 route: points
                             )
                             sessions.append(session)
@@ -150,5 +154,32 @@ class OnboardingViewModel: ObservableObject {
     
     func finish() {
         completeOnboarding()
+    }
+    
+    // MARK: - Helpers
+    nonisolated private func activityType(for workout: WorkoutProtocol) -> ActivityType {
+        let isIndoor = (workout.metadata?["HKIndoorWorkout"] as? Bool) ?? false
+        
+        switch workout.workoutActivityType {
+        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
+            return .indoor
+        case .running:
+            return isIndoor ? .indoor : .run
+        case .walking:
+            return isIndoor ? .indoor : .walk
+        case .cycling:
+            return isIndoor ? .indoor : .bike
+        case .hiking:
+            return .hike
+        default:
+            return isIndoor ? .indoor : .otherOutdoor
+        }
+    }
+    
+    nonisolated private func workoutName(for workout: WorkoutProtocol) -> String {
+        if let title = workout.metadata?["HKWorkoutTitle"] as? String {
+            return title
+        }
+        return ""
     }
 }

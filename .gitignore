@@ -13,6 +13,8 @@ node_modules/
 *serviceAccount.json
 *.p12
 *.plist
+!Adventure-Streak-Info.plist
+!GoogleService-Info.plist
 
 # OS junk
 .DS_Store
@@ -20,3 +22,5 @@ node_modules/
 # Backend Admin
 backend-admin/node_modules/
 backend-admin/secrets/
+*.log
+*.bak

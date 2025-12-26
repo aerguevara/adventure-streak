@@ -65,15 +65,15 @@ extension ActivityType {
 
 extension HKWorkout {
     var activityType: ActivityType {
-        let isIndoor = (metadata?[HKMetadataKeyIndoorWorkout] as? Bool) ?? false
+        let isIndoor = (metadata?["HKIndoorWorkout"] as? Bool) ?? false
         return ActivityType(hkType: workoutActivityType, isIndoor: isIndoor)
     }
     
     var workoutName: String {
-        if let title = metadata?["HKMetadataKeyWorkoutTitle"] as? String, !title.isEmpty {
+        if let title = metadata?["HKWorkoutTitle"] as? String, !title.isEmpty {
             return title
         }
-        if let brand = metadata?[HKMetadataKeyWorkoutBrandName] as? String, !brand.isEmpty {
+        if let brand = metadata?["HKWorkoutBrandName"] as? String, !brand.isEmpty {
             return brand
         }
         

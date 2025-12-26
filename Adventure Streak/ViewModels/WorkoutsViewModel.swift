@@ -489,7 +489,7 @@ class WorkoutsViewModel: ObservableObject {
                                         activityId: remote.activityId
                                     )
                                 }
-                                await TerritoryStore.shared.upsertCells(cells)
+                                TerritoryStore.shared.upsertCells(cells)
                                 print("✅ [Monitor] Hydrated TerritoryStore with \(cells.count) new cells")
                             }
                             
@@ -569,11 +569,7 @@ class WorkoutsViewModel: ObservableObject {
         print("Starting automatic HealthKit check (silent)...")
 
         // Watchdog: si en 12s no hubo progreso, resetea flags para permitir reintento
-        DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
-            guard let self = self else { return }
-
-            // Watchdog block removed to prevent premature dismissal during race conditions
-        }
+        // Watchdog removed for better stability
         
         // Request permissions first
         HealthKitManager.shared.requestPermissions { [weak self] success, error in
