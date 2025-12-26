@@ -472,6 +472,27 @@ class WorkoutsViewModel: ObservableObject {
                             // Fetch actual territory geometries from repository
                             let territories = await TerritoryRepository.shared.fetchConqueredTerritories(forActivityId: activity.id.uuidString)
                             
+                            // NEW: Immediately hydrate local store to update UI (Carousel)
+                            // This ensures "Active Territories" updates instantly without waiting for a sync
+                            if !territories.isEmpty {
+                                let cells = territories.map { remote in
+                                    TerritoryCell(
+                                        id: remote.id ?? UUID().uuidString,
+                                        centerLatitude: remote.centerLatitude,
+                                        centerLongitude: remote.centerLongitude,
+                                        boundary: remote.boundary,
+                                        lastConqueredAt: remote.activityEndAt,
+                                        expiresAt: remote.expiresAt,
+                                        ownerUserId: remote.userId,
+                                        ownerDisplayName: nil,
+                                        ownerUploadedAt: remote.uploadedAt?.dateValue(),
+                                        activityId: remote.activityId
+                                    )
+                                }
+                                await TerritoryStore.shared.upsertCells(cells)
+                                print("✅ [Monitor] Hydrated TerritoryStore with \(cells.count) new cells")
+                            }
+                            
                             // Rarity Logic (Shared with ItemView)
                             let rarity: String
                             if xp >= 200 { rarity = "Épica" }
