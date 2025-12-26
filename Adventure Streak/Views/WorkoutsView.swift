@@ -54,34 +54,6 @@ struct WorkoutsView: View {
                     badgesViewModel.fetchBadges()
                 }
                 
-                // Modal de importación
-                if viewModel.isImporting && viewModel.importTotal > 0 {
-                    Color.black.opacity(0.6)
-                        .ignoresSafeArea()
-                    VStack(spacing: 12) {
-                        ProgressView(
-                            value: Double(viewModel.importProcessed),
-                            total: Double(viewModel.importTotal)
-                        )
-                        .progressViewStyle(.linear)
-                        .tint(Color(hex: "4DA8FF"))
-                        
-                        Text("Importando entrenos: \(viewModel.importProcessed) de \(viewModel.importTotal)")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        Text("Estamos preparando tus actividades y territorio desde la nube.")
-                            .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
-                    }
-                    .padding(24)
-                    .background(Color(hex: "1C1C1E"))
-                    .cornerRadius(16)
-                    .shadow(radius: 10)
-                    .padding(.horizontal, 24)
-                }
             }
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(isPresented: $showProfileDetail) {
