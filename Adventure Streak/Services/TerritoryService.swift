@@ -28,7 +28,7 @@ class TerritoryService {
         // The Cloud Function 'processActivityTerritories' is now the single source of truth.
         print("ℹ️ TerritoryService: Skipping local calculation. Delegating to Server.")
         
-        let emptyStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+        let emptyStats = TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0, stolenCellsCount: 0)
         return ([], emptyStats, [])
     }
     
@@ -38,7 +38,7 @@ class TerritoryService {
         // Cloud Functions are now responsible for territorial updates and XP.
         print("ℹ️ TerritoryService: Skipping local batch process. Delegating to Server.")
         
-        return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+        return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0, stolenCellsCount: 0)
     }
     
     func recalculateExpiredCells() {

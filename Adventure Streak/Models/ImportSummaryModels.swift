@@ -35,7 +35,7 @@ struct GlobalImportSummary {
         self.totalXP += xp
         self.totalNewTerritories += stats.newCellsCount
         self.totalDefended += stats.defendedCellsCount
-        self.totalStolen += stats.recapturedCellsCount
+        self.totalStolen += stats.stolenCellsCount
         self.stolenVictims.formUnion(victimNames)
         if let loc = location, !loc.isEmpty {
             self.locations.append(loc)

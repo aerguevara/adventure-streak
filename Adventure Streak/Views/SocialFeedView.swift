@@ -6,6 +6,8 @@ import MapKit
 
 struct SocialFeedView: View {
     @StateObject var viewModel = SocialViewModel()
+    @State private var selectedStory: UserStory? = nil
+    @State private var showStoryPlayer = false
     
     var body: some View {
         NavigationView {
@@ -15,11 +17,19 @@ struct SocialFeedView: View {
                 if viewModel.isLoading {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                } else if viewModel.posts.isEmpty {
+                } else if viewModel.posts.isEmpty && viewModel.stories.isEmpty {
                     emptyStateView
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 20) {
+                            if !viewModel.stories.isEmpty {
+                                StoriesBarView(stories: viewModel.stories) { story in
+                                    selectedStory = story
+                                    showStoryPlayer = true
+                                }
+                                .padding(.bottom, 10)
+                            }
+                            
                             ForEach(viewModel.displayPosts) { post in
                                 NavigationLink {
                                     SocialPostDetailView(post: post)
@@ -43,6 +53,13 @@ struct SocialFeedView: View {
             }
             .navigationTitle("Social")
             .navigationBarTitleDisplayMode(.inline)
+        }
+        .fullScreenCover(isPresented: $showStoryPlayer) {
+             StoryContainerView(
+                 stories: viewModel.stories,
+                 selectedStory: $selectedStory,
+                 isPresented: $showStoryPlayer
+             )
         }
     }
     
@@ -84,6 +101,8 @@ struct SocialPostDetailView: View {
         if post.hasTerritoryImpact {
             if post.activityData.recapturedZonesCount > 0 {
                 return "¡Ha recapturado territorios estratégicos!"
+            } else if post.activityData.stolenZonesCount > 0 {
+                return "¡Ha robado territorios a otros jugadores!"
             } else if post.activityData.defendedZonesCount > 0 {
                 return "¡Ha defendido exitosamente sus dominios!"
             } else {
@@ -167,8 +186,10 @@ struct SocialPostDetailView: View {
                 territoryBadge(color: "32D74B", title: "Nuevas", value: post.activityData.newZonesCount)
                 territoryBadge(color: "4C6FFF", title: "Defendidas", value: post.activityData.defendedZonesCount)
                 territoryBadge(color: "FF9F0A", title: "Recapturadas", value: post.activityData.recapturedZonesCount)
+                territoryBadge(color: "FF3B30", title: "Robadas", value: post.activityData.stolenZonesCount)
             }
-            if post.activityData.newZonesCount == 0 && post.activityData.defendedZonesCount == 0 && post.activityData.recapturedZonesCount == 0 {
+            if post.activityData.newZonesCount == 0 && post.activityData.defendedZonesCount == 0 &&
+                post.activityData.recapturedZonesCount == 0 && post.activityData.stolenZonesCount == 0 {
                 Text("Sin cambios en territorios en esta sesión.")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.7))

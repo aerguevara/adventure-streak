@@ -49,7 +49,7 @@ enum BadgeRarity: String, Codable {
 
 // MARK: - Helper Models
 
-struct MiniMapRegion: Codable, Equatable {
+struct MiniMapRegion: Codable, Equatable, Hashable {
     let centerLatitude: Double
     let centerLongitude: Double
     let spanLatitudeDelta: Double

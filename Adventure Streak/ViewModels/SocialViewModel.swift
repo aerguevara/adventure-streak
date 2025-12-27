@@ -4,6 +4,7 @@ import Combine
 @MainActor
 class SocialViewModel: ObservableObject {
     @Published var posts: [SocialPost] = []
+    @Published var stories: [UserStory] = []
     @Published var isLoading: Bool = false
     @Published var reactionStates: [String: ActivityReactionState] = [:]
 
@@ -17,6 +18,7 @@ class SocialViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] posts in
                 self?.posts = posts
+                self?.updateStories(from: posts)
                 let ids = posts.compactMap { $0.activityId }
                 self?.reactionRepository.observeActivities(ids)
             }
@@ -128,5 +130,21 @@ class SocialViewModel: ObservableObject {
             fireCount: post.activityData.fireCount,
             currentUserReaction: post.activityData.currentUserReaction
         )
+    }
+
+    private func updateStories(from posts: [SocialPost]) {
+        let now = Date()
+        let twentyFourHoursAgo = now.addingTimeInterval(-24 * 3600)
+        
+        let territoryEvents = posts.filter { post in
+            post.date >= twentyFourHoursAgo && post.hasTerritoryImpact
+        }
+        
+        let grouped = Dictionary(grouping: territoryEvents) { $0.userId }
+        
+        self.stories = grouped.compactMap { (userId, activities) -> UserStory? in
+            guard let firstActivity = activities.first else { return nil }
+            return UserStory(user: firstActivity.user, activities: activities.sorted(by: { $0.date > $1.date }))
+        }.sorted(by: { $0.latestDate > $1.latestDate })
     }
 }

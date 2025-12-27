@@ -115,6 +115,7 @@ class SocialService: ObservableObject {
                 newZonesCount: 0,
                 defendedZonesCount: 0,
                 recapturedZonesCount: 0,
+                stolenZonesCount: 0,
                 swordCount: 0,
                 shieldCount: 0,
                 fireCount: 0,
@@ -159,7 +160,8 @@ class SocialService: ObservableObject {
                 eventType: event.type,
                 eventTitle: event.title,
                 eventSubtitle: event.subtitle,
-                rarity: event.rarity
+                rarity: event.rarity,
+                miniMapRegion: event.miniMapRegion
             )
         }
         .sorted(by: { $0.date > $1.date })
@@ -487,7 +489,8 @@ class SocialService: ObservableObject {
                     eventType: post.eventType,
                     eventTitle: post.eventTitle,
                     eventSubtitle: post.eventSubtitle,
-                    rarity: post.rarity
+                    rarity: post.rarity,
+                    miniMapRegion: post.miniMapRegion
                 )
             }
             return post

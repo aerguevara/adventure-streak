@@ -463,7 +463,7 @@ class WorkoutsViewModel: ObservableObject {
                         var summary = GlobalImportSummary()
                         for activity in completed {
                             // Extract stats
-                            let stats = activity.territoryStats ?? TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0)
+                            let stats = activity.territoryStats ?? TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0, stolenCellsCount: 0)
                             let xp = activity.xpBreakdown?.total ?? 0
 
                             let victims = activity.conqueredVictims ?? []

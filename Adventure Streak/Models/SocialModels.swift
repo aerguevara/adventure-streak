@@ -20,6 +20,17 @@ struct SocialPost: Identifiable, Codable, Hashable {
     let eventTitle: String?
     let eventSubtitle: String?
     let rarity: MissionRarity?
+    let miniMapRegion: MiniMapRegion?
+}
+
+struct UserStory: Identifiable, Hashable {
+    var id: String { user.id }
+    let user: SocialUser
+    let activities: [SocialPost]
+    
+    var latestDate: Date {
+        activities.map { $0.date }.max() ?? Date.distantPast
+    }
 }
 
 struct SocialActivityData: Codable, Hashable {
@@ -30,6 +41,7 @@ struct SocialActivityData: Codable, Hashable {
     let newZonesCount: Int
     let defendedZonesCount: Int
     let recapturedZonesCount: Int
+    let stolenZonesCount: Int
     
     // Reactions
     var currentUserReaction: ReactionType?
@@ -52,6 +64,7 @@ struct SocialActivityData: Codable, Hashable {
         case newZonesCount
         case defendedZonesCount
         case recapturedZonesCount
+        case stolenZonesCount
         case swordCount
         case shieldCount
         case fireCount
@@ -74,6 +87,7 @@ struct SocialActivityData: Codable, Hashable {
          newZonesCount: Int,
          defendedZonesCount: Int,
          recapturedZonesCount: Int,
+         stolenZonesCount: Int,
          swordCount: Int = 0,
          shieldCount: Int = 0,
          fireCount: Int = 0,
@@ -90,6 +104,7 @@ struct SocialActivityData: Codable, Hashable {
         self.newZonesCount = newZonesCount
         self.defendedZonesCount = defendedZonesCount
         self.recapturedZonesCount = recapturedZonesCount
+        self.stolenZonesCount = stolenZonesCount
         self.swordCount = swordCount
         self.shieldCount = shieldCount
         self.fireCount = fireCount
@@ -112,6 +127,7 @@ struct SocialActivityData: Codable, Hashable {
         newZonesCount = try container.decode(Int.self, forKey: .newZonesCount)
         defendedZonesCount = try container.decode(Int.self, forKey: .defendedZonesCount)
         recapturedZonesCount = try container.decode(Int.self, forKey: .recapturedZonesCount)
+        stolenZonesCount = try container.decodeIfPresent(Int.self, forKey: .stolenZonesCount) ?? 0
         
         // Optional/Newer fields with defaults
         swordCount = try container.decodeIfPresent(Int.self, forKey: .swordCount) ?? 0
@@ -145,7 +161,7 @@ extension SocialPost {
     }
 
     var hasTerritoryImpact: Bool {
-        activityData.newZonesCount > 0 || activityData.defendedZonesCount > 0 || activityData.recapturedZonesCount > 0
+        activityData.newZonesCount > 0 || activityData.defendedZonesCount > 0 || activityData.recapturedZonesCount > 0 || activityData.stolenZonesCount > 0
     }
 
     // Missions are optional; treat any non-common rarity as impactful

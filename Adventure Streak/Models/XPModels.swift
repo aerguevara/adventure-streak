@@ -64,10 +64,11 @@ struct TerritoryStats: Codable {
     let newCellsCount: Int
     let defendedCellsCount: Int
     let recapturedCellsCount: Int
+    let stolenCellsCount: Int
     
     // Helper to check if empty
     var isEmpty: Bool {
-        newCellsCount == 0 && defendedCellsCount == 0 && recapturedCellsCount == 0
+        newCellsCount == 0 && defendedCellsCount == 0 && recapturedCellsCount == 0 && stolenCellsCount == 0
     }
 }
 

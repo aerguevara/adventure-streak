@@ -34,7 +34,10 @@ struct ActivityCardView: View {
         let isOutdoor = activity.activityData.activityType.isOutdoor
         
         if activity.activityData.recapturedZonesCount > 0 {
-            return "¡\(userName) ha recapturado \(location)!"
+            return "¡\(userName) ha recuperado \(location)!"
+        }
+        if activity.activityData.stolenZonesCount > 0 {
+            return "¡\(userName) ha robado territorios en \(location)!"
         }
         if activity.activityData.newZonesCount > 0 {
             return "¡\(userName) ha descubierto \(location)!"
@@ -227,6 +230,15 @@ struct ActivityCardView: View {
                     .background(Color(hex: "32D74B").opacity(0.8))
                     .cornerRadius(4)
             }
+            if activity.activityData.stolenZonesCount > 0 {
+                Text("+\(activity.activityData.stolenZonesCount) robos")
+                    .font(.caption2.bold())
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(4)
+            }
         }
         .padding(.top, 4)
     }
@@ -255,7 +267,10 @@ struct ActivityCardView: View {
                     badge(text: "+\(activity.activityData.newZonesCount) zona\(activity.activityData.newZonesCount == 1 ? "" : "s") conquistada\(activity.activityData.newZonesCount == 1 ? "" : "s")", color: "32D74B")
                 }
                 if activity.activityData.recapturedZonesCount > 0 {
-                    badge(text: "\(activity.activityData.recapturedZonesCount) zona\(activity.activityData.recapturedZonesCount == 1 ? "" : "s") recapturada\(activity.activityData.recapturedZonesCount == 1 ? "" : "s")", color: "FF9F0A")
+                    badge(text: "\(activity.activityData.recapturedZonesCount) zona\(activity.activityData.recapturedZonesCount == 1 ? "" : "s") recuperada\(activity.activityData.recapturedZonesCount == 1 ? "" : "s")", color: "FF9F0A")
+                }
+                if activity.activityData.stolenZonesCount > 0 {
+                    badge(text: "\(activity.activityData.stolenZonesCount) zona\(activity.activityData.stolenZonesCount == 1 ? "" : "s") robada\(activity.activityData.stolenZonesCount == 1 ? "" : "s")", color: "FF3B30")
                 }
                 if activity.activityData.defendedZonesCount > 0 {
                     badge(text: "\(activity.activityData.defendedZonesCount) defensa\(activity.activityData.defendedZonesCount == 1 ? "" : "s") completada\(activity.activityData.defendedZonesCount == 1 ? "" : "s")", color: "4C6FFF")
@@ -405,7 +420,7 @@ struct ActivityCardView: View {
 
 
     private var hasTerritoryImpact: Bool {
-        activity.activityData.newZonesCount > 0 || activity.activityData.defendedZonesCount > 0 || activity.activityData.recapturedZonesCount > 0
+        activity.activityData.newZonesCount > 0 || activity.activityData.defendedZonesCount > 0 || activity.activityData.recapturedZonesCount > 0 || activity.activityData.stolenZonesCount > 0
     }
 
 
