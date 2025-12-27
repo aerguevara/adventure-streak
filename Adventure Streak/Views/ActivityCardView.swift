@@ -221,26 +221,36 @@ struct ActivityCardView: View {
             
             Spacer()
             
-            if activity.activityData.newZonesCount > 0 {
-                Text("+\(activity.activityData.newZonesCount) zonas")
-                    .font(.caption2.bold())
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(hex: "32D74B").opacity(0.8))
-                    .cornerRadius(4)
-            }
-            if activity.activityData.stolenZonesCount > 0 {
-                Text("+\(activity.activityData.stolenZonesCount) robos")
-                    .font(.caption2.bold())
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.red.opacity(0.8))
-                    .cornerRadius(4)
+            HStack(spacing: 4) {
+                if activity.activityData.newZonesCount > 0 {
+                    compactBadge(text: "+\(activity.activityData.newZonesCount)", icon: "flag.fill", color: Color(hex: "32D74B"))
+                }
+                if activity.activityData.recapturedZonesCount > 0 {
+                    compactBadge(text: "\(activity.activityData.recapturedZonesCount)", icon: "arrow.counterclockwise", color: Color(hex: "FF9F0A"))
+                }
+                if activity.activityData.stolenZonesCount > 0 {
+                    compactBadge(text: "-\(activity.activityData.stolenZonesCount)", icon: "flag.slash.fill", color: Color(hex: "FF3B30"))
+                }
+                if activity.activityData.defendedZonesCount > 0 {
+                    compactBadge(text: "\(activity.activityData.defendedZonesCount)", icon: "shield.fill", color: Color(hex: "4C6FFF"))
+                }
             }
         }
         .padding(.top, 4)
+    }
+
+    private func compactBadge(text: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+            Text(text)
+                .font(.caption2.bold())
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.8))
+        .cornerRadius(4)
     }
 
     private func compactMetric(icon: String, value: String, color: Color = .white.opacity(0.7)) -> some View {

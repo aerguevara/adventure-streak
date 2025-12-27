@@ -66,11 +66,16 @@ struct UserProfileView: View {
                         }
                         
                         // Stats Grid
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                            StatCard(title: "Total XP", value: "\(user.xp)", icon: "sparkles", color: .purple)
-                            StatCard(title: "Territories", value: "\(user.totalCellsOwned ?? 0)", icon: "map.fill", color: .blue)
-                            StatCard(title: "This Week", value: String(format: "%.1f km", user.currentWeekDistanceKm ?? 0), icon: "figure.run", color: .green)
-                            StatCard(title: "Best Week", value: String(format: "%.1f km", user.bestWeeklyDistanceKm ?? 0), icon: "trophy.fill", color: .yellow)
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 8),
+                            GridItem(.flexible(), spacing: 8),
+                            GridItem(.flexible(), spacing: 8),
+                            GridItem(.flexible(), spacing: 8)
+                        ], spacing: 8) {
+                            StatCard(title: "Nuevos", value: "\(user.totalConqueredTerritories ?? 0)", icon: "flag.fill", color: Color(hex: "32D74B"))
+                            StatCard(title: "Defendidos", value: "\(user.totalDefendedTerritories ?? 0)", icon: "shield.fill", color: Color(hex: "4C6FFF"))
+                            StatCard(title: "Robados", value: "\(user.totalStolenTerritories ?? 0)", icon: "flag.slash.fill", color: Color(hex: "FF3B30"))
+                            StatCard(title: "Recup.", value: "\(user.totalRecapturedTerritories ?? 0)", icon: "arrow.counterclockwise", color: Color(hex: "FF9F0A"))
                         }
                         .padding(.horizontal)
                         
@@ -156,29 +161,32 @@ struct StatCard: View {
     let color: Color
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.title3)
+                .font(.system(size: 14, weight: .bold)) // Smaller icon
                 .foregroundColor(color)
+                .padding(6)
+                .background(color.opacity(0.15))
+                .clipShape(Circle())
             
-            VStack(alignment: .leading, spacing: 4) {
-                Text(value)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.gray)
-            }
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .rounded)) // Compact value
+                .foregroundColor(.white)
+            
+            Text(title)
+                .font(.system(size: 10)) // Tiny title
+                .fontWeight(.medium)
+                .foregroundColor(.gray)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity)
         .background(Color(hex: "18181C"))
-        .cornerRadius(16)
+        .cornerRadius(12)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(0.05), lineWidth: 1)
         )
     }

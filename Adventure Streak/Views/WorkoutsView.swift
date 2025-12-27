@@ -392,35 +392,37 @@ struct WorkoutsView: View {
                 .padding(.horizontal)
             
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 10),
-                GridItem(.flexible(), spacing: 10)
-            ], spacing: 10) {
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
+            ], spacing: 8) {
                 TerritoryStatCard(
-                    title: "Zonas Descubiertas",
+                    title: "Nuevos",
                     value: "\(profileViewModel.totalHistoricalConquered)",
                     icon: "flag.fill",
-                    color: Color(hex: "4C6FFF")
-                )
-                
-                TerritoryStatCard(
-                    title: "Robados",
-                    value: "\(profileViewModel.totalStolen)",
-                    icon: "shredder.fill", // Usando un icono agresivo para robos
-                    color: Color(hex: "FF453A")
+                    color: Color(hex: "32D74B")
                 )
                 
                 TerritoryStatCard(
                     title: "Defendidos",
                     value: "\(profileViewModel.totalDefended)",
                     icon: "shield.fill",
-                    color: Color(hex: "32D74B")
+                    color: Color(hex: "4C6FFF")
                 )
                 
                 TerritoryStatCard(
-                    title: "Total Activos",
-                    value: "\(profileViewModel.totalCellsConquered)",
-                    icon: "map.fill",
-                    color: Color(hex: "A259FF")
+                    title: "Robados",
+                    value: "\(profileViewModel.totalStolen)",
+                    icon: "flag.slash.fill",
+                    color: Color(hex: "FF3B30")
+                )
+                
+                TerritoryStatCard(
+                    title: "Recup.",
+                    value: "\(profileViewModel.totalRecaptured)",
+                    icon: "arrow.counterclockwise",
+                    color: Color(hex: "FF9F0A")
                 )
             }
             .padding(.horizontal)
@@ -435,30 +437,27 @@ struct TerritoryStatCard: View {
     let color: Color
     
     var body: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 14, weight: .bold)) // Smaller icon
                 .foregroundColor(color)
                 .padding(6)
                 .background(color.opacity(0.15))
                 .clipShape(Circle())
             
-            VStack(alignment: .leading, spacing: 0) {
-                Text(value)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                
-                Text(title)
-                    .font(.system(size: 10))
-                    .fontWeight(.medium)
-                    .foregroundColor(.gray)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .rounded)) // Compact value
+                .foregroundColor(.white)
             
-            Spacer(minLength: 0)
+            Text(title)
+                .font(.system(size: 10)) // Tiny title
+                .fontWeight(.medium)
+                .foregroundColor(.gray)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
         .background(Color(hex: "18181C"))
         .cornerRadius(12)

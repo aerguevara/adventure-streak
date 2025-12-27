@@ -28,6 +28,7 @@ struct User: Identifiable, Codable {
     var totalConqueredTerritories: Int?
     var totalStolenTerritories: Int?
     var totalDefendedTerritories: Int?
+    var totalRecapturedTerritories: Int?
     
     // Extended Profile Info
     var prestige: Int?
@@ -50,6 +51,7 @@ struct User: Identifiable, Codable {
          totalConqueredTerritories: Int? = nil,
          totalStolenTerritories: Int? = nil,
          totalDefendedTerritories: Int? = nil,
+         totalRecapturedTerritories: Int? = nil,
          prestige: Int? = nil,
          currentStreakWeeks: Int? = nil,
          bestWeeklyDistanceKm: Double? = nil,
@@ -67,6 +69,7 @@ struct User: Identifiable, Codable {
         self.totalConqueredTerritories = totalConqueredTerritories
         self.totalStolenTerritories = totalStolenTerritories
         self.totalDefendedTerritories = totalDefendedTerritories
+        self.totalRecapturedTerritories = totalRecapturedTerritories
         self.prestige = prestige
         self.currentStreakWeeks = currentStreakWeeks
         self.bestWeeklyDistanceKm = bestWeeklyDistanceKm
@@ -86,6 +89,7 @@ struct User: Identifiable, Codable {
         case totalConqueredTerritories
         case totalStolenTerritories
         case totalDefendedTerritories
+        case totalRecapturedTerritories
         case prestige
         case currentStreakWeeks
         case bestWeeklyDistanceKm
@@ -114,6 +118,7 @@ struct User: Identifiable, Codable {
         totalConqueredTerritories = try container.decodeIfPresent(Int.self, forKey: .totalConqueredTerritories)
         totalStolenTerritories = try container.decodeIfPresent(Int.self, forKey: .totalStolenTerritories)
         totalDefendedTerritories = try container.decodeIfPresent(Int.self, forKey: .totalDefendedTerritories)
+        totalRecapturedTerritories = try container.decodeIfPresent(Int.self, forKey: .totalRecapturedTerritories)
         prestige = try container.decodeIfPresent(Int.self, forKey: .prestige)
         currentStreakWeeks = try container.decodeIfPresent(Int.self, forKey: .currentStreakWeeks)
         bestWeeklyDistanceKm = try container.decodeIfPresent(Double.self, forKey: .bestWeeklyDistanceKm)
