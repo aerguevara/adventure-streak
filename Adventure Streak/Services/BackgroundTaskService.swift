@@ -32,21 +32,27 @@ final class BackgroundTaskService {
     
     private func handleRefresh(task: BGAppRefreshTask) {
         scheduleRefresh() // vuelve a programar para el futuro
-        
-        let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 1
-        
+
+        let completionLock = NSLock()
+        var completed = false
+        let complete: (Bool) -> Void = { success in
+            completionLock.lock()
+            if completed {
+                completionLock.unlock()
+                return
+            }
+            completed = true
+            completionLock.unlock()
+            task.setTaskCompleted(success: success)
+        }
+
         task.expirationHandler = {
-            queue.cancelAllOperations()
+            complete(false)
         }
-        
-        queue.addOperation {
-            // Reusar el flujo de observers para disparar notificaciones si hay entrenos nuevos
-            HealthKitManager.shared.startBackgroundObservers()
-        }
-        
-        queue.addOperation {
-            task.setTaskCompleted(success: true)
+
+        HealthKitManager.shared.startBackgroundObserversIfAuthorized()
+        HealthKitManager.shared.checkForNewWorkoutsInBackground {
+            complete(true)
         }
     }
 }

@@ -91,9 +91,11 @@ class HealthKitManager: ObservableObject {
             } else {
                 print("HK requestPermissions — success:\(success)")
             }
+            let status = self.healthStore.authorizationStatus(for: workoutType)
+            let granted = status == .sharingAuthorized
             DispatchQueue.main.async {
-                self.isAuthorized = success
-                completion(success, error)
+                self.isAuthorized = granted
+                completion(granted, error)
             }
         }
 
@@ -111,9 +113,41 @@ class HealthKitManager: ObservableObject {
                 if let error { print("HK permisos rechazados: \(error)") }
                 return
             }
-            self.enableBackgroundDelivery()
-            self.registerWorkoutObserver()
+            self.configureBackgroundObservers()
         }
+    }
+
+    func startBackgroundObserversIfAuthorized() {
+        guard isWorkoutAuthorized() else {
+            DispatchQueue.main.async {
+                self.isAuthorized = false
+            }
+            return
+        }
+        DispatchQueue.main.async {
+            self.isAuthorized = true
+        }
+        configureBackgroundObservers()
+    }
+
+    func checkForNewWorkoutsInBackground(completion: (() -> Void)? = nil) {
+        guard isWorkoutAuthorized() else {
+            completion?()
+            return
+        }
+        handleWorkoutUpdates {
+            completion?()
+        }
+    }
+
+    private func configureBackgroundObservers() {
+        enableBackgroundDelivery()
+        registerWorkoutObserver()
+    }
+
+    private func isWorkoutAuthorized() -> Bool {
+        let status = healthStore.authorizationStatus(for: HKObjectType.workoutType())
+        return status == .sharingAuthorized
     }
     
     private func enableBackgroundDelivery() {

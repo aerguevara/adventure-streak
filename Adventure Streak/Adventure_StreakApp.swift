@@ -40,6 +40,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     // Registrar tareas en background (HealthKit refresh)
     BackgroundTaskService.shared.registerTasks()
+    HealthKitManager.shared.startBackgroundObserversIfAuthorized()
     
     #if DEBUG
     if ProcessInfo.processInfo.arguments.contains("CRASHLYTICS_TEST_CRASH") {
