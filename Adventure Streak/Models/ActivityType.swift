@@ -42,6 +42,21 @@ enum ActivityType: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+import SwiftUI
+
+extension ActivityType {
+    var color: Color {
+        switch self {
+        case .run: return Color(hex: "FF3B30") // Red
+        case .walk: return Color(hex: "32D74B") // Green
+        case .bike: return Color(hex: "5856D6") // Indigo
+        case .hike: return Color(hex: "FF9500") // Orange
+        case .otherOutdoor: return Color(hex: "64D2FF") // Light Blue
+        case .indoor: return Color(hex: "A259FF") // Purple
+        }
+    }
+}
+
 import HealthKit
 
 extension ActivityType {

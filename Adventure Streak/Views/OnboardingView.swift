@@ -143,7 +143,7 @@ struct OnboardingView: View {
         case .notifications:
             return "Te avisaremos cuando detectemos nuevos entrenos y para recordarte tus streaks."
         case .discovery:
-            return "Hemos encontrado \(viewModel.discoveredActivities.count) entrenos con ruta GPS. Al continuar, se importarán para reclamar tus territorios y XP."
+            return "Hemos encontrado \(viewModel.discoveredActivities.count) entrenos. Al continuar, se importarán para reclamar tus territorios y XP."
         case .done:
             return "Permisos configurados. ¡Empecemos la aventura!"
         }

@@ -137,10 +137,8 @@ class WorkoutsViewModel: ObservableObject {
     
     func loadWorkouts() {
         let activities = activityStore.fetchAllActivities()
-        let cutoffDate = configService.cutoffDate()
         
         self.workouts = activities
-            .filter { $0.startDate >= cutoffDate }
             .sorted(by: { $0.startDate > $1.startDate })
             .map { activity in
                 let titlePrefix = activity.workoutName ?? activity.activityType.displayName
@@ -251,7 +249,7 @@ class WorkoutsViewModel: ObservableObject {
                         semaphore.wait()
                         group.enter()
                         
-                        let type = self.activityType(for: workout)
+                        let type = ActivitySyncService.shared.activityType(for: workout)
                         let bundleId = workout.sourceBundleIdentifier
                         let sourceName = workout.sourceName
                         let requiresRoute = config.requiresRoute(for: bundleId) && type.isOutdoor
@@ -264,7 +262,7 @@ class WorkoutsViewModel: ObservableObject {
                             
                             let distanceMeters = workout.totalDistanceMeters ?? 0
                             let durationSeconds = workout.duration
-                            let name = self.workoutName(for: workout)
+                            let name = ActivitySyncService.shared.workoutName(for: workout)
                             
                             switch result {
                             case .success(let routePoints):
@@ -531,427 +529,48 @@ class WorkoutsViewModel: ObservableObject {
     }
     
     func importFromHealthKit() {
-        // Require authenticated user to avoid importing under "unknown_user"
-        guard let _ = AuthenticationService.shared.userId else {
-            print("Import HK -> aborted: no authenticated user")
-            return
-        }
+        guard AuthenticationService.shared.userId != nil else { return }
+        guard activityStore.isSynced else { return }
+        guard !isImporting && !isCheckingForWorkouts else { return }
         
-        // NEW: Prevent race condition (importing against empty local store before sync)
-        guard activityStore.isSynced else {
-            print("⏳ HK Import deferred: Waiting for ActivityStore sync.")
-            return
-        }
-
-        // Recuperación: si quedó marcado importando pero sin progreso, reiniciar flags
-        if isImporting && importTotal == 0 && importProcessed == 0 {
-            print("Import HK -> recuperando estado (importing=true pero sin progreso), reseteando flags")
-            isImporting = false
-            isLoading = false
-        }
+        guard configService.config.loadHistoricalWorkouts else { return }
         
-        print("Import HK -> isImporting:\(isImporting) loadHistorical:\(configService.config.loadHistoricalWorkouts) lookback:\(configService.config.workoutLookbackDays)")
-        guard !isImporting else {
-            print("Import HK -> aborted, already importing")
-            return
-        }
+        isCheckingForWorkouts = true
         
-        guard configService.config.loadHistoricalWorkouts else {
-            print("Import HK -> disabled by config")
-            errorMessage = "La importación de entrenos históricos está desactivada en la configuración."
-            isImporting = false
-            isLoading = false
-            importTotal = 0
-            importProcessed = 0
-            return
-        }
-        
-        print("Starting automatic HealthKit check (silent)...")
-
-        // Watchdog: si en 12s no hubo progreso, resetea flags para permitir reintento
-        // Watchdog removed for better stability
-        
-        // Request permissions first
-        HealthKitManager.shared.requestPermissions { [weak self] success, error in
-            guard let self = self else { return }
+        Task {
+            let cutoffDate = configService.cutoffDate()
+            let newSessions = await ActivitySyncService.shared.findNewWorkouts(from: cutoffDate)
             
-            // Prevent concurrent calls
-            guard !self.isImporting && !self.isCheckingForWorkouts else {
-                print("⚠️ Import or check already in progress. Skipping.")
-                return 
+            await MainActor.run {
+                self.isCheckingForWorkouts = false
+                guard !newSessions.isEmpty else { return }
+                
+                self.isImporting = true
+                self.isLoading = true
+                self.importTotal = newSessions.count
+                self.importProcessed = 0
             }
             
-            self.isCheckingForWorkouts = true
-            
-            // We don't set isImporting = true here anymore to avoid UI flickering
-            // if we discover there are no new workouts.
-            
-            guard success else {
-                print("Error HealthKit Auth: \(String(describing: error?.localizedDescription))")
-                DispatchQueue.main.async {
-                    self.isCheckingForWorkouts = false
-                    self.isImporting = false
-                    self.isLoading = false
-                    self.importTotal = 0
-                    self.importProcessed = 0
+            if !newSessions.isEmpty {
+                await ActivitySyncService.shared.processSessions(newSessions) { processed, total in
+                    DispatchQueue.main.async {
+                        self.importProcessed = processed
+                        self.importTotal = total
+                    }
                 }
-                return
             }
             
-            print("HK import -> permisos OK, solicitando workouts...")
-            
-            HealthKitManager.shared.fetchWorkouts { [weak self] workouts, error in
-                guard let self = self else { return }
-                
-                if let error = error {
-                    print("Error fetching workouts: \(error.localizedDescription)")
-                    DispatchQueue.main.async {
-                        self.isCheckingForWorkouts = false
-                        self.isImporting = false
-                        self.isLoading = false
-                        self.importTotal = 0
-                        self.importProcessed = 0
-                    }
-                    return
-                }
-                
-                guard let workouts = workouts, !workouts.isEmpty else {
-                    print("No se encontraron entrenos en HealthKit.")
-                    DispatchQueue.main.async {
-                        self.isCheckingForWorkouts = false
-                        self.isImporting = false
-                        self.isLoading = false
-                        self.importTotal = 0
-                        self.importProcessed = 0
-                    }
-                    return
-                }
-                
-                // Log de entrada
-                print("HK import — recibidos \(workouts.count) entrenos.")
-                
-                // Fetch Remote IDs to check against existing cloud data (even if not synced locally yet)
-                let cutoffDate = self.configService.cutoffDate()
-                let userId = AuthenticationService.shared.userId ?? "unknown_user"
-                
-                // Async fetch inside MainActor context? 
-                // We are inside a closure. We should use Task to fetch remote IDs, then proceed.
-                Task {
-                    let remoteIds = await ActivityRepository.shared.fetchAllActivityIds(userId: userId)
-                    let localIds = Set(self.activityStore.activities.map { $0.id })
-                    let allExistingIds = localIds.union(remoteIds.compactMap { UUID(uuidString: $0) })
-                    
-                    print("🔍 Check Silencioso: userId=\(userId), remote=\(remoteIds.count), local=\(localIds.count)")
-                    
-                    let newWorkouts = workouts.filter { workout in
-                        // 1. Dentro de la ventana (usar endDate por seguridad)
-                        guard workout.endDate >= cutoffDate else { return false }
-                        
-                        // 2. Duplicados por id (UUID estable de HealthKit)
-                        if allExistingIds.contains(workout.uuid) { return false }
-                        
-                        return true
-                    }
-                    
-                    print("HK import — total:\(workouts.count) nuevos:\(newWorkouts.count) (vs \(remoteIds.count) remotos)")
-                    
-                    guard !newWorkouts.isEmpty else {
-                        print("No new workouts to import.")
-                        self.isCheckingForWorkouts = false
-                        print("No new workouts to import.")
-                        self.isCheckingForWorkouts = false
-                        self.isImporting = false
-                        self.isLoading = false
-                        self.importTotal = 0
-                        self.importProcessed = 0
-                        return
-                    }
-                    
-                    // ONLY NOW trigger the UI
-                    self.isCheckingForWorkouts = false // Done checking, now importing
-                    self.isImporting = true
-                    self.isLoading = true
-                    
-                    print("Found \(newWorkouts.count) new workouts. Processing in background...")
-                    
-                    // Proceed with background processing
-                    self.processNewWorkouts(newWorkouts, userId: userId)
-                }
-            } // End of HK fetch closure
+            await MainActor.run {
+                self.isImporting = false
+                self.isLoading = false
+                self.loadWorkouts()
+            }
         }
     }
     
-    // Extracted for clarity and async handling
-    private func processNewWorkouts(_ newWorkouts: [WorkoutProtocol], userId: String) {
-        let config = self.configService.config
-        let pendingStore = self.pendingRouteStore
-                
-        DispatchQueue.global(qos: .utility).async {
-            var newSessions: [ActivitySession] = []
-            let group = DispatchGroup()
-            let semaphore = DispatchSemaphore(value: 1) // Throttle to prevent overloading CoreData/CloudKit
-            let isolationQueue = DispatchQueue(label: "com.adventurestreak.importIsolation")
-
-            var activitiesToMonitor: [UUID] = []
-
-                    
-                    for workout in newWorkouts {
-                        semaphore.wait() // Wait for slot
-                        group.enter()
-                        
-                        let type = self.activityType(for: workout)
-                        let bundleId = workout.sourceBundleIdentifier
-                        let sourceName = workout.sourceName
-                        let requiresRoute = config.requiresRoute(for: bundleId) && type.isOutdoor
-                        
-                        HealthKitManager.shared.fetchRoute(for: workout) { result in
-                            defer { 
-                                group.leave()
-                                semaphore.signal() // Release slot
-                            }
-
-                            let distanceMeters = workout.totalDistanceMeters ?? 0
-                            let durationSeconds = workout.duration
-                            let name = self.workoutName(for: workout)
-                            
-                            switch result {
-                            case .success(let routePoints):
-                                if requiresRoute && routePoints.isEmpty {
-                                    Task { @MainActor in
-                                        self.handlePendingRoute(
-                                            workout: workout,
-                                            type: type,
-                                            workoutName: name,
-                                            sourceBundleId: bundleId,
-                                            sourceName: sourceName,
-                                            status: .missingRoute,
-                                            errorDescription: nil
-                                        )
-                                    }
-                                    return
-                                }
-                                
-                                pendingStore.remove(workoutId: workout.uuid)
-                                
-                                let session = ActivitySession(
-                                    id: workout.uuid, // use stable HKWorkout id to avoid duplicates
-                                    startDate: workout.startDate,
-                                    endDate: workout.endDate,
-                                    activityType: type,
-                                    distanceMeters: distanceMeters,
-                                    durationSeconds: durationSeconds,
-                                    workoutName: name,
-                                    route: routePoints,
-                                    processingStatus: .processing
-                                )
-                                
-                                isolationQueue.sync {
-                                    newSessions.append(session)
-                                    activitiesToMonitor.append(session.id)
-                                }
-                            case .emptySeries:
-                                let gracePeriod: TimeInterval = 30 * 60
-                                let timeSinceEnd = Date().timeIntervalSince(workout.endDate)
-                                
-                                if requiresRoute && timeSinceEnd < gracePeriod {
-                                    Task { @MainActor in
-                                        self.handlePendingRoute(
-                                            workout: workout,
-                                            type: type,
-                                            workoutName: name,
-                                            sourceBundleId: bundleId,
-                                            sourceName: sourceName,
-                                            status: .missingRoute,
-                                            errorDescription: nil
-                                        )
-                                    }
-                                    return
-                                }
-                                
-                                if requiresRoute {
-                                    print("⚠️ Pending route -> Grace period expired for \(workout.uuid). Importing without GPS.")
-                                }
-                                
-                                pendingStore.remove(workoutId: workout.uuid)
-                                
-                                let session = ActivitySession(
-                                    id: workout.uuid,
-                                    startDate: workout.startDate,
-                                    endDate: workout.endDate,
-                                    activityType: type,
-                                    distanceMeters: distanceMeters,
-                                    durationSeconds: durationSeconds,
-                                    workoutName: name,
-                                    route: [],
-                                    processingStatus: .processing
-                                )
-                                
-                                isolationQueue.sync {
-                                    newSessions.append(session)
-                                    activitiesToMonitor.append(session.id)
-                                }
-                            case .error(let error):
-                                let gracePeriod: TimeInterval = 45 * 60 // Slightly longer for real errors
-                                let timeSinceEnd = Date().timeIntervalSince(workout.endDate)
-                                let existing = pendingStore.find(workoutId: workout.uuid)
-                                let retryCount = existing?.retryCount ?? 0
-                                
-                                if requiresRoute && timeSinceEnd < gracePeriod && retryCount < 3 {
-                                    Task { @MainActor in
-                                        self.handlePendingRoute(
-                                            workout: workout,
-                                            type: type,
-                                            workoutName: name,
-                                            sourceBundleId: bundleId,
-                                            sourceName: sourceName,
-                                            status: .fetchError,
-                                            errorDescription: error.localizedDescription
-                                        )
-                                    }
-                                    return
-                                }
-                                
-                                if requiresRoute {
-                                    print("⚠️ Pending route -> Error fallback (grace/retries expired) for \(workout.uuid): \(error.localizedDescription)")
-                                }
-                                
-                                pendingStore.remove(workoutId: workout.uuid)
-                                
-                                let session = ActivitySession(
-                                    id: workout.uuid,
-                                    startDate: workout.startDate,
-                                    endDate: workout.endDate,
-                                    activityType: type,
-                                    distanceMeters: distanceMeters,
-                                    durationSeconds: durationSeconds,
-                                    workoutName: name,
-                                    route: [],
-                                    processingStatus: .processing
-                                )
-                                
-                                isolationQueue.sync {
-                                    newSessions.append(session)
-                                    activitiesToMonitor.append(session.id)
-                                }
-                            }
-                        }
-                    }
-                    
-                    group.wait()
-                    
-                    print("Discovered \(newSessions.count) actual sessions to be processed.")
-                    
-                    // Create immutable copies to avoid capturing mutable vars in concurrent closures (Swift 6 warning fix)
-                    let finalSessions = newSessions
-                    let finalActivitiesToMonitor = activitiesToMonitor
-                    
-                    DispatchQueue.main.async {
-                        if !finalSessions.isEmpty {
-                            // Update total to real number of sessions
-                            self.importTotal = finalSessions.count
-                            self.importProcessed = 0
-                            
-                            let sortedSessions = finalSessions.sorted { $0.endDate < $1.endDate }
-                            
-                            Task {
-                                guard let userId = AuthenticationService.shared.userId else {
-                                    print("Import HK -> aborted: user logged out during fetch")
-                                    Task { @MainActor in
-                                        self.isImporting = false
-                                        self.isLoading = false
-                                    }
-                                    return
-                                }
-                                let userName = AuthenticationService.shared.userName
-                                
-                                do {
-                                    // Process sessions one by one
-                                    // But since validation happens in Cloud, GameEngine.completeActivity 
-                                    // mainly saves initial request. The actual heavy lifting is server-side.
-                                    for session in sortedSessions {
-                                        let stats = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
-                                        // We don't increment IMPORTED here, we wait for SERVER processing
-                                        print("Processed request for \(session.id). Status: \(stats)")
-                                    }
-                                    
-                                    // Once all requests are sent, start monitoring
-                                    // Wait for activityStore to reflect the new activities (synced from local write)
-                                    
-                                    await MainActor.run {
-                                        // Check if monitoring is needed
-                                        if !finalActivitiesToMonitor.isEmpty {
-                                            // Only monitor TRULY new processed activities
-                                            self.monitorProcessing(for: finalActivitiesToMonitor)
-                                        } else {
-                                            print("✅ Import complete. No new activities to monitor for summary.")
-                                            // Reset counters and hide bar
-                                            self.isImporting = false
-                                            self.importTotal = 0
-                                            self.importProcessed = 0
-                                        }
-                                    }
-                                } catch {
-                                    print("❌ Failed processing batch: \(error)")
-                                    self.isImporting = false
-                                }
-                            }
-                        } else {
-                            self.isImporting = false
-                            self.isLoading = false
-                            self.importTotal = 0
-                            self.importProcessed = 0
-                        }
-                }
-        }
-    }
+    // MARK: - Legacy processing logic moved to ActivitySyncService.shared
     
-    // MARK: - Helper mappings
-    nonisolated private func activityType(for workout: WorkoutProtocol) -> ActivityType {
-        // Use updated protocol attributes
-        let isIndoor = (workout.metadata?["HKIndoorWorkout"] as? Bool) ?? false
-        
-        switch workout.workoutActivityType {
-        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
-            return .indoor
-        case .running:
-            return isIndoor ? .indoor : .run
-        case .walking:
-            return isIndoor ? .indoor : .walk
-        case .cycling:
-            return isIndoor ? .indoor : .bike
-        case .hiking:
-            return .hike
-        default:
-            return isIndoor ? .indoor : .otherOutdoor
-        }
-    }
-    
-    nonisolated private func workoutName(for workout: WorkoutProtocol) -> String {
-        // Just derive a basic name or return empty to let View handle "running", etc.
-        // Or if you store custom titles in metadata
-        if let title = workout.metadata?["HKWorkoutTitle"] as? String {
-            return title
-        }
-        return fallbackWorkoutName(for: workout.workoutActivityType)
-    }
-    
-    nonisolated private func fallbackWorkoutName(for type: HKWorkoutActivityType) -> String {
-        switch type {
-        case .running: return "Correr"
-        case .walking: return "Caminar"
-        case .cycling: return "Ciclismo"
-        case .hiking: return "Senderismo"
-        case .traditionalStrengthTraining: return "Fuerza Tradicional"
-        case .functionalStrengthTraining: return "Fuerza Funcional"
-        case .highIntensityIntervalTraining: return "HIIT"
-        case .flexibility: return "Flexibilidad"
-        case .yoga: return "Yoga"
-        case .pilates: return "Pilates"
-        default: return "Entrenamiento"
-        }
-    }
-    
-    // NEW: Handle pending route logic
+    // UI Formatters
     private func handlePendingRoute(
         workout: WorkoutProtocol,
         type: ActivityType,

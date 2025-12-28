@@ -316,9 +316,6 @@ class AuthenticationService: NSObject, ObservableObject {
     }
     
     private func loadDisplayNameFromRemoteIfNeeded(userId: String) {
-        // Skip if already have a non-empty name
-        if let existing = userName, !existing.isEmpty { return }
-        
         UserRepository.shared.fetchUser(userId: userId) { [weak self] user in
             guard let self = self else { return }
             
@@ -328,6 +325,26 @@ class AuthenticationService: NSObject, ObservableObject {
                     DispatchQueue.main.async {
                         self.userName = remoteName
                         self.userAvatarURL = user.avatarURL
+                    }
+                }
+                
+                // RESTORE ONBOARDING DATE: If remote joinedAt exists, we reconstruct the original discovery window.
+                if let joinedAt = user.joinedAt {
+                    let days = GameConfigService.shared.config.workoutLookbackDays
+                    // The actual "history floor" is JoinedAt - 30 days (initial discovery window)
+                    let firstDiscoveryStart = Calendar.current.date(
+                        byAdding: .day,
+                        value: -days,
+                        to: joinedAt
+                    ) ?? joinedAt
+                    
+                    let remoteTimestamp = firstDiscoveryStart.timeIntervalSince1970
+                    let localTimestamp = self.userDefaults.double(forKey: "onboardingCompletionDate")
+                    
+                    // Restore if local is missing or remote-derived is older (more inclusive)
+                    if localTimestamp == 0 || remoteTimestamp < localTimestamp {
+                        self.userDefaults.set(remoteTimestamp, forKey: "onboardingCompletionDate")
+                        print("[AuthenticationService] Restored historic discovery window from Firestore: \(firstDiscoveryStart)")
                     }
                 }
             } else {

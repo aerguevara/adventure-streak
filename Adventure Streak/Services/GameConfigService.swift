@@ -26,7 +26,7 @@ struct GameConfig: Equatable {
     }()
     
     var clampedLookbackDays: Int {
-        max(1, min(workoutLookbackDays, 60))
+        max(0, min(workoutLookbackDays, 60))
     }
     
     var clampedTerritoryExpiration: Int {

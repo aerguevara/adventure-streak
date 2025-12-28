@@ -10,143 +10,140 @@ struct ActivityCardView: View {
 
     @State private var pendingReaction: ReactionType? = nil
     @State private var territoryCells: [TerritoryCell] = []
-    @State private var isLoadingTerritories = false
+    @State private var isLoadingTerritories: Bool
+
+    init(activity: SocialPost, reactionState: ActivityReactionState, onReaction: @escaping (ReactionType) -> Void) {
+        self.activity = activity
+        self.reactionState = reactionState
+        self.onReaction = onReaction
+        
+        // Predetermine loading state based on territory impact
+        let hasImpact = activity.activityData.newZonesCount > 0 || 
+                         activity.activityData.defendedZonesCount > 0 || 
+                         activity.activityData.recapturedZonesCount > 0 || 
+                         activity.activityData.stolenZonesCount > 0
+        self._isLoadingTerritories = State(initialValue: hasImpact)
+    }
 
     private var mergedReactionState: ActivityReactionState {
         var state = reactionState
-
         if state.swordCount == 0 && state.shieldCount == 0 && state.fireCount == 0 {
             state.swordCount = activity.activityData.swordCount
             state.shieldCount = activity.activityData.shieldCount
             state.fireCount = activity.activityData.fireCount
         }
-
         if state.currentUserReaction == nil {
             state.currentUserReaction = activity.activityData.currentUserReaction
         }
-
         return state
     }
 
-    private var narrativeTitle: String {
-        let userName = activity.user.displayName
+    private var refinedTitle: String {
         let location = activity.activityData.locationLabel ?? "una nueva zona"
-        let isOutdoor = activity.activityData.activityType.isOutdoor
-        
-        if activity.activityData.recapturedZonesCount > 0 {
-            return "¡\(userName) ha recuperado \(location)!"
-        }
-        if activity.activityData.stolenZonesCount > 0 {
-            return "¡\(userName) ha robado territorios en \(location)!"
-        }
-        if activity.activityData.newZonesCount > 0 {
-            return "¡\(userName) ha descubierto \(location)!"
-        }
-        if activity.activityData.defendedZonesCount > 0 {
-            return "¡\(userName) ha defendido su territorio en \(location)!"
-        }
-        
-        // Default activity
-        let activityVerb = translateActivityVerb(activity.activityData.activityType)
-        if isOutdoor {
-            return "¡\(userName) ha salido a \(activityVerb) por \(location)!"
-        } else {
-            return "¡\(userName) ha completado un entrenamiento de \(activityVerb)!"
-        }
-    }
-
-    private func translateActivityVerb(_ type: ActivityType) -> String {
-        switch type {
-        case .run: return "correr"
-        case .walk: return "caminar"
-        case .bike: return "rodar"
-        case .hike: return "explorar"
-        case .indoor: return "Interior"
-        case .otherOutdoor: return "entrenar al aire libre"
-        }
-    }
-
-    private var style: ActivityCardStyle {
-        switch activity.impactLevel {
-        case .high:
-            return ActivityCardStyle(
-                background: Color(hex: "18181C"),
-                borderColor: Color(hex: "E0AA3E").opacity(0.7),
-                borderWidth: 1.2,
-                verticalPadding: 14,
-                verticalSpacing: 10,
-                fadedBackground: Color(hex: "E0AA3E").opacity(0.12)
-            )
-        case .medium:
-            return ActivityCardStyle(
-                background: Color(hex: "18181C"),
-                borderColor: Color.white.opacity(0.06),
-                borderWidth: 1,
-                verticalPadding: 12,
-                verticalSpacing: 8,
-                fadedBackground: Color.white.opacity(0.06)
-            )
-        case .low:
-            return ActivityCardStyle(
-                background: Color(hex: "0F0F10"),
-                borderColor: Color.white.opacity(0.04),
-                borderWidth: 1,
-                verticalPadding: 8,
-                verticalSpacing: 6,
-                fadedBackground: Color.white.opacity(0.03)
-            )
-        }
+        if activity.activityData.recapturedZonesCount > 0 { return "Zona Recuperada" }
+        if activity.activityData.stolenZonesCount > 0 { return "Territorios Capturados" }
+        if activity.activityData.newZonesCount > 0 { return "¡Nuevo Descubrimiento!" }
+        if activity.activityData.defendedZonesCount > 0 { return "Defensa Exitosa" }
+        return activity.activityData.activityType.displayName
     }
 
     var body: some View {
-        let currentStyle = style
-
-        VStack(alignment: .leading, spacing: currentStyle.verticalSpacing) {
-            userActivityHeader
-
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(narrativeTitle)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.trailing, 4)
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack(spacing: 12) {
+                avatar(size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(activity.user.displayName)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                        levelBadge
+                    }
+                    Text(activity.activityData.locationLabel ?? "Explorando")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Text(timeAgo(from: activity.date))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            
+            // Large Square Map - The Highlight
+            ZStack {
+                if isLoadingTerritories {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.05))
+                        .frame(height: 200)
+                        .overlay(
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.2)
+                        )
+                        .padding(.horizontal, 8)
+                } else if !territoryCells.isEmpty {
+                    TerritoryMinimapView(territories: territoryCells)
+                        .aspectRatio(1.2, contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal, 8)
+                        .transition(.opacity)
+                } else if !hasTerritoryImpact {
+                    // Fallback for no maps - Premium Design
+                    premiumNoMapFallback
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: isLoadingTerritories)
+            .animation(.easeInOut(duration: 0.3), value: territoryCells.isEmpty)
+            
+            VStack(alignment: .leading, spacing: 12) {
+                // Title & Missions
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(refinedTitle)
+                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .foregroundColor(Color(hex: "32D74B"))
                     
                     if !missionNames.isEmpty {
                         MissionChipsView(missions: missionNames)
                     }
                 }
                 
-                Spacer()
-                
-                if hasTerritoryImpact {
-                    miniMapThumbnail
+                // Detailed Metrics Section
+                HStack(spacing: 0) {
+                    ProposalMetricSmall(icon: "figure.run", value: String(format: "%.1f km", activity.activityData.distanceKm))
+                    Spacer()
+                    ProposalMetricSmall(icon: "clock", value: formatDuration(activity.activityData.durationSeconds))
+                    Spacer()
+                    ProposalMetricSmall(icon: "star.fill", value: "+\(activity.activityData.xpEarned) XP", color: Color(hex: "A259FF"))
                 }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(Color.white.opacity(0.03))
+                .cornerRadius(12)
+
+                // Reactions Bar
+                ReactionBarView(
+                    state: mergedReactionState,
+                    pendingReaction: pendingReaction,
+                    isEnabled: activity.activityId != nil,
+                    onReaction: handleReaction
+                )
+                .padding(.top, 4)
             }
-            .padding(.vertical, 4)
-
-            metricsSection
-
-            ReactionBarView(
-                state: mergedReactionState,
-                pendingReaction: pendingReaction,
-                isEnabled: activity.activityId != nil,
-                onReaction: handleReaction
-            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
         }
-        .padding(.vertical, currentStyle.verticalPadding)
-        .padding(.horizontal, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(currentStyle.background)
-        )
+        .background(Color(hex: "121214"))
+        .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(currentStyle.borderColor, lineWidth: currentStyle.borderWidth)
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .shadow(color: Color.black.opacity(0.3), radius: 10, y: 6)
         .padding(.horizontal, 12)
+        .shadow(color: .black.opacity(0.4), radius: 15, y: 8)
         .task {
             if hasTerritoryImpact && territoryCells.isEmpty {
                 await loadTerritories()
@@ -154,178 +151,46 @@ struct ActivityCardView: View {
         }
     }
 
-    private var miniMapThumbnail: some View {
+    private var premiumNoMapFallback: some View {
         ZStack {
-            if isLoadingTerritories {
-                ProgressView().scaleEffect(0.6)
-            } else if !territoryCells.isEmpty {
-                TerritoryMinimapView(territories: territoryCells)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .frame(width: 80, height: 80)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "1A1A1E"), Color(hex: "0A0A0B")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-            }
-        }
-        .frame(width: 80, height: 80)
-        .background(Color.black.opacity(0.2))
-        .cornerRadius(10)
-    }
-
-    private func loadTerritories() async {
-        guard let activityId = activity.activityId else { return }
-        isLoadingTerritories = true
-        let cells = await ActivityRepository.shared.fetchTerritoriesForActivity(activityId: activityId)
-        await MainActor.run {
-            self.territoryCells = cells
-            self.isLoadingTerritories = false
-        }
-    }
-
-    private var userActivityHeader: some View {
-        HStack(alignment: .top, spacing: 10) {
-            avatar
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(activity.user.displayName)
-                        .font(.headline.weight(.bold))
-                        .foregroundColor(.primary)
-                    levelBadge
-                }
-
-                Text(activity.activityData.activityType.displayName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.primary.opacity(0.8))
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(timeAgo(from: activity.date))
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(.primary.opacity(0.6))
-                Text(formatAbsoluteDate(activity.date))
-                    .font(.caption2)
-                    .foregroundColor(.primary.opacity(0.4))
-            }
-        }
-    }
-
-    private var metricsSection: some View {
-        HStack(spacing: 8) {
-            compactMetric(icon: "figure.run", value: String(format: "%.1f km", activity.activityData.distanceKm))
-            compactMetric(icon: "clock", value: formatDuration(activity.activityData.durationSeconds))
-            compactMetric(icon: "star.fill", value: "+\(activity.activityData.xpEarned) XP", color: Color(hex: "A259FF"))
+                )
             
-            Spacer()
+            // Decorative background shapes
+            Circle()
+                .fill(activity.activityData.activityType.color.opacity(0.15))
+                .frame(width: 150, height: 150)
+                .blur(radius: 40)
+                .offset(x: 40, y: -20)
             
-            HStack(spacing: 4) {
-                if activity.activityData.newZonesCount > 0 {
-                    compactBadge(text: "+\(activity.activityData.newZonesCount)", icon: "flag.fill", color: Color(hex: "32D74B"))
-                }
-                if activity.activityData.recapturedZonesCount > 0 {
-                    compactBadge(text: "\(activity.activityData.recapturedZonesCount)", icon: "arrow.counterclockwise", color: Color(hex: "FF9F0A"))
-                }
-                if activity.activityData.stolenZonesCount > 0 {
-                    compactBadge(text: "-\(activity.activityData.stolenZonesCount)", icon: "flag.slash.fill", color: Color(hex: "FF3B30"))
-                }
-                if activity.activityData.defendedZonesCount > 0 {
-                    compactBadge(text: "\(activity.activityData.defendedZonesCount)", icon: "shield.fill", color: Color(hex: "4C6FFF"))
-                }
+            VStack(spacing: 12) {
+                Image(systemName: activity.activityData.activityType.iconName)
+                    .font(.system(size: 60))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [activity.activityData.activityType.color, activity.activityData.activityType.color.opacity(0.6)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: activity.activityData.activityType.color.opacity(0.5), radius: 15)
+                
+                Text("Entrenamiento de \(activity.activityData.activityType.displayName)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundColor(.secondary)
             }
         }
-        .padding(.top, 4)
-    }
-
-    private func compactBadge(text: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 2) {
-            Image(systemName: icon)
-                .font(.system(size: 9))
-            Text(text)
-                .font(.caption2.bold())
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(color.opacity(0.8))
-        .cornerRadius(4)
-    }
-
-    private func compactMetric(icon: String, value: String, color: Color = .white.opacity(0.7)) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 10))
-            Text(value)
-                .font(.system(size: 11, weight: .bold))
-        }
-        .foregroundColor(color)
+        .frame(height: 200)
         .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(6)
     }
 
-    private var territoryImpactSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Impacto territorial")
-                .font(.caption.weight(.bold))
-                .foregroundColor(.primary.opacity(0.65))
-            HStack(spacing: 8) {
-                if activity.activityData.newZonesCount > 0 {
-                    badge(text: "+\(activity.activityData.newZonesCount) zona\(activity.activityData.newZonesCount == 1 ? "" : "s") conquistada\(activity.activityData.newZonesCount == 1 ? "" : "s")", color: "32D74B")
-                }
-                if activity.activityData.recapturedZonesCount > 0 {
-                    badge(text: "\(activity.activityData.recapturedZonesCount) zona\(activity.activityData.recapturedZonesCount == 1 ? "" : "s") recuperada\(activity.activityData.recapturedZonesCount == 1 ? "" : "s")", color: "FF9F0A")
-                }
-                if activity.activityData.stolenZonesCount > 0 {
-                    badge(text: "\(activity.activityData.stolenZonesCount) zona\(activity.activityData.stolenZonesCount == 1 ? "" : "s") robada\(activity.activityData.stolenZonesCount == 1 ? "" : "s")", color: "FF3B30")
-                }
-                if activity.activityData.defendedZonesCount > 0 {
-                    badge(text: "\(activity.activityData.defendedZonesCount) defensa\(activity.activityData.defendedZonesCount == 1 ? "" : "s") completada\(activity.activityData.defendedZonesCount == 1 ? "" : "s")", color: "4C6FFF")
-                }
-            }
-        }
-    }
-
-    private func badge(text: String, color: String) -> some View {
-        Text(text)
-            .font(.caption.bold())
-            .foregroundColor(.white)
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
-            .background(Color(hex: color).opacity(0.9))
-            .cornerRadius(10)
-    }
-
-    private func metric(icon: String, label: String, value: String, valueColor: Color = .white) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.6))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.caption2.weight(.medium))
-                    .foregroundColor(.primary.opacity(0.6))
-                Text(value)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(valueColor)
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var missionSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Misiones")
-                .font(.caption.weight(.bold))
-                .foregroundColor(.primary.opacity(0.65))
-            MissionChipsView(missions: missionNames)
-        }
-    }
-
-    private var avatar: some View {
+    private func avatar(size: CGFloat) -> some View {
         Group {
             if let data = activity.user.avatarData, let uiImage = UIImage(data: data) {
                 Image(uiImage: uiImage)
@@ -347,24 +212,30 @@ struct ActivityCardView: View {
                     )
             }
         }
-        .frame(width: 56, height: 56)
+        .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(
-            Circle()
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-        )
+        .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
     }
 
     private var levelBadge: some View {
-        Text("Lv \(activity.user.level)")
-            .font(.caption.bold())
+        Text("LVL \(activity.user.level)")
+            .font(.system(size: 10, weight: .black))
             .foregroundColor(.white)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color(hex: "4C6FFF").opacity(0.8))
-            .cornerRadius(8)
+            .background(Color(hex: "4C6FFF"))
+            .clipShape(Capsule())
     }
 
+    private func loadTerritories() async {
+        guard let activityId = activity.activityId else { return }
+        isLoadingTerritories = true
+        let cells = await ActivityRepository.shared.fetchTerritoriesForActivity(activityId: activityId)
+        await MainActor.run {
+            self.territoryCells = cells
+            self.isLoadingTerritories = false
+        }
+    }
 
     private func handleReaction(_ reaction: ReactionType) {
         guard activity.activityId != nil else { return }
@@ -398,14 +269,6 @@ struct ActivityCardView: View {
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
-    private func formatAbsoluteDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "es_ES")
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-
     private var missionNames: [String] {
         guard let subtitle = activity.eventSubtitle else { return [] }
         let cleaned = subtitle
@@ -420,7 +283,6 @@ struct ActivityCardView: View {
             .filter { !$0.isEmpty }
             .filter { token in
                 let lower = token.lowercased()
-                // Data Hygiene: No renderizar si el valor es 0
                 if lower.contains("nuevas: 0") || lower.contains("defendidas: 0") || lower.contains("recapturadas: 0") {
                     return false
                 }
@@ -428,13 +290,25 @@ struct ActivityCardView: View {
             }
     }
 
-
     private var hasTerritoryImpact: Bool {
         activity.activityData.newZonesCount > 0 || activity.activityData.defendedZonesCount > 0 || activity.activityData.recapturedZonesCount > 0 || activity.activityData.stolenZonesCount > 0
     }
+}
 
-
-
+// Reusing Metric Component from proposals for consistency
+struct ProposalMetricSmall: View {
+    let icon: String
+    let value: String
+    var color: Color = .white
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 11))
+                .foregroundColor(color.opacity(0.8))
+            Text(value).font(.system(size: 13, weight: .bold))
+                .foregroundColor(color)
+        }
+    }
 }
 
 private struct MissionChipsView: View {
@@ -446,10 +320,10 @@ private struct MissionChipsView: View {
             ForEach(missions, id: \.self) { mission in
                 Text(mission)
                     .font(.caption.weight(.bold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.primary.opacity(0.9))
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .background(Color.primary.opacity(0.08))
+                    .background(Color.white.opacity(0.05))
                     .cornerRadius(10)
             }
         }
@@ -510,26 +384,16 @@ struct ReactionBarView: View {
             .padding(.horizontal, isSelected ? 12 : 10)
             .background(
                 Capsule()
-                    .fill(isSelected ? Color(hex: "4C6FFF").opacity(0.2) : Color.primary.opacity(0.06))
+                    .fill(isSelected ? Color(hex: "4C6FFF").opacity(0.2) : Color.white.opacity(0.05))
             )
-            .background(.ultraThinMaterial)
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Color(hex: "4C6FFF") : Color.primary.opacity(0.1), lineWidth: 1)
+                    .stroke(isSelected ? Color(hex: "4C6FFF") : Color.white.opacity(0.1), lineWidth: 1)
             )
             .scaleEffect(isSelected ? 1.05 : 1.0)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
     }
-}
-
-private struct ActivityCardStyle {
-    let background: Color
-    let borderColor: Color
-    let borderWidth: CGFloat
-    let verticalPadding: CGFloat
-    let verticalSpacing: CGFloat
-    let fadedBackground: Color
 }

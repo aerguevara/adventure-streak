@@ -38,6 +38,11 @@ struct WorkoutsView: View {
                         // New Territory Stats Grid
                         territoryStatsGrid
                         
+                        // Rivals Section
+                        if !profileViewModel.recentTheftVictims.isEmpty || !profileViewModel.recentThieves.isEmpty {
+                            territoryRivalsSection
+                        }
+
                         // E) Achievements
                         achievementsSection
                         
@@ -427,6 +432,28 @@ struct WorkoutsView: View {
             }
             .padding(.horizontal)
         }
+    }
+
+    // MARK: - Rivals Section
+    var territoryRivalsSection: some View {
+        VStack(spacing: 24) {
+            if !profileViewModel.recentTheftVictims.isEmpty {
+                RivalsRowView(
+                    title: "Has robado a",
+                    rivals: profileViewModel.recentTheftVictims,
+                    color: Color(hex: "32D74B") // Green
+                )
+            }
+            
+            if !profileViewModel.recentThieves.isEmpty {
+                RivalsRowView(
+                    title: "Te han robado",
+                    rivals: profileViewModel.recentThieves,
+                    color: Color(hex: "FF3B30") // Red
+                )
+            }
+        }
+        .padding(.vertical, 8)
     }
 }
 

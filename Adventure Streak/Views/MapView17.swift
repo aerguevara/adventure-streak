@@ -19,13 +19,12 @@ struct MapView17: View {
                             .stroke(Color.green, lineWidth: 1)
                     }
                 }
-                .mapStyle(.standard(elevation: .flat)) // Evita renderizado 3D/metal con multisample
+                .mapStyle(.standard(elevation: .flat))
                 .mapControls {
                     MapUserLocationButton()
                     MapCompass()
                 }
                 .onMapCameraChange { context in
-                    // Postpone state changes to avoid publishing during view updates
                     DispatchQueue.main.async {
                         viewModel.updateVisibleRegion(context.region)
                     }
@@ -58,87 +57,66 @@ struct MapView17: View {
                 Spacer()
                 
                 if let owner = viewModel.selectedTerritoryOwner {
-                    VStack(spacing: 6) {
-                        if let data = viewModel.selectedTerritoryOwnerAvatarData,
-                           let uiImage = UIImage(data: data) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 56, height: 56)
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.white, lineWidth: 1))
-                        } else {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .foregroundStyle(.primary)
-                                .frame(width: 56, height: 56)
-                        }
-                        Text("Dueño del territorio")
-                            .font(.footnote)
-                            .foregroundColor(.primary)
-                        Text(owner)
-                            .font(.headline)
-                        HStack(spacing: 12) {
-                            Label("\(viewModel.selectedTerritoryOwnerXP ?? 0) XP", systemImage: "star.fill")
-                                .font(.footnote)
-                            let territoriesLabel = viewModel.selectedTerritoryOwnerTerritories.map { "\($0) territorios" } ?? "Territorios desconocidos"
-                            Label(territoriesLabel, systemImage: "map")
-                                .font(.footnote)
-                        }
-                        Button(action: {
-                            viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
-                        }) {
-                            HStack {
-                                Image(systemName: "xmark.circle.fill")
-                                Text("Cerrar")
+                    TerritoryOwnerCard(
+                        ownerName: owner,
+                        territoryId: viewModel.selectedTerritoryId ?? "",
+                        avatarData: viewModel.selectedTerritoryOwnerAvatarData,
+                        xp: viewModel.selectedTerritoryOwnerXP,
+                        territories: viewModel.selectedTerritoryOwnerTerritories,
+                        onClose: {
+                            withAnimation(.spring()) {
+                                viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
                             }
-                            .font(.caption)
                         }
-                    }
-                    .padding(.bottom, 12)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(12)
-                    .shadow(radius: 4)
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 20)
                 }
                 
                 if viewModel.isTracking {
-                    VStack {
-                        Text("Duration: \(formatDuration(viewModel.currentActivityDuration))")
-                        Text("Distance: \(String(format: "%.2f km", viewModel.currentActivityDistance / 1000))")
-                        
-                        Button(action: {
-                            viewModel.stopActivity(type: .walk)
-                        }) {
-                            Text("Stop Activity")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding()
-                                .background(Color.red)
-                                .cornerRadius(30)
-                        }
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.9))
-                    .cornerRadius(15)
-                    .padding(.bottom)
+                    trackingOverlay
                 } else {
-                    Button(action: {
-                        viewModel.startActivity(type: .walk)
-                    }) {
-                        Image(systemName: "play.fill")
-                            .font(.title)
-                            .foregroundColor(.white)
-                            .padding(20)
-                            .background(Color.green)
-                            .clipShape(Circle())
-                            .shadow(radius: 5)
-                    }
-                    .padding(.bottom, 20)
+                    playButton
                 }
             }
         }
+    }
+    
+    private var trackingOverlay: some View {
+        VStack {
+            Text("Duration: \(formatDuration(viewModel.currentActivityDuration))")
+            Text("Distance: \(String(format: "%.2f km", viewModel.currentActivityDistance / 1000))")
+            
+            Button(action: {
+                viewModel.stopActivity(type: .walk)
+            }) {
+                Text("Stop Activity")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.red)
+                    .cornerRadius(30)
+            }
+        }
+        .padding()
+        .background(Color.white.opacity(0.9))
+        .cornerRadius(15)
+        .padding(.bottom)
+    }
+    
+    private var playButton: some View {
+        Button(action: {
+            viewModel.startActivity(type: .walk)
+        }) {
+            Image(systemName: "play.fill")
+                .font(.title)
+                .foregroundColor(.white)
+                .padding(20)
+                .background(Color.green)
+                .clipShape(Circle())
+                .shadow(radius: 5)
+        }
+        .padding(.bottom, 20)
     }
     
     func formatDuration(_ duration: TimeInterval) -> String {
@@ -150,7 +128,6 @@ struct MapView17: View {
     }
     
     private func selectOwner(at coordinate: CLLocationCoordinate2D) {
-        // Check local cells (axis-aligned square, bounding box is enough)
         if let cell = viewModel.conqueredTerritories.first(where: { cell in
             let poly = TerritoryGrid.polygon(for: cell)
             guard let minLat = poly.map(\.latitude).min(),
@@ -169,7 +146,6 @@ struct MapView17: View {
             return
         }
         
-        // Rivals: match by polygon id
         if let rival = viewModel.otherTerritories.first(where: { territory in
             guard let id = territory.id else { return false }
             let dummyCell = TerritoryGrid.getCell(for: CLLocationCoordinate2D(latitude: territory.centerLatitude, longitude: territory.centerLongitude))

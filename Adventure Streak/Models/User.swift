@@ -38,6 +38,10 @@ struct User: Identifiable, Codable {
     
     // Remote logout control
     var forceLogoutVersion: Int?
+    
+    // Rivals
+    var recentTheftVictims: [Rival]?
+    var recentThieves: [Rival]?
 
     init(id: String? = nil,
          email: String? = nil,
@@ -56,7 +60,9 @@ struct User: Identifiable, Codable {
          currentStreakWeeks: Int? = nil,
          bestWeeklyDistanceKm: Double? = nil,
          currentWeekDistanceKm: Double? = nil,
-         forceLogoutVersion: Int? = nil) {
+         forceLogoutVersion: Int? = nil,
+         recentTheftVictims: [Rival]? = nil,
+         recentThieves: [Rival]? = nil) {
         self.id = id
         self.email = email
         self.displayName = displayName
@@ -75,6 +81,8 @@ struct User: Identifiable, Codable {
         self.bestWeeklyDistanceKm = bestWeeklyDistanceKm
         self.currentWeekDistanceKm = currentWeekDistanceKm
         self.forceLogoutVersion = forceLogoutVersion
+        self.recentTheftVictims = recentTheftVictims
+        self.recentThieves = recentThieves
     }
 
     enum CodingKeys: String, CodingKey {
@@ -95,6 +103,8 @@ struct User: Identifiable, Codable {
         case bestWeeklyDistanceKm
         case currentWeekDistanceKm
         case forceLogoutVersion
+        case recentTheftVictims
+        case recentThieves
     }
 
     init(from decoder: Decoder) throws {
@@ -124,5 +134,18 @@ struct User: Identifiable, Codable {
         bestWeeklyDistanceKm = try container.decodeIfPresent(Double.self, forKey: .bestWeeklyDistanceKm)
         currentWeekDistanceKm = try container.decodeIfPresent(Double.self, forKey: .currentWeekDistanceKm)
         forceLogoutVersion = try container.decodeIfPresent(Int.self, forKey: .forceLogoutVersion)
+        
+        recentTheftVictims = try container.decodeIfPresent([Rival].self, forKey: .recentTheftVictims)
+        recentThieves = try container.decodeIfPresent([Rival].self, forKey: .recentThieves)
     }
+}
+
+struct Rival: Identifiable, Codable {
+    let userId: String
+    let displayName: String
+    let avatarURL: String?
+    let lastInteractionAt: Date
+    let count: Int
+    
+    var id: String { userId }
 }

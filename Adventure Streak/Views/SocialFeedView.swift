@@ -21,7 +21,7 @@ struct SocialFeedView: View {
                     emptyStateView
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 20) {
+                        LazyVStack(spacing: 24) {
                             if !viewModel.stories.isEmpty {
                                 StoriesBarView(stories: viewModel.stories) { story in
                                     selectedStory = story
@@ -44,7 +44,8 @@ struct SocialFeedView: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        .padding(.vertical)
+                        .padding(.top, 8)
+                        .padding(.bottom)
                     }
                     .refreshable {
                         await viewModel.refresh()

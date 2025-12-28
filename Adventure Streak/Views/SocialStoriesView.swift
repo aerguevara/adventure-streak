@@ -80,6 +80,7 @@ struct StoryDetailView: View {
     let story: UserStory
     let allStories: [UserStory] // List of all available user stories
     @Binding var selectedStory: UserStory? // Binding to switch users
+    let isActive: Bool
     var containerDismiss: (() -> Void)? = nil // Explicit dismiss action for container
     @Environment(\.dismiss) var dismiss // Fallback
     @State private var currentIndex = 0
@@ -167,6 +168,10 @@ struct StoryDetailView: View {
                     // Content
                     if currentIndex < story.activities.count {
                         let currentPost = story.activities[currentIndex]
+                        let totalTerritories = currentPost.activityData.newZonesCount +
+                            currentPost.activityData.defendedZonesCount +
+                            currentPost.activityData.recapturedZonesCount +
+                            currentPost.activityData.stolenZonesCount
                         
                         VStack(spacing: 24) {
                             // Story text
@@ -179,6 +184,14 @@ struct StoryDetailView: View {
                                 if let subtitle = currentPost.eventSubtitle {
                                     Text(subtitle)
                                         .font(.body)
+                                        .foregroundColor(.white.opacity(0.9))
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal)
+                                }
+                                
+                                if let victimLine = stolenVictimsLine(for: currentPost) {
+                                    Text(victimLine)
+                                        .font(.subheadline.weight(.semibold))
                                         .foregroundColor(.white.opacity(0.9))
                                         .multilineTextAlignment(.center)
                                         .padding(.horizontal)
@@ -238,25 +251,17 @@ struct StoryDetailView: View {
                                     .padding(.horizontal)
                             }
                             
-                            // Metrics small
-                            HStack(spacing: 40) {
-                                storyMetric(icon: "star.fill", value: "+\(currentPost.activityData.xpEarned) XP")
-                                storyMetric(icon: "map.fill", value: "\(currentPost.activityData.newZonesCount) Zonas")
+                            // Metrics & territory impact
+                            VStack(spacing: 12) {
+                                HStack(spacing: 32) {
+                                    storyMetric(icon: "star.fill", value: "+\(currentPost.activityData.xpEarned) XP")
+                                    storyMetric(icon: "flag.fill", value: "\(totalTerritories) Territorios")
+                                }
+                                
+                                territoryImpactRow(for: currentPost)
                             }
                             
                             Spacer()
-                            
-                            // Bottom Action (View Post)
-                            NavigationLink(destination: SocialPostDetailView(post: currentPost)) {
-                                Text("Ver detalles")
-                                    .font(.subheadline.bold())
-                                    .foregroundColor(.white)
-                                    .padding(.vertical, 12)
-                                    .padding(.horizontal, 24)
-                                    .background(Color.white.opacity(0.1))
-                                    .cornerRadius(20)
-                            }
-                            .padding(.bottom, 40)
                         }
                     }
                 }
@@ -268,31 +273,31 @@ struct StoryDetailView: View {
                 .onEnded { _ in isInteracting = false }
         )
         .onReceive(timer) { _ in
+            guard isActive else { return }
             if !isInteracting {
                 if progress < 1.0 {
-                    progress += 0.02 // 5 seconds per story roughly
+                    progress = min(1.0, progress + 0.02) // 5 seconds per story roughly
                 } else {
                     nextStory()
                 }
             }
         }
         .onTapGesture { location in
+            guard isActive else { return }
             if location.x < UIScreen.main.bounds.width / 3 {
                 prevStory()
             } else {
                 nextStory()
             }
         }
-        .task {
-            if currentIndex < story.activities.count {
-                await loadTerritoryCells(for: story.activities[currentIndex].activityId)
-            }
+        .task(id: isActive) {
+            guard isActive, currentIndex < story.activities.count else { return }
+            await loadTerritoryCells(for: story.activities[currentIndex].activityId)
         }
         .onChange(of: currentIndex) { _, newIndex in
-            if newIndex < story.activities.count {
-                Task {
-                    await loadTerritoryCells(for: story.activities[newIndex].activityId)
-                }
+            guard isActive, newIndex < story.activities.count else { return }
+            Task {
+                await loadTerritoryCells(for: story.activities[newIndex].activityId)
             }
         }
     }
@@ -364,6 +369,64 @@ struct StoryDetailView: View {
                 .font(.subheadline.bold())
         }
     }
+
+    private func territoryImpactRow(for post: SocialPost) -> some View {
+        HStack(spacing: 10) {
+            storyTerritoryBadge(title: "Nuevas", value: post.activityData.newZonesCount, color: "32D74B")
+            storyTerritoryBadge(title: "Defendidas", value: post.activityData.defendedZonesCount, color: "4C6FFF")
+            storyTerritoryBadge(title: "Recup.", value: post.activityData.recapturedZonesCount, color: "FF9F0A")
+            storyTerritoryBadge(title: "Robadas", value: post.activityData.stolenZonesCount, color: "FF3B30")
+        }
+    }
+
+    private func storyTerritoryBadge(title: String, value: Int, color: String) -> some View {
+        VStack(spacing: 4) {
+            Text("\(value)")
+                .font(.subheadline.bold())
+                .foregroundColor(.white)
+            Text(title)
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.7))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(Color(hex: color).opacity(0.25))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(hex: color).opacity(0.6), lineWidth: 1)
+        )
+        .cornerRadius(10)
+    }
+
+    private func stolenVictimsLine(for post: SocialPost) -> String? {
+        guard post.activityData.stolenZonesCount > 0 else { return nil }
+        let victims = uniqueVictimNames(post.activityData.stolenVictimNames ?? [])
+        guard !victims.isEmpty else {
+            return "Robó territorios a otros jugadores"
+        }
+        if victims.count == 1 {
+            return "Robó territorios a \(victims[0])"
+        }
+        if victims.count == 2 {
+            return "Robó territorios a \(victims[0]) y \(victims[1])"
+        }
+        return "Robó territorios a \(victims[0]) y \(victims.count - 1) más"
+    }
+
+    private func uniqueVictimNames(_ names: [String]) -> [String] {
+        var seen = Set<String>()
+        var unique: [String] = []
+        for name in names {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            if seen.insert(trimmed).inserted {
+                unique.append(trimmed)
+            }
+        }
+        return unique
+    }
     
     private func timeAgo(from date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
@@ -419,6 +482,7 @@ struct StoryContainerView: View {
                     story: story,
                     allStories: stories,
                     selectedStory: $selectedStory,
+                    isActive: visibleStoryId == story.id,
                     containerDismiss: {
                         isPresented = false
                     }

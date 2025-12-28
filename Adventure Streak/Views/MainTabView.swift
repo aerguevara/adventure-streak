@@ -18,82 +18,43 @@ struct MainTabView: View {
                 }
             
             ZStack(alignment: .bottomTrailing) {
-                ZStack {
-                    MapView(viewModel: mapViewModel)
-                        .ignoresSafeArea(edges: .top)
+                MapView(viewModel: mapViewModel)
+                    .ignoresSafeArea(edges: .top)
+                
+                VStack(alignment: .trailing, spacing: 16) {
+                    Spacer()
+                    
+                    // Location Button
+                    Button(action: {
+                        mapViewModel.centerOnUserLocation()
+                    }) {
+                        Image(systemName: "location.fill")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                        .padding(12)
+                        .background(Color.white)
+                        .clipShape(Circle())
+                        .shadow(radius: 4)
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, mapViewModel.selectedTerritoryId == nil ? 24 : 0)
                     
                     if let owner = mapViewModel.selectedTerritoryOwner,
                        let territoryId = mapViewModel.selectedTerritoryId {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 10) {
-                                if let data = mapViewModel.selectedTerritoryOwnerAvatarData,
-                                   let image = UIImage(data: data) {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 48, height: 48)
-                                        .clipShape(Circle())
-                                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
-                                } else {
-                                    Image(systemName: "person.circle.fill")
-                                        .resizable()
-                                        .foregroundStyle(.primary)
-                                        .frame(width: 48, height: 48)
-                                }
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(owner)
-                                        .font(.headline)
-                                    Text("Territorio \(territoryId)")
-                                        .font(.footnote)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            
-                            HStack(spacing: 12) {
-                                Label("\(mapViewModel.selectedTerritoryOwnerXP ?? 0) XP", systemImage: "star.fill")
-                                    .font(.footnote)
-                                    .foregroundColor(.primary)
-                                
-                                let territoriesLabel = mapViewModel.selectedTerritoryOwnerTerritories.map { "\($0) territorios" } ?? "Territorios desconocidos"
-                                Label(territoriesLabel, systemImage: "map")
-                                    .font(.footnote)
-                                    .foregroundColor(.primary)
-                            }
-                            
-                            Button(action: {
+                        TerritoryOwnerCard(
+                            ownerName: owner,
+                            territoryId: territoryId,
+                            avatarData: mapViewModel.selectedTerritoryOwnerAvatarData,
+                            xp: mapViewModel.selectedTerritoryOwnerXP,
+                            territories: mapViewModel.selectedTerritoryOwnerTerritories,
+                            onClose: {
                                 mapViewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
-                            }) {
-                                HStack {
-                                    Image(systemName: "xmark.circle.fill")
-                                    Text("Cerrar")
-                                }
-                                .font(.caption)
                             }
-                            .padding(.top, 4)
-                        }
-                        .padding(12)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(14)
-                        .shadow(radius: 6)
-                        .padding()
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                
-                // Location Button
-                Button(action: {
-                    mapViewModel.centerOnUserLocation()
-                }) {
-                    Image(systemName: "location.fill")
-                    .font(.title2)
-                    .foregroundColor(.blue)
-                    .padding(12)
-                    .background(Color.white)
-                    .clipShape(Circle())
-                    .shadow(radius: 4)
-                }
-                .padding(.trailing, 16)
-                .padding(.bottom, 24)
+                .animation(.spring(), value: mapViewModel.selectedTerritoryId)
             }
             .tabItem {
                 Label("Mapa", systemImage: "map")

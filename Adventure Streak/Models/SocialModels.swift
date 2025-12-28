@@ -49,6 +49,7 @@ struct SocialActivityData: Codable, Hashable {
     var shieldCount: Int
     var fireCount: Int
     var latestReactorNames: [String]? // NEW: For "UserA and 2 others reacted"
+    let stolenVictimNames: [String]? // Names of players stolen from (if available)
     
     // Map Snapshot (Optional string to store a map image URL or data)
     let mapSnapshotURL: String?
@@ -72,6 +73,7 @@ struct SocialActivityData: Codable, Hashable {
         case calories
         case averageHeartRate
         case latestReactorNames
+        case stolenVictimNames
         case mapSnapshotURL
         case locationLabel
     }
@@ -93,6 +95,7 @@ struct SocialActivityData: Codable, Hashable {
          fireCount: Int = 0,
          currentUserReaction: ReactionType? = nil,
          latestReactorNames: [String]? = nil,
+         stolenVictimNames: [String]? = nil,
          mapSnapshotURL: String? = nil,
          locationLabel: String? = nil,
          calories: Double? = nil,
@@ -110,6 +113,7 @@ struct SocialActivityData: Codable, Hashable {
         self.fireCount = fireCount
         self.currentUserReaction = currentUserReaction
         self.latestReactorNames = latestReactorNames
+        self.stolenVictimNames = stolenVictimNames
         self.mapSnapshotURL = mapSnapshotURL
         self.locationLabel = locationLabel
         self.calories = calories
@@ -136,6 +140,7 @@ struct SocialActivityData: Codable, Hashable {
         
         currentUserReaction = try container.decodeIfPresent(ReactionType.self, forKey: .currentUserReaction)
         latestReactorNames = try container.decodeIfPresent([String].self, forKey: .latestReactorNames)
+        stolenVictimNames = try container.decodeIfPresent([String].self, forKey: .stolenVictimNames)
         mapSnapshotURL = try container.decodeIfPresent(String.self, forKey: .mapSnapshotURL)
         locationLabel = try container.decodeIfPresent(String.self, forKey: .locationLabel)
         calories = try container.decodeIfPresent(Double.self, forKey: .calories)

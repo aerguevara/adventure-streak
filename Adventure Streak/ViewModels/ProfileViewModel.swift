@@ -41,6 +41,10 @@ class ProfileViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     
+    // Rivals
+    @Published var recentTheftVictims: [Rival] = []
+    @Published var recentThieves: [Rival] = []
+    
     // MARK: - Computed Properties
     var userTitle: String {
         switch level {
@@ -251,6 +255,9 @@ class ProfileViewModel: ObservableObject {
         self.totalStolen = user.totalStolenTerritories ?? 0
         self.totalDefended = user.totalDefendedTerritories ?? 0
         self.totalRecaptured = user.totalRecapturedTerritories ?? 0
+        
+        self.recentTheftVictims = user.recentTheftVictims ?? []
+        self.recentThieves = user.recentThieves ?? []
         
         // Sync GamificationService with fetched data
         // This will trigger the observers above to update the UI properties
