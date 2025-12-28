@@ -493,7 +493,7 @@ class WorkoutsViewModel: ObservableObject {
                             }
                             
                             // Calculate distance in km
-                            let distanceKm = (activity.distanceMeters ?? 0.0) / 1000.0
+                            let distanceKm = activity.distanceMeters / 1000.0
                             let duration = activity.durationSeconds
 
                             // Rarity Logic (Shared with ItemView)
