@@ -33,9 +33,9 @@ struct GlobalImportSummary {
     mutating func add(stats: TerritoryStats, xp: Int, victimNames: [String], location: String?, route: [RoutePoint]) {
         self.processedCount += 1
         self.totalXP += xp
-        self.totalNewTerritories += stats.newCellsCount
-        self.totalDefended += stats.defendedCellsCount
-        self.totalStolen += stats.stolenCellsCount
+        self.totalNewTerritories += stats.newCellsCount ?? 0
+        self.totalDefended += stats.defendedCellsCount ?? 0
+        self.totalStolen += stats.stolenCellsCount ?? 0
         self.stolenVictims.formUnion(victimNames)
         if let loc = location, !loc.isEmpty {
             self.locations.append(loc)

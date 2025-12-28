@@ -34,14 +34,14 @@ enum XPConfig {
 
 // 2. Breakdown of earned XP
 struct XPBreakdown: Codable, Hashable {
-    let xpBase: Int
-    let xpTerritory: Int
-    let xpStreak: Int
-    let xpWeeklyRecord: Int
-    let xpBadges: Int
+    let xpBase: Int?
+    let xpTerritory: Int?
+    let xpStreak: Int?
+    let xpWeeklyRecord: Int?
+    let xpBadges: Int?
     
     var total: Int {
-        xpBase + xpTerritory + xpStreak + xpWeeklyRecord + xpBadges
+        (xpBase ?? 0) + (xpTerritory ?? 0) + (xpStreak ?? 0) + (xpWeeklyRecord ?? 0) + (xpBadges ?? 0)
     }
 }
 
@@ -61,14 +61,17 @@ struct XPContext {
 typealias TerritorialDelta = TerritoryStats
 
 struct TerritoryStats: Codable {
-    let newCellsCount: Int
-    let defendedCellsCount: Int
-    let recapturedCellsCount: Int
-    let stolenCellsCount: Int
+    let newCellsCount: Int?
+    let defendedCellsCount: Int?
+    let recapturedCellsCount: Int?
+    let stolenCellsCount: Int?
     
     // Helper to check if empty
     var isEmpty: Bool {
-        newCellsCount == 0 && defendedCellsCount == 0 && recapturedCellsCount == 0 && stolenCellsCount == 0
+        (newCellsCount ?? 0) == 0 && 
+        (defendedCellsCount ?? 0) == 0 && 
+        (recapturedCellsCount ?? 0) == 0 && 
+        (stolenCellsCount ?? 0) == 0
     }
 }
 

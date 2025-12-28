@@ -203,16 +203,14 @@ class ProfileViewModel: ObservableObject {
     private func refreshLocalStats() {
         self.streakWeeks = activityStore.calculateCurrentStreak()
         
-        let cutoffDate = configService.cutoffDate()
+        // Activities (Total Historical)
+        self.activitiesCount = activityStore.activities.count
         
-        // Activities in configurable window
-        self.activitiesCount = activityStore.activities.filter { $0.startDate >= cutoffDate }.count
+        // Territories conquered (Total Historical Ownership)
+        // Note: 'conqueredCells' contains current ownership.
+        self.territoriesCount = territoryStore.conqueredCells.count
         
-        // Territories conquered in configurable window
-        // Note: 'conqueredCells' contains current ownership. We check 'lastConqueredAt'.
-        self.territoriesCount = territoryStore.conqueredCells.values.filter { $0.lastConqueredAt >= cutoffDate }.count
-        
-        // Total Cells Owned (Historical/Current Total)
+        // Total Cells Owned (Historical/Current Total) - Keep as is for now
         self.totalCellsConquered = territoryStore.conqueredCells.count
         
         // territoryInventory: Group by activityId

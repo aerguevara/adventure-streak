@@ -92,20 +92,10 @@ class MapViewModel: ObservableObject {
             .combineLatest(configService.$config)
             .map { [weak self] combined, config -> [TerritoryCell] in
                 guard let self = self else { return [] }
-                
                 let (cellsDict, region) = combined
-                let cutoffDate = self.cutoffDate(for: config)
-
-                // 1. LOD Check: If zoomed out too far, don't render individual cells
-                // MODIFIED: Increased threshold from 0.2 to 10.0 to keep boxes visible at large scales
-                if region.span.latitudeDelta > 10.0 || region.span.longitudeDelta > 10.0 {
-                    print("DEBUG: Zoomed out too far (Span: \(region.span.latitudeDelta)), hiding territories.")
-                    return []
-                }
                 
                 let allCells = Array(cellsDict.values)
-                // Filter by date first
-                let recentCells = allCells.filter { $0.lastConqueredAt >= cutoffDate }
+                let recentCells = allCells // Show everything
                 
                 // Simple bounding box check
                 let minLat = region.center.latitude - region.span.latitudeDelta / 2
@@ -133,11 +123,8 @@ class MapViewModel: ObservableObject {
             .assign(to: &$visibleTerritories)
         
         territoryStore.$conqueredCells
-            .combineLatest(configService.$config)
-            .map { [weak self] dict, config -> [TerritoryCell] in
-                guard let self = self else { return [] }
-                let cutoffDate = self.cutoffDate(for: config)
-                return Array(dict.values).filter { $0.lastConqueredAt >= cutoffDate }
+            .map { dict in
+                Array(dict.values)
             }
             .assign(to: &$conqueredTerritories)
             
@@ -234,11 +221,8 @@ class MapViewModel: ObservableObject {
             .assign(to: &$otherTerritories)
             
         activityStore.$activities
-            .combineLatest(configService.$config)
-            .map { [weak self] activities, config -> [ActivitySession] in
-                guard let self = self else { return [] }
-                let cutoffDate = self.cutoffDate(for: config)
-                return activities.filter { $0.startDate >= cutoffDate }
+            .map { activities in
+                activities
             }
             .assign(to: &$activities)
         
