@@ -6,18 +6,92 @@ struct StoriesBarView: View {
     let onSelect: (UserStory) -> Void
     
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                ForEach(stories) { story in
-                    StoryCircleView(story: story) {
-                        onSelect(story)
+        if stories.isEmpty {
+            EmptyStoriesView()
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(stories) { story in
+                        StoryCircleView(story: story) {
+                            onSelect(story)
+                        }
                     }
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
         }
-        .background(Color.black)
+    }
+}
+
+struct EmptyStoriesView: View {
+    @State private var isAnimating = false
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Pulsing Circle
+            ZStack {
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color(hex: "FF9500").opacity(0.5), Color(hex: "FF3B30").opacity(0.5)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2
+                    )
+                    .frame(width: 72, height: 72)
+                    .scaleEffect(isAnimating ? 1.15 : 1.0)
+                    .opacity(isAnimating ? 0.0 : 0.8)
+                
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 64, height: 64)
+                    .overlay(
+                        Image(systemName: "safari.fill") // Compass icon
+                            .font(.system(size: 28))
+                            .foregroundColor(.orange)
+                            .shadow(color: .orange.opacity(0.6), radius: 6)
+                            .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color(hex: "FF9500"), Color(hex: "FF3B30")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2
+                            )
+                    )
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SIN ACTIVIDAD")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundColor(.orange)
+                    .tracking(1.5)
+                
+                Text("Tú marcas el paso")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                
+                Text("Explora y sé el primero")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.6))
+            }
+            .padding(.leading, 4)
+            
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: false)) {
+                isAnimating = true
+            }
+        }
     }
 }
 

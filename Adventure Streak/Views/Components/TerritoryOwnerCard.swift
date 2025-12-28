@@ -4,6 +4,7 @@ struct TerritoryOwnerCard: View {
     let ownerName: String
     let territoryId: String
     let avatarData: Data?
+    let ownerIcon: String?
     let xp: Int?
     let territories: Int?
     let onClose: () -> Void
@@ -37,6 +38,18 @@ struct TerritoryOwnerCard: View {
                             lineWidth: 2
                         )
                         .frame(width: 66, height: 66)
+                    
+                    // Map Icon Badge
+                    if let icon = ownerIcon {
+                        Text(icon)
+                            .font(.system(size: 18))
+                            .padding(4)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.5))
+                            .offset(x: 24, y: 24)
+                            .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                    }
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {

@@ -159,10 +159,13 @@ struct GamifiedWorkoutCard: View {
             }
         }
         .padding(20)
-        .background(Color(hex: "1A1A1D"))
+        .background(.ultraThinMaterial)
         .cornerRadius(18)
-        .shadow(color: workout.rarityColor.opacity(0.15), radius: 10, x: 0, y: 4)
-        .shadow(color: workout.rarityColor.opacity(0.15), radius: 10, x: 0, y: 4)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
     }
     
     var iconName: String {

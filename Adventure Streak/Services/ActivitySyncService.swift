@@ -106,10 +106,13 @@ final class ActivitySyncService {
         }
     }
     
-    nonisolated func workoutName(for workout: WorkoutProtocol) -> String {
-        if let title = workout.metadata?["HKWorkoutTitle"] as? String {
+    nonisolated func workoutName(for workout: WorkoutProtocol) -> String? {
+        if let title = workout.metadata?["HKWorkoutTitle"] as? String, !title.isEmpty {
             return title
         }
-        return ""
+        if let brand = workout.metadata?["HKWorkoutBrandName"] as? String, !brand.isEmpty {
+            return brand
+        }
+        return nil
     }
 }

@@ -45,6 +45,7 @@ struct MainTabView: View {
                             ownerName: owner,
                             territoryId: territoryId,
                             avatarData: mapViewModel.selectedTerritoryOwnerAvatarData,
+                            ownerIcon: mapViewModel.selectedTerritoryOwnerIcon,
                             xp: mapViewModel.selectedTerritoryOwnerXP,
                             territories: mapViewModel.selectedTerritoryOwnerTerritories,
                             onClose: {

@@ -16,6 +16,7 @@ struct ProfileDetailView: View {
     @State private var showSignOutConfirmation = false
     @State private var showImagePicker = false
     @State private var pickedImage: UIImage?
+    @State private var showIconPicker = false
     private let currentUserId: String? = AuthenticationService.shared.userId
     
     enum RelationTab: String, CaseIterable, Identifiable {
@@ -99,6 +100,52 @@ struct ProfileDetailView: View {
                         StatCard(title: "Zonas Totales", value: "\(profileViewModel.totalCellsConquered)", icon: "map.fill", color: .blue)
                         StatCard(title: "Esta Semana", value: "+\(profileViewModel.territoriesCount)", icon: "figure.run", color: .green)
                         StatCard(title: "Actividades", value: "\(profileViewModel.activitiesCount)", icon: "bolt.horizontal.fill", color: .yellow)
+                    }
+                    .padding(.horizontal)
+                    
+                    // Extra Actions: Map Icon
+                    VStack(spacing: 12) {
+                        Button {
+                            showIconPicker = true
+                        } label: {
+                            HStack {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color.blue.opacity(0.15))
+                                        .frame(width: 36, height: 36)
+                                    
+                                    if let icon = profileViewModel.mapIcon {
+                                        Text(icon)
+                                            .font(.system(size: 18))
+                                    } else {
+                                        Image(systemName: "map.fill")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                                
+                                Text("Icono del Mapa")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.white)
+                                
+                                Spacer()
+                                
+                                Text(profileViewModel.mapIcon ?? "Seleccionar")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding()
+                            .background(Color(hex: "18181C"))
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                            )
+                        }
                     }
                     .padding(.horizontal)
                     
@@ -258,6 +305,9 @@ struct ProfileDetailView: View {
         }
         .sheet(isPresented: $showDebugMenu) {
             DebugSimulationView(workoutsViewModel: workoutsViewModel)
+        }
+        .sheet(isPresented: $showIconPicker) {
+            IconPickerView(viewModel: profileViewModel)
         }
     }
     

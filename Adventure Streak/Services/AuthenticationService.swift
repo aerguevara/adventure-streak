@@ -204,28 +204,37 @@ class AuthenticationService: NSObject, ObservableObject {
                         let finalName = (remoteUser?.displayName?.isEmpty == false) ? remoteUser!.displayName! : resolvedName
                         self.userName = finalName
                         
-                        // Sync with backend
-                        UserRepository.shared.syncUser(user: firebaseUser, name: finalName, initialXP: initialXP, initialLevel: initialLevel)
-                        
-                        // Update Gamification
-                        let isNewOrDummy = remoteUser == nil || (remoteUser?.xp == 0 && remoteUser?.joinedAt == nil)
-                        if isNewOrDummy {
-                            GamificationService.shared.syncState(xp: initialXP, level: initialLevel)
-                        } else if let remoteUser = remoteUser {
-                            GamificationService.shared.syncState(xp: remoteUser.xp, level: remoteUser.level)
-                        }
-                        
-                        // Sync Activities
+                        // RECOVERY LOGIC: Use custom claims if provided in the token (preserved after reinstall)
                         Task {
+                            let result = try? await firebaseUser.getIDTokenResult()
+                            let recoveryXP = result?.claims["xp"] as? Int
+                            let recoveryLevel = result?.claims["level"] as? Int
+                            
+                            if let xp = recoveryXP {
+                                print("[AuthenticationService] Found recovery XP in Auth claims (Google): \(xp)")
+                            }
+
+                            // Sync with backend
+                            UserRepository.shared.syncUser(user: firebaseUser, name: finalName, initialXP: recoveryXP, initialLevel: recoveryLevel)
+                            
+                            // Update Gamification
+                            let isNewOrDummy = remoteUser == nil || (remoteUser?.xp == 0 && remoteUser?.joinedAt == nil)
+                            if isNewOrDummy {
+                                GamificationService.shared.syncState(xp: recoveryXP ?? 0, level: recoveryLevel ?? 1)
+                            } else if let remoteUser = remoteUser {
+                                GamificationService.shared.syncState(xp: remoteUser.xp, level: remoteUser.level)
+                            }
+                            
+                            // Sync Activities
                             self.isSyncingData = true
                             await ActivityRepository.shared.ensureRemoteParity(userId: firebaseUser.uid, territoryStore: TerritoryStore.shared)
                             await TerritoryRepository.shared.syncUserTerritories(userId: firebaseUser.uid, store: TerritoryStore.shared)
                             self.isSyncingData = false
                             
                             ActivityStore.shared.startObserving(userId: firebaseUser.uid)
+                            
+                            completion(true, nil)
                         }
-                        
-                        completion(true, nil)
                     }
                 }
             }
@@ -476,24 +485,29 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                         self.userName = chosenName
                         self.userAvatarURL = remoteUser?.avatarURL
                         
-                        // Realistic starting stats for new Apple users (Start at 0 for real devices)
-                        let initialXP = 0
-                        let initialLevel = 1
-                        
-                        // Sync with robustness (will merge if exists, create if not)
-                        UserRepository.shared.syncUser(user: user, name: chosenName, initialXP: initialXP, initialLevel: initialLevel)
-                        
-                        // Ensure local gamification state is immediate
-                        // If user is nil OR was partially created (missing XP and join date), apply initial stats
-                        let isNewOrDummy = remoteUser == nil || (remoteUser?.xp == 0 && remoteUser?.joinedAt == nil)
-                        
-                        if isNewOrDummy {
-                            GamificationService.shared.syncState(xp: initialXP, level: initialLevel)
-                        } else if let remoteUser = remoteUser {
-                            GamificationService.shared.syncState(xp: remoteUser.xp, level: remoteUser.level)
-                        }
-                        
+                        // RECOVERY LOGIC: Use custom claims if provided in the token (preserved after reinstall)
                         Task {
+                            let result = try? await user.getIDTokenResult()
+                            let recoveryXP = result?.claims["xp"] as? Int
+                            let recoveryLevel = result?.claims["level"] as? Int
+                            
+                            if let xp = recoveryXP {
+                                print("[AuthenticationService] Found recovery XP in Auth claims: \(xp)")
+                            }
+
+                            // Sync with robustness (will merge if exists, create if not)
+                            UserRepository.shared.syncUser(user: user, name: chosenName, initialXP: recoveryXP, initialLevel: recoveryLevel)
+                            
+                            // Ensure local gamification state is immediate
+                            // If user is nil OR was partially created (missing XP and join date), apply initial/recovery stats
+                            let isNewOrDummy = remoteUser == nil || (remoteUser?.xp == 0 && remoteUser?.joinedAt == nil)
+                            
+                            if isNewOrDummy {
+                                GamificationService.shared.syncState(xp: recoveryXP ?? 0, level: recoveryLevel ?? 1)
+                            } else if let remoteUser = remoteUser {
+                                GamificationService.shared.syncState(xp: remoteUser.xp, level: remoteUser.level)
+                            }
+                            
                             self.isSyncingData = true
                             await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
                             await TerritoryRepository.shared.syncUserTerritories(userId: user.uid, store: TerritoryStore.shared)

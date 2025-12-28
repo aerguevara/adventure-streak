@@ -8,11 +8,12 @@ struct SocialFeedView: View {
     @StateObject var viewModel = SocialViewModel()
     @State private var selectedStory: UserStory? = nil
     @State private var showStoryPlayer = false
+    @State private var scrollOffset: CGFloat = 0
     
     var body: some View {
         NavigationView {
             ZStack {
-                Color.black.ignoresSafeArea()
+                NeonBackgroundView(scrollOffset: scrollOffset)
                 
                 if viewModel.isLoading {
                     ProgressView()
@@ -22,13 +23,11 @@ struct SocialFeedView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 24) {
-                            if !viewModel.stories.isEmpty {
-                                StoriesBarView(stories: viewModel.stories) { story in
-                                    selectedStory = story
-                                    showStoryPlayer = true
-                                }
-                                .padding(.bottom, 10)
+                            StoriesBarView(stories: viewModel.stories) { story in
+                                selectedStory = story
+                                showStoryPlayer = true
                             }
+                            .padding(.bottom, 10)
                             
                             ForEach(viewModel.displayPosts) { post in
                                 NavigationLink {
@@ -46,6 +45,15 @@ struct SocialFeedView: View {
                         }
                         .padding(.top, 8)
                         .padding(.bottom)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(key: ScrollOffsetPreferenceKey.self, value: proxy.frame(in: .named("scroll")).minY)
+                            }
+                        )
+                    }
+                    .coordinateSpace(name: "scroll")
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                        scrollOffset = -value
                     }
                     .refreshable {
                         await viewModel.refresh()

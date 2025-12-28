@@ -134,10 +134,10 @@ class SocialViewModel: ObservableObject {
 
     private func updateStories(from posts: [SocialPost]) {
         let now = Date()
-        let seventyTwoHoursAgo = now.addingTimeInterval(-72 * 3600)
+        let twentyFourHoursAgo = now.addingTimeInterval(-24 * 3600)
         
         let territoryEvents = posts.filter { post in
-            post.date >= seventyTwoHoursAgo && post.hasTerritoryImpact
+            post.date >= twentyFourHoursAgo && post.hasTerritoryImpact
         }
         
         let grouped = Dictionary(grouping: territoryEvents) { $0.userId }

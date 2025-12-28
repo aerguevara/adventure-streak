@@ -40,14 +40,48 @@ struct RankingView: View {
     @State private var nextGoalTargetName: String = ""
     @State private var isLoadingSuggestions = false
     
+    // Parallax & Effects
+    @State private var scrollOffset: CGFloat = 0
+    
     var body: some View {
         ZStack {
-            // Background
-            Color.black.ignoresSafeArea()
+            // Capa 1: Fondo Parallax (Mesh Gradient)
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                LinearGradient(colors: [Color(hex: "08080A"), Color(hex: "121216")], startPoint: .top, endPoint: .bottom)
+                
+                Circle()
+                    .fill(Color(hex: "4C6FFF").opacity(0.12))
+                    .frame(width: 400, height: 400)
+                    .blur(radius: 80)
+                    .offset(x: -150, y: -200 + (scrollOffset * 0.1))
+                
+                Circle()
+                    .fill(Color(hex: "A259FF").opacity(0.12))
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 60)
+                    .offset(x: 150, y: 100 + (scrollOffset * 0.15))
+            }
+            .ignoresSafeArea()
+            
+            // Capa 2: Partículas Flotantes
+            GeometryReader { geo in
+                Canvas { context, size in
+                    for i in 0..<20 {
+                        let x = CGFloat((i * 137) % Int(size.width))
+                        let y = CGFloat((i * 251) % Int(size.height * 2)) - (scrollOffset * 0.2)
+                        let rect = CGRect(x: x, y: y, width: 2, height: 2)
+                        context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.2)))
+                    }
+                }
+            }
+            .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // 1. Header
                 headerView
+                    .zIndex(10)
                 
                 // 2. Content
                 ScrollView {
@@ -61,28 +95,23 @@ struct RankingView: View {
                         } else if !viewModel.hasEntries {
                             emptyStateView
                         } else {
-                            // Podium
-                            PodiumView(entries: Array(viewModel.entries.prefix(3))) { entry in
-                                if !entry.isCurrentUser {
-                                    viewModel.selectUser(userId: entry.userId)
+                            // Leader Horizon (Replaces old Podium)
+                            if let leader = viewModel.entries.first {
+                                LeaderHorizonView(entry: leader, scrollOffset: scrollOffset) {
+                                    if !leader.isCurrentUser {
+                                        viewModel.selectUser(userId: leader.userId)
+                                    }
                                 }
-                            }
                                 .padding(.top, 10)
-                            
-                            if let goal = nextGoalInfo, goal.current.position <= 3 {
-                                NextGoalCardView(
-                                    xpUser: goal.current.weeklyXP,
-                                    xpTarget: goal.target.weeklyXP,
-                                    targetName: goal.target.displayName
-                                ) {
-                                    handleNextGoalTap(goal: goal)
-                                }
-                                .padding(.horizontal)
                             }
                             
-                            // List
+                            if let goal = nextGoalInfo, goal.current.position <= 1 {
+                                // No goal needed if you are #1, but if we have other logic:
+                            }
+                            
+                            // List (Cards with Glassmorphism)
                             LazyVStack(spacing: 12) {
-                                ForEach(viewModel.entries.dropFirst(3)) { entry in
+                                ForEach(viewModel.entries.dropFirst()) { entry in
                                     RankingCard(entry: entry) {
                                         viewModel.toggleFollow(for: entry)
                                     } onCardTapped: {
@@ -103,9 +132,18 @@ struct RankingView: View {
                                 }
                             }
                             .padding(.horizontal)
-                            .padding(.bottom, 20)
+                            .padding(.bottom, 30)
                         }
                     }
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: ScrollOffsetPreferenceKey.self, value: proxy.frame(in: .named("scroll")).minY)
+                        }
+                    )
+                }
+                .coordinateSpace(name: "scroll")
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                    scrollOffset = -value
                 }
                 .refreshable {
                     viewModel.fetchRanking()
@@ -180,7 +218,7 @@ struct RankingView: View {
             }
         }
         .padding(.bottom, 16)
-        .background(Color.black)
+        .background(Color.black.opacity(0.8).blur(radius: 10))
     }
     
     private var emptyStateView: some View {
@@ -263,39 +301,70 @@ struct RankingView: View {
     }
 }
 
-struct PodiumView: View {
-    let entries: [RankingEntry]
-    var onEntryTapped: ((RankingEntry) -> Void)?
+struct LeaderHorizonView: View {
+    let entry: RankingEntry
+    let scrollOffset: CGFloat
+    var onAvatarTapped: (() -> Void)?
     
     var body: some View {
-        HStack(alignment: .bottom, spacing: 16) {
-            // 2nd Place
-            if entries.indices.contains(1) {
-                Button(action: { onEntryTapped?(entries[1]) }) {
-                    PodiumItem(entry: entries[1], scale: 0.9)
+        VStack(spacing: 20) {
+            ZStack {
+                // Halo de Poder Animado
+                Circle()
+                    .stroke(
+                        LinearGradient(colors: [Color(hex: "FFD60A"), .orange, .clear], startPoint: .top, endPoint: .bottom),
+                        lineWidth: 2
+                    )
+                    .frame(width: 140, height: 140)
+                    .rotationEffect(.degrees(scrollOffset * 0.5))
+                
+                Button(action: { onAvatarTapped?() }) {
+                    avatarView()
+                        .frame(width: 120, height: 120)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle().stroke(Color(hex: "FFD60A"), lineWidth: 3)
+                        )
                 }
                 .buttonStyle(.plain)
+                .shadow(color: Color(hex: "FFD60A").opacity(0.5), radius: 20)
+                
+                // Corona
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 30))
+                    .foregroundColor(Color(hex: "FFD60A"))
+                    .offset(y: -70)
+                    .shadow(color: .black, radius: 4)
             }
+            .scaleEffect(max(1.0 - (scrollOffset * 0.001), 0.85))
+            .opacity(max(1.0 - (scrollOffset * 0.005), 0.0))
             
-            // 1st Place
-            if entries.indices.contains(0) {
-                Button(action: { onEntryTapped?(entries[0]) }) {
-                    PodiumItem(entry: entries[0], scale: 1.1, isFirst: true)
-                }
-                .buttonStyle(.plain)
-                .zIndex(1)
+            VStack(spacing: 4) {
+                Text(entry.displayName)
+                    .font(.system(size: 28, weight: .black))
+                    .foregroundColor(.white)
+                
+                Text("LÍDER DEL HORIZONTE • \(entry.weeklyXP) XP")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(3)
+                    .foregroundColor(Color(hex: "FFD60A"))
             }
-            
-            // 3rd Place
-            if entries.indices.contains(2) {
-                Button(action: { onEntryTapped?(entries[2]) }) {
-                    PodiumItem(entry: entries[2], scale: 0.85)
-                }
-                .buttonStyle(.plain)
-            }
+            .offset(y: -scrollOffset * 0.1)
         }
-        .padding(.horizontal)
-        .padding(.bottom, 20)
+        .padding(.top, 20)
+    }
+    
+    @ViewBuilder
+    private func avatarView() -> some View {
+        if let data = entry.avatarData, let uiImage = UIImage(data: data) {
+            Image(uiImage: uiImage).resizable().scaledToFill()
+        } else if let url = entry.avatarURL {
+            AsyncImage(url: url) { image in image.resizable().scaledToFill() }
+            placeholder: { Circle().fill(Color(hex: "1C1C1E")) }
+        } else {
+            Circle().fill(Color(hex: "1C1C1E"))
+                .overlay(Text(entry.displayName.prefix(1).uppercased()).font(.largeTitle).bold().foregroundColor(.gray))
+        }
     }
 }
 
@@ -478,11 +547,11 @@ struct RankingCard: View {
                 }
             }
             .padding(16)
-            .background(Color(hex: "18181C"))
-            .cornerRadius(16)
+            .background(.ultraThinMaterial)
+            .cornerRadius(24)
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(entry.isCurrentUser ? Color(hex: "4C6FFF").opacity(0.5) : Color.white.opacity(0.05), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(entry.isCurrentUser ? Color(hex: "4C6FFF").opacity(0.3) : Color.white.opacity(0.05), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -696,6 +765,14 @@ struct NextGoalSuggestionsSheet: View {
             .padding(.bottom, 16)
         }
         .background(Color.black.edgesIgnoringSafeArea(.all))
+    }
+}
+
+// MARK: - Helpers
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

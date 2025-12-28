@@ -19,6 +19,7 @@ struct User: Identifiable, Codable {
     let displayName: String?
     let joinedAt: Date?
     var avatarURL: String?
+    var mapIcon: String?
     var xp: Int
     var level: Int
     
@@ -48,6 +49,7 @@ struct User: Identifiable, Codable {
          displayName: String? = nil,
          joinedAt: Date? = nil,
          avatarURL: String? = nil,
+         mapIcon: String? = nil,
          xp: Int = 0,
          level: Int = 1,
          totalCellsOwned: Int? = nil,
@@ -68,6 +70,7 @@ struct User: Identifiable, Codable {
         self.displayName = displayName
         self.joinedAt = joinedAt
         self.avatarURL = avatarURL
+        self.mapIcon = mapIcon
         self.xp = xp
         self.level = level
         self.totalCellsOwned = totalCellsOwned
@@ -90,6 +93,7 @@ struct User: Identifiable, Codable {
         case displayName
         case joinedAt
         case avatarURL
+        case mapIcon
         case xp
         case level
         case totalCellsOwned
@@ -118,6 +122,7 @@ struct User: Identifiable, Codable {
         displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
         joinedAt = try container.decodeIfPresent(Date.self, forKey: .joinedAt)
         avatarURL = try container.decodeIfPresent(String.self, forKey: .avatarURL)
+        mapIcon = try container.decodeIfPresent(String.self, forKey: .mapIcon)
         
         // Fix: Provide defaults for missing XP/Level
         xp = try container.decodeIfPresent(Int.self, forKey: .xp) ?? 0

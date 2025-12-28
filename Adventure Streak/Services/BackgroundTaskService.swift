@@ -50,7 +50,7 @@ final class BackgroundTaskService {
             complete(false)
         }
 
-        HealthKitManager.shared.startBackgroundObserversIfAuthorized()
+        HealthKitManager.shared.startBackgroundObserversInBackground()
         HealthKitManager.shared.checkForNewWorkoutsInBackground {
             complete(true)
         }

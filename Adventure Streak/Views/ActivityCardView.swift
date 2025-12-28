@@ -136,14 +136,14 @@ struct ActivityCardView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
         }
-        .background(Color(hex: "121214"))
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay(
             RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
         )
         .padding(.horizontal, 12)
-        .shadow(color: .black.opacity(0.4), radius: 15, y: 8)
+        .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
         .task {
             if hasTerritoryImpact && territoryCells.isEmpty {
                 await loadTerritories()

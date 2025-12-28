@@ -46,11 +46,11 @@ struct TerritoryInventoryCard: View {
         }
         .padding(12)
         .frame(width: 140)
-        .background(Color(hex: "18181C"))
+        .background(.ultraThinMaterial)
         .cornerRadius(20)
         .overlay(
             RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
         )
     }
     

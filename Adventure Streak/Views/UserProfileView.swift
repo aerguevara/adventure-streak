@@ -35,6 +35,18 @@ struct UserProfileView: View {
                                         .font(.system(size: 32))
                                         .offset(x: 4, y: 4)
                                 }
+                                
+                                // Map Icon Badge
+                                if let icon = user.mapIcon {
+                                    Text(icon)
+                                        .font(.system(size: 32))
+                                        .padding(8)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                        .offset(x: 40, y: 40)
+                                        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+                                }
                             }
                             
                             VStack(spacing: 4) {

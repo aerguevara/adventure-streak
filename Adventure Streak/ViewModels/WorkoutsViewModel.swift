@@ -141,7 +141,7 @@ class WorkoutsViewModel: ObservableObject {
         self.workouts = activities
             .sorted(by: { $0.startDate > $1.startDate })
             .map { activity in
-                let titlePrefix = activity.workoutName ?? activity.activityType.displayName
+                let titlePrefix = activity.displayName
                 // Filter out non-outdoor/processed activities from "Stolen" logic if needed, but for now map direct
                 return WorkoutItemViewData(
                     id: activity.id,
@@ -574,7 +574,7 @@ class WorkoutsViewModel: ObservableObject {
     private func handlePendingRoute(
         workout: WorkoutProtocol,
         type: ActivityType,
-        workoutName: String,
+        workoutName: String?,
         sourceBundleId: String,
         sourceName: String,
         status: PendingRouteStatus,

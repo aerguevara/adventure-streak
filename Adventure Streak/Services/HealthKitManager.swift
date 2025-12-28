@@ -71,13 +71,14 @@ class HealthKitManager: ObservableObject {
 
         let workoutType = HKObjectType.workoutType()
         let currentStatus = healthStore.authorizationStatus(for: workoutType)
+        
+        // Note: For read-only access, we can't accurately check authorizationStatus.
+        // We'll proceed to request authorization unless we already know it's authorized for sharing (if applicable).
         if currentStatus == .sharingAuthorized {
             print("HK requestPermissions — ya autorizado (status: \(currentStatus.rawValue)), continuando sin prompt")
             self.isAuthorized = true
             completion(true, nil)
             return
-        } else {
-            print("HK requestPermissions — estado actual: \(currentStatus.rawValue), solicitando autorización...")
         }
         
         let typesToRead: Set<HKObjectType> = [
@@ -91,11 +92,12 @@ class HealthKitManager: ObservableObject {
             } else {
                 print("HK requestPermissions — success:\(success)")
             }
-            let status = self.healthStore.authorizationStatus(for: workoutType)
-            let granted = status == .sharingAuthorized
+            
+            // For read-only, 'success' indicates the flow completed.
+            // We set isAuthorized to true to allow observers to start.
             DispatchQueue.main.async {
-                self.isAuthorized = granted
-                completion(granted, error)
+                self.isAuthorized = success
+                completion(success, error)
             }
         }
 
@@ -117,24 +119,11 @@ class HealthKitManager: ObservableObject {
         }
     }
 
-    func startBackgroundObserversIfAuthorized() {
-        guard isWorkoutAuthorized() else {
-            DispatchQueue.main.async {
-                self.isAuthorized = false
-            }
-            return
-        }
-        DispatchQueue.main.async {
-            self.isAuthorized = true
-        }
+    func startBackgroundObserversInBackground() {
         configureBackgroundObservers()
     }
 
     func checkForNewWorkoutsInBackground(completion: (() -> Void)? = nil) {
-        guard isWorkoutAuthorized() else {
-            completion?()
-            return
-        }
         handleWorkoutUpdates {
             completion?()
         }
@@ -145,10 +134,6 @@ class HealthKitManager: ObservableObject {
         registerWorkoutObserver()
     }
 
-    private func isWorkoutAuthorized() -> Bool {
-        let status = healthStore.authorizationStatus(for: HKObjectType.workoutType())
-        return status == .sharingAuthorized
-    }
     
     private func enableBackgroundDelivery() {
         healthStore.enableBackgroundDelivery(for: .workoutType(), frequency: .immediate) { success, error in

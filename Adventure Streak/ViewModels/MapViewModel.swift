@@ -22,6 +22,8 @@ class MapViewModel: ObservableObject {
     @Published var selectedTerritoryOwnerXP: Int?
     @Published var selectedTerritoryOwnerTerritories: Int?
     @Published var selectedTerritoryOwnerAvatarData: Data?
+    @Published var selectedTerritoryOwnerIcon: String?
+    @Published var userIcons: [String: String] = [:]
     
     @Published var activities: [ActivitySession] = []
     @Published var isTracking = false
@@ -214,6 +216,13 @@ class MapViewModel: ObservableObject {
                 if rivals.count > 500 {
                     print("[Territories] Capping rivals to 500 of \(rivals.count) fetched")
                 }
+                
+                // Trigger icon fetch for rivals
+                let uniqueUserIds = Set(rivals.compactMap { $0.userId })
+                Task {
+                    await self.fetchIcons(for: uniqueUserIds)
+                }
+                
                 return Array(rivals.prefix(500))
             }
             .removeDuplicates() // Prevent UI updates if the list of rivals hasn't changed
@@ -273,6 +282,7 @@ class MapViewModel: ObservableObject {
         selectedTerritoryOwner = finalOwnerName
         selectedTerritoryOwnerId = finalOwnerId
         selectedTerritoryOwnerAvatarData = finalOwnerId.flatMap { AvatarCacheManager.shared.data(for: $0) }
+        selectedTerritoryOwnerIcon = finalOwnerId.flatMap { userIcons[$0] }
         
         if let currentUserId,
            finalOwnerId == currentUserId {
@@ -441,6 +451,36 @@ class MapViewModel: ObservableObject {
             }
         } catch {
             print("[Map] Error al obtener perfil remoto de \(userId): \(error)")
+        }
+        #endif
+    }
+    
+    private func fetchIcons(for userIds: Set<String>) async {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.shared
+        var newIconsFound = false
+        
+        for userId in userIds {
+            guard userIcons[userId] == nil else { continue }
+            
+            do {
+                let doc = try await db.collection("users").document(userId).getDocument()
+                if let icon = doc.get("mapIcon") as? String {
+                    await MainActor.run {
+                        self.userIcons[userId] = icon
+                    }
+                    newIconsFound = true
+                }
+            } catch {
+                print("[Map] Error fetching icon for \(userId): \(error)")
+            }
+        }
+        
+        // If we selected a territory whose owner's icon just arrived, update it
+        if newIconsFound, let selectedId = selectedTerritoryOwnerId {
+            await MainActor.run {
+                self.selectedTerritoryOwnerIcon = self.userIcons[selectedId]
+            }
         }
         #endif
     }

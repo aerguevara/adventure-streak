@@ -39,7 +39,7 @@ class UserRepository: ObservableObject {
     }
     
     #if canImport(FirebaseAuth)
-    func syncUser(user: FirebaseAuth.User, name: String?, initialXP: Int = 0, initialLevel: Int = 1) {
+    func syncUser(user: FirebaseAuth.User, name: String?, initialXP: Int? = nil, initialLevel: Int? = nil) {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         
@@ -51,21 +51,23 @@ class UserRepository: ObservableObject {
                 "lastLogin": FieldValue.serverTimestamp()
             ]
             
+            let hasXP = document?.get("xp") != nil
+            let hasLevel = document?.get("level") != nil
+            
             // Default values for new user part of the data if it doesn't exist
             if let document = document, !document.exists {
                 data["joinedAt"] = FieldValue.serverTimestamp()
                 data["email"] = user.email as Any
-                data["xp"] = initialXP
-                data["level"] = initialLevel
-                data["displayName"] = name ?? "Adventurer"
+                data["xp"] = initialXP ?? 0
+                data["level"] = initialLevel ?? 1
+                data["displayName"] = name ?? "Aventurero"
             } else if let document = document, document.exists {
-                // EVEN if the document exists, check if critical stats are missing 
-                // (e.g. if another service created the doc with just a token)
-                if document.get("xp") == nil {
-                    data["xp"] = initialXP
+                // Check for missing critical stats (e.g. if another service created the doc with just a token)
+                if !hasXP {
+                    data["xp"] = initialXP ?? 0
                 }
-                if document.get("level") == nil {
-                    data["level"] = initialLevel
+                if !hasLevel {
+                    data["level"] = initialLevel ?? 1
                 }
                 if document.get("joinedAt") == nil {
                     data["joinedAt"] = FieldValue.serverTimestamp()
@@ -125,6 +127,93 @@ class UserRepository: ObservableObject {
         userRef.setData([
             "fcmTokens": FieldValue.delete()
         ], merge: true)
+        #endif
+    }
+    
+    // MARK: - Map Icon Management
+    
+    func checkIconAvailability(icon: String) async -> Bool {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return false }
+        do {
+            let doc = try await db.collection("reserved_icons").document(icon).getDocument()
+            return !doc.exists
+        } catch {
+            print("Error checking icon availability: \(error)")
+            return false
+        }
+        #else
+        return false
+        #endif
+    }
+    
+    func fetchReservedIcons() async -> Set<String> {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return [] }
+        do {
+            let snapshot = try await db.collection("reserved_icons").getDocuments()
+            return Set(snapshot.documents.map { $0.documentID })
+        } catch {
+            print("Error fetching reserved icons: \(error)")
+            return []
+        }
+        #else
+        return []
+        #endif
+    }
+    
+    func updateUserMapIcon(userId: String, icon: String) async throws {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        
+        // Use a transaction to ensure uniqueness
+        try await db.runTransaction({ (transaction, errorPointer) -> Any? in
+            let iconRef = db.collection("reserved_icons").document(icon)
+            let userRef = db.collection("users").document(userId)
+            
+            // 1. Check if icon is already reserved by someone else
+            let iconDoc: DocumentSnapshot
+            do {
+                iconDoc = try transaction.getDocument(iconRef)
+            } catch {
+                errorPointer?.pointee = error as NSError
+                return nil
+            }
+            
+            if iconDoc.exists {
+                let ownerId = iconDoc.get("userId") as? String
+                if ownerId != userId {
+                    let error = NSError(domain: "AdventureStreak", code: 409, userInfo: [NSLocalizedDescriptionKey: "Icon already in use"])
+                    errorPointer?.pointee = error
+                    return nil
+                }
+            }
+            
+            // 2. Get current user to see if they already have an icon reserved
+            let userDoc: DocumentSnapshot
+            do {
+                userDoc = try transaction.getDocument(userRef)
+            } catch {
+                errorPointer?.pointee = error as NSError
+                return nil
+            }
+            
+            if let previousIcon = userDoc.get("mapIcon") as? String, previousIcon != icon {
+                // Delete previous reservation
+                let previousIconRef = db.collection("reserved_icons").document(previousIcon)
+                transaction.deleteDocument(previousIconRef)
+            }
+            
+            // 3. Set new reservation and update user
+            transaction.setData([
+                "userId": userId,
+                "reservedAt": FieldValue.serverTimestamp()
+            ], forDocument: iconRef)
+            
+            transaction.updateData(["mapIcon": icon], forDocument: userRef)
+            
+            return nil
+        })
         #endif
     }
     #else

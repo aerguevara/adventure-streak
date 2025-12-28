@@ -18,6 +18,20 @@ struct MapView17: View {
                             .foregroundStyle(Color.green.opacity(0.4))
                             .stroke(Color.green, lineWidth: 1)
                     }
+                    
+                    ForEach(viewModel.otherTerritories) { territory in
+                        MapPolygon(coordinates: territory.boundary.map { $0.coordinate })
+                            .foregroundStyle(Color.orange.opacity(0.4))
+                            .stroke(Color.orange, lineWidth: 1)
+                        
+                        if position.region?.span.latitudeDelta ?? 0 < 0.05 {
+                            Annotation("", coordinate: territory.centerCoordinate) {
+                                Text(viewModel.userIcons[territory.userId] ?? "🚩")
+                                    .font(.system(size: 22))
+                                    .shadow(color: .black, radius: 2, x: 0, y: 1)
+                            }
+                        }
+                    }
                 }
                 .mapStyle(.standard(elevation: .flat))
                 .mapControls {
@@ -61,6 +75,7 @@ struct MapView17: View {
                         ownerName: owner,
                         territoryId: viewModel.selectedTerritoryId ?? "",
                         avatarData: viewModel.selectedTerritoryOwnerAvatarData,
+                        ownerIcon: viewModel.selectedTerritoryOwnerIcon,
                         xp: viewModel.selectedTerritoryOwnerXP,
                         territories: viewModel.selectedTerritoryOwnerTerritories,
                         onClose: {

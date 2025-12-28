@@ -50,7 +50,7 @@ struct DiscoveryItem: View {
             }
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(activity.workoutName ?? activity.activityType.displayName)
+                Text(activity.displayName)
                     .font(.subheadline.bold())
                     .foregroundColor(.white)
                 

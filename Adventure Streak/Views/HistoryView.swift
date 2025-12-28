@@ -27,7 +27,7 @@ struct HistoryView: View {
                                 Text("·")
                                     .foregroundColor(.secondary)
                                 
-                                let subheadline = activity.workoutName ?? activity.activityType.displayName
+                                let subheadline = activity.displayName
                                 Text(subheadline)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -108,7 +108,7 @@ struct ActivityDetailView: View {
                 }
                 
                 HStack {
-                    let baseName = activity.workoutName ?? activity.activityType.displayName
+                    let baseName = activity.displayName
                     StatBox(title: "Tipo", value: baseName)
                     StatBox(title: "Fecha", value: activity.startDate.formatted(date: .numeric, time: .omitted))
                 }

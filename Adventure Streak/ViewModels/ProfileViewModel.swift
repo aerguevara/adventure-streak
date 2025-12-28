@@ -38,8 +38,10 @@ class ProfileViewModel: ObservableObject {
     @Published var totalDefended: Int = 0
     @Published var totalRecaptured: Int = 0
     @Published var territoryInventory: [TerritoryInventoryItem] = []
+    @Published var mapIcon: String? = nil
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
+    @Published var reservedIcons: Set<String> = []
     
     // Rivals
     @Published var recentTheftVictims: [Rival] = []
@@ -256,6 +258,7 @@ class ProfileViewModel: ObservableObject {
         
         self.recentTheftVictims = user.recentTheftVictims ?? []
         self.recentThieves = user.recentThieves ?? []
+        self.mapIcon = user.mapIcon
         
         // Sync GamificationService with fetched data
         // This will trigger the observers above to update the UI properties
@@ -289,6 +292,34 @@ class ProfileViewModel: ObservableObject {
         #else
         print("FirebaseStorage not available")
         #endif
+    }
+    
+    // MARK: - Map Icon Management
+    
+    func fetchReservedIcons() async {
+        let icons = await userRepository.fetchReservedIcons()
+        await MainActor.run {
+            self.reservedIcons = icons
+        }
+    }
+    
+    func updateMapIcon(_ icon: String) async {
+        guard let userId = authService.userId else { return }
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            try await userRepository.updateUserMapIcon(userId: userId, icon: icon)
+            await MainActor.run {
+                self.mapIcon = icon
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
+            }
+        }
     }
     
     // Procesamiento delegado al cropper; no reprocesar aquí

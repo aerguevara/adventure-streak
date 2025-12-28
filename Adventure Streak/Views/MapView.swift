@@ -114,7 +114,42 @@ struct MapView: UIViewRepresentable {
             mapView.addOverlays(newOverlays)
         }
         
+        
         context.coordinator.renderedRivalIds = newIds
+        
+        // 3. Update Rival Annotations (Icons)
+        updateRivalAnnotations(mapView: mapView, context: context)
+    }
+    
+    private func updateRivalAnnotations(mapView: MKMapView, context: Context) {
+        let currentIds = context.coordinator.renderedRivalIconIds
+        let newRivals = viewModel.otherTerritories
+        let newIds = Set(newRivals.map { ($0.id ?? "") + "_icon" })
+        
+        let toRemoveIds = currentIds.subtracting(newIds)
+        let toAddIds = newIds.subtracting(currentIds)
+        
+        if !toRemoveIds.isEmpty {
+            let annotationsToRemove = mapView.annotations.filter { annotation in
+                guard let title = annotation.title, let id = title else { return false }
+                return toRemoveIds.contains(id)
+            }
+            mapView.removeAnnotations(annotationsToRemove)
+        }
+        
+        if !toAddIds.isEmpty {
+            let rivalsToAdd = newRivals.filter { toAddIds.contains(($0.id ?? "") + "_icon") }
+            let newAnnotations = rivalsToAdd.map { territory -> MKPointAnnotation in
+                let annotation = MKPointAnnotation()
+                annotation.coordinate = territory.centerCoordinate
+                annotation.title = (territory.id ?? "") + "_icon"
+                annotation.subtitle = territory.userId // Store userId in subtitle for icon lookup
+                return annotation
+            }
+            mapView.addAnnotations(newAnnotations)
+        }
+        
+        context.coordinator.renderedRivalIconIds = newIds
     }
     
     func makeCoordinator() -> Coordinator {
@@ -125,6 +160,7 @@ struct MapView: UIViewRepresentable {
         var parent: MapView
         var renderedTerritoryIds: Set<String> = []
         var renderedRivalIds: Set<String> = []
+        var renderedRivalIconIds: Set<String> = []
         
         init(_ parent: MapView) {
             self.parent = parent
@@ -188,6 +224,39 @@ struct MapView: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.viewModel.updateVisibleRegion(mapView.region)
             }
+        }
+        
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if annotation is MKUserLocation {
+                return nil
+            }
+            
+            // Handle Individual Rival Icons
+            let identifier = "RivalIcon"
+            var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+            
+            if annotationView == nil {
+                annotationView = MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                annotationView?.canShowCallout = false
+                // Disable clustering to show all icons individually as requested
+                annotationView?.clusteringIdentifier = nil 
+                annotationView?.displayPriority = .required
+            } else {
+                annotationView?.annotation = annotation
+            }
+            
+            if let title = annotation.title as? String, title.hasSuffix("_icon") {
+                let userId = annotation.subtitle as? String ?? ""
+                let icon = parent.viewModel.userIcons[userId] ?? "🚩"
+                
+                // Clear any existing subviews
+                annotationView?.subviews.forEach { $0.removeFromSuperview() }
+                
+                // Use rasterized image
+                annotationView?.image = MapIconGenerator.shared.icon(for: icon, size: 22)
+            }
+            
+            return annotationView
         }
     }
 }

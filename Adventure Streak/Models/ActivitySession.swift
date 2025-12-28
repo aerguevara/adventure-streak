@@ -34,6 +34,13 @@ struct ActivitySession: Identifiable, Codable {
         case error = "error"
     }
     
+    var displayName: String {
+        if let name = workoutName, !name.isEmpty {
+            return name
+        }
+        return activityType.displayName
+    }
+    
     init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, workoutName: String? = nil, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil, territoryStats: TerritoryStats? = nil, missions: [Mission]? = nil, calories: Double? = nil, averageHeartRate: Int? = nil, locationLabel: String? = nil, processingStatus: ProcessingStatus = .pending, conqueredVictims: [String]? = nil) {
         self.id = id
         self.startDate = startDate

@@ -9,6 +9,7 @@ struct WorkoutsView: View {
     @State private var showProfileDetail = false
     @State private var showNotifications = false
     @State private var showImportAlert = false
+    @State private var scrollOffset: CGFloat = 0
     
     // Init with dependency injection
     init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel) {
@@ -20,9 +21,8 @@ struct WorkoutsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background
-                Color(hex: "000000") // Pure black as requested
-                    .ignoresSafeArea()
+                // Neon Parallax Background
+                NeonBackgroundView(scrollOffset: scrollOffset)
                 
                 ScrollView {
                     VStack(spacing: 32) {
@@ -52,6 +52,15 @@ struct WorkoutsView: View {
                     }
                     .padding(.top, 20)
                     .padding(.bottom, 40)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: ScrollOffsetPreferenceKey.self, value: proxy.frame(in: .named("scroll")).minY)
+                        }
+                    )
+                }
+                .coordinateSpace(name: "scroll")
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                    scrollOffset = -value
                 }
                 .refreshable {
                     await viewModel.refresh()
@@ -194,6 +203,7 @@ struct WorkoutsView: View {
             }
         }
         .padding(.horizontal)
+        .padding(.bottom, 12)
     }
     
     // MARK: - B) Main Progress Card
@@ -269,10 +279,14 @@ struct WorkoutsView: View {
             }
         }
         .padding(24)
-        .background(Color(hex: "18181C"))
+        .background(.ultraThinMaterial)
         .cornerRadius(24)
         .padding(.horizontal)
-        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+        )
     }
     
     
@@ -486,11 +500,11 @@ struct TerritoryStatCard: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
-        .background(Color(hex: "18181C"))
+        .background(.ultraThinMaterial)
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
         )
     }
 }
@@ -525,11 +539,11 @@ struct AchievementCard: View {
         }
         .padding(12)
         .frame(width: 110)
-        .background(Color(hex: "18181C"))
+        .background(.ultraThinMaterial)
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
         )
     }
     
@@ -559,8 +573,12 @@ struct SecondaryButton: View {
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color(hex: "18181C"))
+            .background(.ultraThinMaterial)
             .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+            )
         }
     }
 }
