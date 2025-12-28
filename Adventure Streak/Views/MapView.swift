@@ -73,7 +73,7 @@ struct MapView: UIViewRepresentable {
             let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id) }
             let newOverlays = territoriesToAdd.compactMap { cell -> MKPolygon? in
                 guard cell.boundary.count >= 3 else { return nil }
-                var coords = cell.boundary.map { $0.coordinate }
+                let coords = cell.boundary.map { $0.coordinate }
                 
                 // Ensure closure - REVERTED
                 
@@ -108,7 +108,7 @@ struct MapView: UIViewRepresentable {
             let rivalsToAdd = newRivals.filter { toAddIds.contains($0.id ?? "") }
             let newOverlays = rivalsToAdd.compactMap { territory -> MKPolygon? in
                 guard territory.boundary.count >= 3 else { return nil }
-                var coords = territory.boundary.map { $0.coordinate }
+                let coords = territory.boundary.map { $0.coordinate }
                 
                 // Ensure closure - REVERTED
                 
