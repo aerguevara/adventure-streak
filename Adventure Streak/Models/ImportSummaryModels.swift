@@ -18,7 +18,11 @@ struct GlobalImportSummary {
     var routeCoordinates: [[CLLocationCoordinate2D]] = []
     // NEW: Territory Polygons for map
     // NEW: Territories for map
+    // NEW: Territories for map
     var territories: [RemoteTerritory] = []
+    
+    // NEW: Activity Type tracking for fallback visuals
+    var mainActivityType: ActivityType?
     
     // NEW: Gamification Elements
     var completedMissions: [Mission] = []
@@ -34,7 +38,7 @@ struct GlobalImportSummary {
     }
     
     // Mutating function to add data from a processed activity
-    mutating func add(stats: TerritoryStats, xp: Int, distance: Double, duration: Double, victimNames: [String], location: String?, route: [RoutePoint]) {
+    mutating func add(stats: TerritoryStats, xp: Int, distance: Double, duration: Double, victimNames: [String], location: String?, route: [RoutePoint], activityType: ActivityType? = nil) {
         self.processedCount += 1
         self.totalXP += xp
         self.totalDistance += distance
@@ -48,6 +52,10 @@ struct GlobalImportSummary {
             self.locations.append(loc)
         }
         
+        if let type = activityType {
+            self.mainActivityType = type
+        }
+        
         let coords = route.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
         if !coords.isEmpty {
             self.routeCoordinates.append(coords)
@@ -55,9 +63,9 @@ struct GlobalImportSummary {
     }
     
     // Overload to include missions, rarity AND territories
-    mutating func add(stats: TerritoryStats, xp: Int, distance: Double, duration: Double, victimNames: [String], location: String?, route: [RoutePoint], missions: [Mission]?, rarity: String, territories: [RemoteTerritory]?) {
+    mutating func add(stats: TerritoryStats, xp: Int, distance: Double, duration: Double, victimNames: [String], location: String?, route: [RoutePoint], missions: [Mission]?, rarity: String, territories: [RemoteTerritory]?, activityType: ActivityType? = nil) {
         // Call base add for core stats
-        self.add(stats: stats, xp: xp, distance: distance, duration: duration, victimNames: victimNames, location: location, route: route)
+        self.add(stats: stats, xp: xp, distance: distance, duration: duration, victimNames: victimNames, location: location, route: route, activityType: activityType)
         
         // Handle missions
         if let newMissions = missions {

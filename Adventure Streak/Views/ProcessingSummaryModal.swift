@@ -16,7 +16,9 @@ struct ProcessingSummaryModal: View {
     // Hardcoded activity type for now as GlobalImportSummary aggregates multiple.
     // We assume the dominant type or default to running if mixed.
     // In a real scenario, we might want to expose the main activity type in GlobalImportSummary.
-    private let ActivityTypeColor = Color(hex: "32D74B") // Running Green default
+    private var activityTypeColor: Color {
+        summary.mainActivityType?.color ?? Color(hex: "32D74B")
+    }
     
     var body: some View {
         ScrollView {
@@ -68,7 +70,7 @@ struct ProcessingSummaryModal: View {
                     // Metrics Row
                     // Metrics Row
                     HStack(spacing: 15) {
-                        SocialDetailMetric(icon: "figure.run", value: String(format: "%.1f", totalDistanceKm), unit: "KM")
+                        SocialDetailMetric(icon: summary.mainActivityType?.iconName ?? "figure.run", value: String(format: "%.1f", totalDistanceKm), unit: "KM")
                         SocialDetailMetric(icon: "clock", value: formatDuration(summary.durationSeconds), unit: "TIEMPO")
                         SocialDetailMetric(icon: "star.fill", value: "+\(summary.totalXP)", unit: "XP", color: Color(hex: "A259FF"))
                     }
@@ -83,7 +85,6 @@ struct ProcessingSummaryModal: View {
                     
                     
                     // Territory Stats Row (Capturas, Defendidos, Renovadas)
-
                     
                     // Description / Impact Quote
                     VStack(alignment: .leading, spacing: 12) {
@@ -138,9 +139,9 @@ struct ProcessingSummaryModal: View {
                         ForEach(summary.territories) { territory in
                             let coords = territory.boundary.map { $0.coordinate }
                              if coords.count >= 3 {
-                                MapPolygon(coordinates: coords)
-                                    .stroke(Color(hex: "32D74B"), lineWidth: 1)
-                                    .foregroundStyle(Color(hex: "32D74B").opacity(0.4))
+                                 MapPolygon(coordinates: coords)
+                                     .stroke(activityTypeColor, lineWidth: 1)
+                                     .foregroundStyle(activityTypeColor.opacity(0.4))
                             }
                         }
                         
@@ -149,32 +150,10 @@ struct ProcessingSummaryModal: View {
                             MapPolyline(coordinates: route)
                                 .stroke(Color(hex: "E4C746"), lineWidth: 4)
                         }
-                        
-                        /*
-                        // Draw Territories (Temporarily Disabled for Debugging)
-                        ForEach(0..<summary.territoryPolygons.count, id: \.self) { index in
-                            let coords = summary.territoryPolygons[index]
-                            MapPolygon(coordinates: coords)
-                                .stroke(Color(hex: "32D74B"), lineWidth: 1)
-                                .foregroundStyle(Color(hex: "32D74B").opacity(0.2))
-                        }
-                        
-                        // Draw Routes (Temporarily Disabled for Debugging)
-                        ForEach(0..<summary.routeCoordinates.count, id: \.self) { index in
-                            let route = summary.routeCoordinates[index]
-                            MapPolyline(coordinates: route)
-                                .stroke(Color(hex: "E4C746"), lineWidth: 4) // Goldish
-                        }
-                        */
                     }
                 } else {
-                    // Fallback visual
-                    Rectangle()
-                        .fill(LinearGradient(
-                            colors: [Color.green.opacity(0.3), Color.black],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ))
+                    // Fallback visual - Premium Design matching ActivityCardView
+                    premiumNoMapFallback
                 }
             }
             .frame(height: 380)
@@ -216,6 +195,46 @@ struct ProcessingSummaryModal: View {
             }
             .padding(.bottom, 25)
         }
+    }
+
+    private var premiumNoMapFallback: some View {
+        ZStack {
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "1A1A1E"), Color.black],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            
+            // Decorative background shapes
+            Circle()
+                .fill(activityTypeColor.opacity(0.15))
+                .frame(width: 250, height: 250)
+                .blur(radius: 60)
+                .offset(x: 40, y: -40)
+            
+            VStack(spacing: 20) {
+                Spacer()
+                Image(systemName: summary.mainActivityType?.iconName ?? "figure.run")
+                    .font(.system(size: 80))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [activityTypeColor, activityTypeColor.opacity(0.6)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: activityTypeColor.opacity(0.5), radius: 20)
+                
+                Text("Entrenamiento \(summary.mainActivityType?.displayName ?? "")")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(.secondary)
+                Spacer().frame(height: 100) // Space for the title and badges
+            }
+        }
+        .frame(height: 380)
     }
     
     private var avatar: some View {

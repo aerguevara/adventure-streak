@@ -512,7 +512,8 @@ class WorkoutsViewModel: ObservableObject {
                                 route: activity.route,
                                 missions: activity.missions,
                                 rarity: rarity,
-                                territories: remoteTerritories
+                                territories: remoteTerritories,
+                                activityType: activity.activityType
                             )
                         }
                         
@@ -722,52 +723,34 @@ class WorkoutsViewModel: ObservableObject {
 
 #if DEBUG
     func debugSimulateActivity() {
-        print("🛠️ Starting debug simulation...")
+        print("🛠️ Starting debug simulation (Indoor Activity)...")
         guard let userId = AuthenticationService.shared.userId else { return }
         let userName = AuthenticationService.shared.userName
         
-        // Use a fixed UUID so we can reproduce/monitor if we want, or random for every click
+        // Use a fixed UUID for simulation
         let id = UUID()
         let startDate = Date().addingTimeInterval(-3600)
         let endDate = Date()
         
-        // Mock Route: Circle around El Retiro, Madrid
-        // REAL DATA from activity 434A6907-7984-4AFD-8D8A-140C69EF8455 (Lleida/Fraga area?)
-        // Coordinates: ~41.65, 0.56
-        let routeData: [(Double, Double)] = [
-            (41.649531, 0.567484), (41.649525, 0.567495), (41.649517, 0.567509),
-            (41.649508, 0.567523), (41.649501, 0.567531), (41.649489, 0.567540),
-            (41.649475, 0.567544), (41.649463, 0.567543), (41.649451, 0.567538),
-            (41.649440, 0.567528), (41.649420, 0.567510), (41.649400, 0.567490),
-            (41.650000, 0.567000), (41.650500, 0.566800), (41.651000, 0.566556),
-            (41.651049, 0.566466), (41.651069, 0.566379), (41.651002, 0.566183)
-        ]
+        // No route for indoor activity
+        let route: [RoutePoint] = []
         
-        var route: [RoutePoint] = []
-        for (i, coord) in routeData.enumerated() {
-            route.append(RoutePoint(
-                latitude: coord.0,
-                longitude: coord.1,
-                timestamp: startDate.addingTimeInterval(Double(i) * 10)
-            ))
-        }
-        
-        // Mock Session
+        // Mock Session: Indoor Functional Strength Training
         let session = ActivitySession(
             id: id,
             startDate: startDate,
             endDate: endDate,
-            activityType: .walk, // Changed to match real data (was run)
-            distanceMeters: 383, // Real distance
-            durationSeconds: 909, // Real duration
-            workoutName: "Simulación de Datos Reales (Debug)",
+            activityType: .indoor,
+            distanceMeters: 0, // Indoor usually has no distance
+            durationSeconds: 1800, // 30 mins
+            workoutName: "Entrenamiento de Fuerza (Simulación)",
             route: route
         )
         
         // Monitor FIRST to set up the observer
         self.monitorProcessing(for: [id])
         
-        // THEN Trigger UI state (overriding any internal reset)
+        // THEN Trigger UI state
         self.isImporting = true
         self.isLoading = true
         self.importTotal = 1
@@ -779,9 +762,8 @@ class WorkoutsViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 500_000_000)
             
             do {
-                print("🛠️ Sending activity to GameEngine...")
+                print("🛠️ Sending indoor activity to GameEngine...")
                 let _ = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
-                
                 print("🛠️ Simulation sent!")
             } catch {
                 print("❌ Debug processing failed: \(error)")
