@@ -68,7 +68,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     
     // Default init
     init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date, activityId: String? = nil) {
-        self.id = id
+        self._id = DocumentID(wrappedValue: id)
         self.userId = userId
         self.centerLatitude = centerLatitude
         self.centerLongitude = centerLongitude

@@ -11,10 +11,14 @@ struct GlobalImportSummary {
     var totalStolen: Int = 0
     var stolenVictims: Set<String> = [] // Names of players stolen from
     var locations: [String] = [] // Smart place names
+    var totalDistance: Double = 0.0
+    var totalRecaptured: Int = 0 
+    var durationSeconds: Double = 0.0
     // For the mini-map visualization
     var routeCoordinates: [[CLLocationCoordinate2D]] = []
     // NEW: Territory Polygons for map
-    var territoryPolygons: [[CLLocationCoordinate2D]] = []
+    // NEW: Territories for map
+    var territories: [RemoteTerritory] = []
     
     // NEW: Gamification Elements
     var completedMissions: [Mission] = []
@@ -30,12 +34,15 @@ struct GlobalImportSummary {
     }
     
     // Mutating function to add data from a processed activity
-    mutating func add(stats: TerritoryStats, xp: Int, victimNames: [String], location: String?, route: [RoutePoint]) {
+    mutating func add(stats: TerritoryStats, xp: Int, distance: Double, duration: Double, victimNames: [String], location: String?, route: [RoutePoint]) {
         self.processedCount += 1
         self.totalXP += xp
+        self.totalDistance += distance
+        self.durationSeconds += duration
         self.totalNewTerritories += stats.newCellsCount ?? 0
         self.totalDefended += stats.defendedCellsCount ?? 0
         self.totalStolen += stats.stolenCellsCount ?? 0
+        self.totalRecaptured += stats.recapturedCellsCount ?? 0
         self.stolenVictims.formUnion(victimNames)
         if let loc = location, !loc.isEmpty {
             self.locations.append(loc)
@@ -48,9 +55,9 @@ struct GlobalImportSummary {
     }
     
     // Overload to include missions, rarity AND territories
-    mutating func add(stats: TerritoryStats, xp: Int, victimNames: [String], location: String?, route: [RoutePoint], missions: [Mission]?, rarity: String, territories: [RemoteTerritory]?) {
+    mutating func add(stats: TerritoryStats, xp: Int, distance: Double, duration: Double, victimNames: [String], location: String?, route: [RoutePoint], missions: [Mission]?, rarity: String, territories: [RemoteTerritory]?) {
         // Call base add for core stats
-        self.add(stats: stats, xp: xp, victimNames: victimNames, location: location, route: route)
+        self.add(stats: stats, xp: xp, distance: distance, duration: duration, victimNames: victimNames, location: location, route: route)
         
         // Handle missions
         if let newMissions = missions {
@@ -64,12 +71,7 @@ struct GlobalImportSummary {
         
         // Handle territories
         if let newTerritories = territories {
-            for territory in newTerritories {
-                let polygon = territory.boundary.map { $0.coordinate }
-                if !polygon.isEmpty {
-                    self.territoryPolygons.append(polygon)
-                }
-            }
+                self.territories.append(contentsOf: newTerritories)
         }
     }
 }

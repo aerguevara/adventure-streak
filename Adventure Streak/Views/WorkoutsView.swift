@@ -46,9 +46,13 @@ struct WorkoutsView: View {
                         // E) Achievements
                         achievementsSection
                         
+                        
                         // F) Feed
                         feedSection
                         
+                        #if DEBUG
+                        debugSection
+                        #endif
                     }
                     .padding(.top, 20)
                     .padding(.bottom, 40)
@@ -469,6 +473,24 @@ struct WorkoutsView: View {
         }
         .padding(.vertical, 8)
     }
+    
+    #if DEBUG
+    var debugSection: some View {
+        Button {
+            viewModel.debugSimulateActivity()
+        } label: {
+            HStack {
+                Image(systemName: "ant.fill")
+                Text("Simular Actividad (Debug)")
+            }
+            .foregroundColor(.white)
+            .padding()
+            .background(Color.red.opacity(0.5))
+            .cornerRadius(12)
+        }
+        .padding(.top, 20)
+    }
+    #endif
 }
 
 struct TerritoryStatCard: View {

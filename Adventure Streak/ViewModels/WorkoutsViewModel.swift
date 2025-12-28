@@ -60,8 +60,8 @@ class WorkoutsViewModel: ObservableObject {
     
     @Published var showProcessingSummary: Bool = false {
         didSet {
-            if !showProcessingSummary {
-                // Cleanup: prevents accumulation and stale data
+            if oldValue && !showProcessingSummary {
+                // Cleanup ONLY when transitioning from shown -> hidden (dismissal)
                 self.processingSummaryData = nil
                 self.isSummaryTriggered = false
                 self.importTotal = 0
@@ -456,7 +456,7 @@ class WorkoutsViewModel: ObservableObject {
                     // Aggregate stats asynchronously to fetch territories
                     Task {
                         // Safety delay to allow Firestore subcollections to propagate
-                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
                         
                         var summary = GlobalImportSummary()
                         for activity in completed {
@@ -467,30 +467,35 @@ class WorkoutsViewModel: ObservableObject {
                             let victims = activity.conqueredVictims ?? []
                             let loc = activity.locationLabel
                             
-                            // Fetch actual territory geometries from repository
-                            let territories = await TerritoryRepository.shared.fetchConqueredTerritories(forActivityId: activity.id.uuidString)
+                            // Fetch actual territory geometries from repository (Subcollection of Activity)
+                            let territories = await ActivityRepository.shared.fetchTerritoriesForActivity(activityId: activity.id.uuidString)
+                            print("🔍 [Monitor] Fetched \(territories.count) territories for activity \(activity.id)")
                             
-                            // NEW: Immediately hydrate local store to update UI (Carousel)
-                            // This ensures "Active Territories" updates instantly without waiting for a sync
+                            // Map local TerritoryCell to RemoteTerritory for GlobalImportSummary compatibility if needed
+                            // Or hydrate local store directly
                             if !territories.isEmpty {
-                                let cells = territories.map { remote in
-                                    TerritoryCell(
-                                        id: remote.id ?? UUID().uuidString,
-                                        centerLatitude: remote.centerLatitude,
-                                        centerLongitude: remote.centerLongitude,
-                                        boundary: remote.boundary,
-                                        lastConqueredAt: remote.activityEndAt,
-                                        expiresAt: remote.expiresAt,
-                                        ownerUserId: remote.userId,
-                                        ownerDisplayName: nil,
-                                        ownerUploadedAt: remote.uploadedAt?.dateValue(),
-                                        activityId: remote.activityId
-                                    )
-                                }
-                                TerritoryStore.shared.upsertCells(cells)
-                                print("✅ [Monitor] Hydrated TerritoryStore with \(cells.count) new cells")
+                                TerritoryStore.shared.upsertCells(territories)
+                                print("✅ [Monitor] Hydrated TerritoryStore with \(territories.count) new cells")
                             }
                             
+                            // Map to RemoteTerritory for GlobalImportSummary
+                            let remoteTerritories = territories.map { cell in
+                                RemoteTerritory(
+                                    id: cell.id,
+                                    userId: cell.ownerUserId ?? "",
+                                    centerLatitude: cell.centerLatitude,
+                                    centerLongitude: cell.centerLongitude,
+                                    boundary: cell.boundary,
+                                    expiresAt: cell.expiresAt,
+                                    activityEndAt: cell.lastConqueredAt,
+                                    activityId: cell.activityId
+                                )
+                            }
+                            
+                            // Calculate distance in km
+                            let distanceKm = (activity.distanceMeters ?? 0.0) / 1000.0
+                            let duration = activity.durationSeconds
+
                             // Rarity Logic (Shared with ItemView)
                             let rarity: String
                             if xp >= 200 { rarity = "Épica" }
@@ -500,12 +505,14 @@ class WorkoutsViewModel: ObservableObject {
                             summary.add(
                                 stats: stats, 
                                 xp: xp, 
+                                distance: distanceKm,
+                                duration: duration,
                                 victimNames: victims, 
                                 location: loc, 
                                 route: activity.route,
                                 missions: activity.missions,
                                 rarity: rarity,
-                                territories: territories
+                                territories: remoteTerritories
                             )
                         }
                         
@@ -558,7 +565,9 @@ class WorkoutsViewModel: ObservableObject {
             if !newSessions.isEmpty {
                 await ActivitySyncService.shared.processSessions(newSessions) { processed, total in
                     DispatchQueue.main.async {
-                        self.importProcessed = processed
+                        // We avoid manual updates to importProcessed here because it conflicts 
+                        // with monitorProcessing's reactive updates (which only count COMPLETED).
+                        // We just update the total so the spinner/bar knows the scope.
                         self.importTotal = total
                     }
                 }
@@ -710,4 +719,78 @@ class WorkoutsViewModel: ObservableObject {
         let seconds = Int(paceSecondsPerKm.truncatingRemainder(dividingBy: 60))
         return String(format: "%d:%02d/km", minutes, seconds)
     }
+
+#if DEBUG
+    func debugSimulateActivity() {
+        print("🛠️ Starting debug simulation...")
+        guard let userId = AuthenticationService.shared.userId else { return }
+        let userName = AuthenticationService.shared.userName
+        
+        // Use a fixed UUID so we can reproduce/monitor if we want, or random for every click
+        let id = UUID()
+        let startDate = Date().addingTimeInterval(-3600)
+        let endDate = Date()
+        
+        // Mock Route: Circle around El Retiro, Madrid
+        // REAL DATA from activity 434A6907-7984-4AFD-8D8A-140C69EF8455 (Lleida/Fraga area?)
+        // Coordinates: ~41.65, 0.56
+        let routeData: [(Double, Double)] = [
+            (41.649531, 0.567484), (41.649525, 0.567495), (41.649517, 0.567509),
+            (41.649508, 0.567523), (41.649501, 0.567531), (41.649489, 0.567540),
+            (41.649475, 0.567544), (41.649463, 0.567543), (41.649451, 0.567538),
+            (41.649440, 0.567528), (41.649420, 0.567510), (41.649400, 0.567490),
+            (41.650000, 0.567000), (41.650500, 0.566800), (41.651000, 0.566556),
+            (41.651049, 0.566466), (41.651069, 0.566379), (41.651002, 0.566183)
+        ]
+        
+        var route: [RoutePoint] = []
+        for (i, coord) in routeData.enumerated() {
+            route.append(RoutePoint(
+                latitude: coord.0,
+                longitude: coord.1,
+                timestamp: startDate.addingTimeInterval(Double(i) * 10)
+            ))
+        }
+        
+        // Mock Session
+        let session = ActivitySession(
+            id: id,
+            startDate: startDate,
+            endDate: endDate,
+            activityType: .walk, // Changed to match real data (was run)
+            distanceMeters: 383, // Real distance
+            durationSeconds: 909, // Real duration
+            workoutName: "Simulación de Datos Reales (Debug)",
+            route: route
+        )
+        
+        // Monitor FIRST to set up the observer
+        self.monitorProcessing(for: [id])
+        
+        // THEN Trigger UI state (overriding any internal reset)
+        self.isImporting = true
+        self.isLoading = true
+        self.importTotal = 1
+        self.importProcessed = 0
+        
+        // Execute Logic
+        Task {
+            // Simulate network delay
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            
+            do {
+                print("🛠️ Sending activity to GameEngine...")
+                let _ = try await GameEngine.shared.completeActivity(session, for: userId, userName: userName)
+                
+                print("🛠️ Simulation sent!")
+            } catch {
+                print("❌ Debug processing failed: \(error)")
+                await MainActor.run {
+                    self.isImporting = false
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+#endif
 }

@@ -34,7 +34,8 @@ struct TerritoryGrid {
             TerritoryPoint(latitude: center.latitude + halfSize, longitude: center.longitude - halfSize), // Top Left
             TerritoryPoint(latitude: center.latitude + halfSize, longitude: center.longitude + halfSize), // Top Right
             TerritoryPoint(latitude: center.latitude - halfSize, longitude: center.longitude + halfSize), // Bottom Right
-            TerritoryPoint(latitude: center.latitude - halfSize, longitude: center.longitude - halfSize)  // Bottom Left
+            TerritoryPoint(latitude: center.latitude - halfSize, longitude: center.longitude - halfSize), // Bottom Left
+            TerritoryPoint(latitude: center.latitude + halfSize, longitude: center.longitude - halfSize)  // Top Left (Close loop)
         ]
         
         return TerritoryCell(
@@ -61,7 +62,8 @@ struct TerritoryGrid {
             CLLocationCoordinate2D(latitude: center.latitude + halfSize, longitude: center.longitude - halfSize), // Top Left
             CLLocationCoordinate2D(latitude: center.latitude + halfSize, longitude: center.longitude + halfSize), // Top Right
             CLLocationCoordinate2D(latitude: center.latitude - halfSize, longitude: center.longitude + halfSize), // Bottom Right
-            CLLocationCoordinate2D(latitude: center.latitude - halfSize, longitude: center.longitude - halfSize)  // Bottom Left
+            CLLocationCoordinate2D(latitude: center.latitude - halfSize, longitude: center.longitude - halfSize), // Bottom Left
+            CLLocationCoordinate2D(latitude: center.latitude + halfSize, longitude: center.longitude - halfSize)  // Top Left (Close loop)
         ]
     }
     
