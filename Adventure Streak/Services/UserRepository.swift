@@ -167,7 +167,7 @@ class UserRepository: ObservableObject {
         guard let db = db as? Firestore else { return }
         
         // Use a transaction to ensure uniqueness
-        try await db.runTransaction({ (transaction, errorPointer) -> Any? in
+        _ = try await db.runTransaction({ (transaction, errorPointer) -> Any? in
             let iconRef = db.collection("reserved_icons").document(icon)
             let userRef = db.collection("users").document(userId)
             

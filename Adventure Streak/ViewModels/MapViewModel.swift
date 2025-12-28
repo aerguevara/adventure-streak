@@ -92,8 +92,7 @@ class MapViewModel: ObservableObject {
         territoryStore.$conqueredCells
             .combineLatest($region.debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .userInteractive)))
             .combineLatest(configService.$config)
-            .map { [weak self] combined, config -> [TerritoryCell] in
-                guard let self = self else { return [] }
+            .map { combined, config -> [TerritoryCell] in
                 let (cellsDict, region) = combined
                 
                 let allCells = Array(cellsDict.values)

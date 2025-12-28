@@ -197,13 +197,10 @@ class AuthenticationService: NSObject, ObservableObject {
                     UserRepository.shared.fetchUser(userId: firebaseUser.uid) { [weak self] remoteUser in
                         guard let self = self else { return }
                         
-                        let initialXP = 0
-                        let initialLevel = 1
-                        
                         // Use remote name if it exists and is not empty, otherwise use Google name
                         let finalName = (remoteUser?.displayName?.isEmpty == false) ? remoteUser!.displayName! : resolvedName
                         self.userName = finalName
-                        
+
                         // RECOVERY LOGIC: Use custom claims if provided in the token (preserved after reinstall)
                         Task {
                             let result = try? await firebaseUser.getIDTokenResult()

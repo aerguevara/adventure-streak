@@ -545,6 +545,10 @@ class WorkoutsViewModel: ObservableObject {
                 self.isCheckingForWorkouts = false
                 guard !newSessions.isEmpty else { return }
                 
+                // 1. Monitor first (resets flags internally via didSet)
+                self.monitorProcessing(for: newSessions.map { $0.id })
+                
+                // 2. Then set UI state (overriding any reset)
                 self.isImporting = true
                 self.isLoading = true
                 self.importTotal = newSessions.count
@@ -558,12 +562,20 @@ class WorkoutsViewModel: ObservableObject {
                         self.importTotal = total
                     }
                 }
-            }
-            
-            await MainActor.run {
-                self.isImporting = false
-                self.isLoading = false
-                self.loadWorkouts()
+                
+                await MainActor.run {
+                    // Important: We do NOT set isImporting = false here.
+                    // monitorProcessing will set it to true once the Cloud Function finish.
+                    // isImporting = false will be handled by the summary modal dismissal.
+                    self.isLoading = false
+                    self.loadWorkouts()
+                }
+            } else {
+                await MainActor.run {
+                    self.isImporting = false
+                    self.isLoading = false
+                    self.loadWorkouts()
+                }
             }
         }
     }

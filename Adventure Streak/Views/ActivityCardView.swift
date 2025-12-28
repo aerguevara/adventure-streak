@@ -39,7 +39,6 @@ struct ActivityCardView: View {
     }
 
     private var refinedTitle: String {
-        let location = activity.activityData.locationLabel ?? "una nueva zona"
         if activity.activityData.recapturedZonesCount > 0 { return "Zona Recuperada" }
         if activity.activityData.stolenZonesCount > 0 { return "Territorios Capturados" }
         if activity.activityData.newZonesCount > 0 { return "¡Nuevo Descubrimiento!" }
