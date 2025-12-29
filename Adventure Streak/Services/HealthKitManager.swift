@@ -136,11 +136,12 @@ class HealthKitManager: ObservableObject {
 
     
     private func enableBackgroundDelivery() {
-        healthStore.enableBackgroundDelivery(for: .workoutType(), frequency: .immediate) { success, error in
+        // OPTIMIZATION: Use .hourly instead of .immediate to reduce background wake-ups and save battery.
+        healthStore.enableBackgroundDelivery(for: .workoutType(), frequency: .hourly) { success, error in
             if let error {
                 print("❌ enableBackgroundDelivery error: \(error)")
             } else {
-                print("✅ Background delivery activada para workouts: \(success)")
+                print("✅ Background delivery activada para workouts (.hourly): \(success)")
             }
         }
     }

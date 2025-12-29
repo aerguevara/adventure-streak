@@ -14,7 +14,8 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     override init() {
         super.init()
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        // OPTIMIZATION: Use nearestTenMeters for battery efficiency when just monitoring.
+        locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
         locationManager.distanceFilter = 10 // Update every 10 meters
         locationManager.allowsBackgroundLocationUpdates = false
         locationManager.pausesLocationUpdatesAutomatically = true
@@ -28,6 +29,7 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     func startMonitoring() {
         guard !isMonitoring, !isTracking else { return }
         isMonitoring = true
+        locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
         locationManager.startUpdatingLocation()
     }
     
@@ -40,6 +42,8 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     func startTracking() {
         routePoints = []
         isTracking = true
+        // OPTIMIZATION: Use High Accuracy only when actively tracking a route.
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.startUpdatingLocation()
     }
     
@@ -47,6 +51,9 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
         isTracking = false
         if !isMonitoring {
             locationManager.stopUpdatingLocation()
+        } else {
+            // Revert to power-efficient monitoring accuracy.
+            locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
         }
     }
     

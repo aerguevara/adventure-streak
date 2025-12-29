@@ -57,8 +57,14 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let documents = snapshot?.documents, let self = self else { return }
                 
-                let sorted = self.processFeedDocuments(documents)
-                self.events = sorted
+                // OPTIMIZATION: Process heavy decoding and deduplication on background thread.
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let sorted = self.processFeedDocuments(documents)
+                    
+                    DispatchQueue.main.async {
+                        self.events = sorted
+                    }
+                }
             }
         #endif
     }
@@ -82,7 +88,7 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         #endif
     }
 
-    private func processFeedDocuments(_ documents: [QueryDocumentSnapshot]) -> [FeedEvent] {
+    nonisolated private func processFeedDocuments(_ documents: [QueryDocumentSnapshot]) -> [FeedEvent] {
         let decoded = documents.compactMap { doc -> FeedEvent? in
             do {
                 var event = try doc.data(as: FeedEvent.self)
