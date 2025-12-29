@@ -44,6 +44,8 @@ class MapViewModel: ObservableObject {
     private let territoryRepository = TerritoryRepository.shared
     private let configService: GameConfigService
     
+    private var lastQueryRegion: MKCoordinateRegion?
+    
     private var timer: Timer?
     private var startTime: Date?
     private var cancellables = Set<AnyCancellable>()
@@ -61,8 +63,8 @@ class MapViewModel: ObservableObject {
         self.configService = configService
         
         setupBindings()
-        // NEW: Start observing remote territories
-        territoryRepository.observeTerritories()
+        // REMOVED: Static observation replaced by region-based observation in bindings
+        // territoryRepository.observeTerritories()
         
         Task {
             await configService.loadConfigIfNeeded()
@@ -84,6 +86,33 @@ class MapViewModel: ObservableObject {
             .first() // Only set initial region once
             .sink { [weak self] location in
                 self?.region.center = location.coordinate
+                // Initial fetch for the starting location
+                self?.territoryRepository.observeTerritories(in: self?.region ?? MKCoordinateRegion())
+            }
+            .store(in: &cancellables)
+        
+        // NEW: Region change listener with debounce for remote territories
+        $region
+            .debounce(for: .seconds(1.0), scheduler: RunLoop.main)
+            .sink { [weak self] newRegion in
+                guard let self = self else { return }
+                
+                // Only query if the region has changed significantly (e.g. > 20% of the span)
+                if let last = self.lastQueryRegion {
+                    let latChange = abs(newRegion.center.latitude - last.center.latitude)
+                    let lonChange = abs(newRegion.center.longitude - last.center.longitude)
+                    let significantThreshold = 0.2
+                    
+                    if latChange < last.span.latitudeDelta * significantThreshold &&
+                       lonChange < last.span.longitudeDelta * significantThreshold &&
+                       abs(newRegion.span.latitudeDelta - last.span.latitudeDelta) < last.span.latitudeDelta * significantThreshold {
+                        return // Not significant enough
+                    }
+                }
+                
+                print("[Map] Triggering region-based territory fetch...")
+                self.lastQueryRegion = newRegion
+                self.territoryRepository.observeTerritories(in: newRegion)
             }
             .store(in: &cancellables)
         

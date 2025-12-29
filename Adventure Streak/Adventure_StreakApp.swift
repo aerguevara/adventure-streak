@@ -31,6 +31,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     // Check current permissions silently. Only register if already authorized.
     UNUserNotificationCenter.current().getNotificationSettings { settings in
+        print("🔔 [AppDelegate] Notification settings: \(settings.authorizationStatus.rawValue)")
         if settings.authorizationStatus == .authorized {
             DispatchQueue.main.async {
                 UIApplication.shared.registerForRemoteNotifications()
@@ -39,6 +40,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
     
     // Registrar tareas en background (HealthKit refresh)
+    print("🛠 [AppDelegate] Configuring background tasks and HealthKit observers")
     BackgroundTaskService.shared.registerTasks()
     HealthKitManager.shared.startBackgroundObserversInBackground()
     

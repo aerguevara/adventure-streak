@@ -2,7 +2,7 @@ import Foundation
 import BackgroundTasks
 
 /// Gestiona el registro y la programación de tareas en background.
-final class BackgroundTaskService {
+final class BackgroundTaskService: Sendable {
     static let shared = BackgroundTaskService()
     
     private let refreshIdentifier = "com.adventurestreak.refreshHealth"
@@ -10,7 +10,9 @@ final class BackgroundTaskService {
     private init() {}
     
     func registerTasks() {
+        print("📲 [BackgroundTaskService] Registering BGTask: \(refreshIdentifier)")
         BGTaskScheduler.shared.register(forTaskWithIdentifier: refreshIdentifier, using: nil) { task in
+            print("🔋 [BackgroundTaskService] Running background task: \(task.identifier)")
             guard let refreshTask = task as? BGAppRefreshTask else {
                 task.setTaskCompleted(success: false)
                 return
@@ -25,8 +27,9 @@ final class BackgroundTaskService {
         request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
         do {
             try BGTaskScheduler.shared.submit(request)
+            print("📅 [BackgroundTaskService] Task scheduled: \(refreshIdentifier)")
         } catch {
-            print("No se pudo programar BGTask: \(error)")
+            print("❌ No se pudo programar BGTask: \(error)")
         }
     }
     

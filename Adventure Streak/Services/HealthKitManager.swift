@@ -196,16 +196,20 @@ class HealthKitManager: ObservableObject {
                 return
             }
             
-            self.notifyNewWorkouts(workouts as [WorkoutProtocol])
-            completion()
+            self.notifyNewWorkouts(workouts as [WorkoutProtocol]) {
+                completion()
+            }
         }
         
         healthStore.execute(query)
     }
     
-    private func notifyNewWorkouts(_ workouts: [WorkoutProtocol]) {
+    private func notifyNewWorkouts(_ workouts: [WorkoutProtocol], completion: @escaping () -> Void) {
         let notified = Set(userDefaults.stringArray(forKey: notifiedWorkoutsKey) ?? [])
         var newNotified = notified
+        
+        let group = DispatchGroup()
+        var hasAddedAny = false
         
         for workout in workouts {
             let id = workout.uuid.uuidString
@@ -217,6 +221,7 @@ class HealthKitManager: ObservableObject {
                 continue
             }
             
+            hasAddedAny = true
             let content = UNMutableNotificationContent()
             content.title = "Nuevo entreno detectado"
             let distance = workout.totalDistanceMeters ?? 0
@@ -228,10 +233,27 @@ class HealthKitManager: ObservableObject {
             content.sound = .default
             
             let request = UNNotificationRequest(identifier: "workout_\(id)", content: content, trigger: nil)
-            UNUserNotificationCenter.current().add(request)
+            
+            group.enter()
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    print("❌ Error scheduling notification for \(id): \(error)")
+                } else {
+                    print("✅ Notification scheduled for \(id)")
+                }
+                group.leave()
+            }
         }
         
         userDefaults.set(Array(newNotified), forKey: notifiedWorkoutsKey)
+        
+        if hasAddedAny {
+            group.notify(queue: .main) {
+                completion()
+            }
+        } else {
+            completion()
+        }
     }
     
     private func loadAnchor() -> HKQueryAnchor? {
@@ -247,8 +269,10 @@ class HealthKitManager: ObservableObject {
 
     
     // Public wrapper for simulation
-    func triggerNotificationCheck(for workouts: [WorkoutProtocol]) {
-        self.notifyNewWorkouts(workouts)
+    func triggerNotificationCheck(for workouts: [WorkoutProtocol], completion: (() -> Void)? = nil) {
+        self.notifyNewWorkouts(workouts) {
+            completion?()
+        }
     }
     
     // Simulate background fetch with delay
@@ -284,10 +308,8 @@ class HealthKitManager: ObservableObject {
                 }
                 
                 // 1. Notify (Simulates 'HKObserverQuery' detecting new data)
-                self.notifyNewWorkouts(workouts as [WorkoutProtocol])
-                
-                // 2. End task
-                Task { @MainActor in
+                self.notifyNewWorkouts(workouts as [WorkoutProtocol]) {
+                    // 2. End task
                     UIApplication.shared.endBackgroundTask(backgroundTask)
                     backgroundTask = .invalid
                 }

@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
+import MapKit
 // NEW: Added for multiplayer conquest feature
-// Ensure you add the Firebase SDK to your project via SPM: https://github.com/firebase/firebase-ios-sdk
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
@@ -15,6 +15,7 @@ class TerritoryRepository: ObservableObject {
     
     private var db: Any? // Type-erased Firestore reference to avoid build errors if SDK missing
     private var listener: Any?
+    private var currentRegion: MKCoordinateRegion?
     private var isObserving = false
     
     init() {
@@ -25,36 +26,83 @@ class TerritoryRepository: ObservableObject {
     
     // NEW: Listen for territories (now routes)
     func observeTerritories() {
+        // Fallback to a global observation if no region provided (not recommended for production)
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         guard !isObserving else { return }
         isObserving = true
         
-        // Listen to "remote_territories" collection
-        listener = db.collection("remote_territories")
-            .limit(to: 1000) // Increased limit to prevent missing territories
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let documents = snapshot?.documents else {
-                    print("Error fetching territories: \(error?.localizedDescription ?? "Unknown error")")
-                    return
-                }
-                
-                // Perform heavy decoding on background thread to avoid freezing UI
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let territories = documents.compactMap { doc -> RemoteTerritory? in
-                        var territory = try? doc.data(as: RemoteTerritory.self)
-                        territory?.id = doc.documentID // Force assignment of ID
-                        return territory
+        setupListener(query: db.collection("remote_territories").limit(to: 1000))
+        #endif
+    }
+    
+    // NEW: Listen for territories within a specific region
+    func observeTerritories(in region: MKCoordinateRegion) {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        
+        // Calculate bounds with a bit of buffer (20%)
+        let latDelta = region.span.latitudeDelta * 1.2
+        let lonDelta = region.span.longitudeDelta * 1.2
+        
+        let minLat = region.center.latitude - latDelta / 2
+        let maxLat = region.center.latitude + latDelta / 2
+        let minLon = region.center.longitude - lonDelta / 2
+        let maxLon = region.center.longitude + lonDelta / 2
+        
+        // Store current region for in-memory filtering of longitude if needed
+        self.currentRegion = region
+        
+        // Cancel existing listener
+        #if canImport(FirebaseFirestore)
+        if let currentListener = listener as? ListenerRegistration {
+            currentListener.remove()
+        }
+        #endif
+        
+        // Firestore can only do range filters on one field easily. 
+        // We'll filter by Latitude on server and Longitude in memory.
+        let query = db.collection("remote_territories")
+            .whereField("centerLatitude", isGreaterThanOrEqualTo: minLat)
+            .whereField("centerLatitude", isLessThanOrEqualTo: maxLat)
+            .limit(to: 1000)
+            
+        isObserving = true
+        setupListener(query: query, minLon: minLon, maxLon: maxLon)
+        #endif
+    }
+    
+    private func setupListener(query: Query, minLon: Double? = nil, maxLon: Double? = nil) {
+        #if canImport(FirebaseFirestore)
+        listener = query.addSnapshotListener { [weak self] snapshot, error in
+            guard let documents = snapshot?.documents else {
+                print("Error fetching territories: \(error?.localizedDescription ?? "Unknown error")")
+                return
+            }
+            
+            // Perform heavy decoding on background thread to avoid freezing UI
+            DispatchQueue.global(qos: .userInitiated).async {
+                let territories = documents.compactMap { doc -> RemoteTerritory? in
+                    var territory = try? doc.data(as: RemoteTerritory.self)
+                    territory?.id = doc.documentID // Force assignment of ID
+                    
+                    // In-memory longitude filtering
+                    if let minLon = minLon, let maxLon = maxLon, let t = territory {
+                        if t.centerLongitude < minLon || t.centerLongitude > maxLon {
+                            return nil
+                        }
                     }
                     
-                    // Update UI on main thread
-                    DispatchQueue.main.async {
-                        self?.otherTerritories = territories
-                        self?.hasInitialSnapshot = true
-                    }
+                    return territory
+                }
+                
+                // Update UI on main thread
+                DispatchQueue.main.async {
+                    self?.otherTerritories = territories
+                    self?.hasInitialSnapshot = true
                 }
             }
-        
+        }
         #endif
     }
     
