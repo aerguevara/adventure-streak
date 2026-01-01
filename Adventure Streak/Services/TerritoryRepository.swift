@@ -12,6 +12,7 @@ class TerritoryRepository: ObservableObject {
     
     @Published var otherTerritories: [RemoteTerritory] = []
     @Published var vengeanceTargets: [VengeanceTarget] = []
+    @Published var vengeanceTerritoryDetails: [RemoteTerritory] = [] // NEW: Store details for off-screen targets
     @Published private(set) var hasInitialSnapshot: Bool = false
     
     private var db: Any? // Type-erased Firestore reference to avoid build errors if SDK missing
@@ -66,6 +67,23 @@ class TerritoryRepository: ObservableObject {
                 DispatchQueue.main.async {
                     self?.vengeanceTargets = targets
                     print("[Territories] Updated vengeance targets (\(targets.count) targets found)")
+                    
+                    // NEW: Fetch details for these targets so we have boundaries/expiry
+                    Task { [weak self] in
+                        let ids = targets.map { $0.cellId }
+                        // Ensure we don't re-fetch if we already have them (optional optimization, but good practice)
+                        // For now, just fetch fresh to be safe
+                        if !ids.isEmpty {
+                            let details = await self?.fetchTerritories(ids: ids) ?? []
+                            await MainActor.run {
+                                self?.vengeanceTerritoryDetails = details
+                            }
+                        } else {
+                             await MainActor.run {
+                                self?.vengeanceTerritoryDetails = []
+                            }
+                        }
+                    }
                 }
             }
         #endif

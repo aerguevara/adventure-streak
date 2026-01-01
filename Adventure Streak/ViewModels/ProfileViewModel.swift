@@ -89,11 +89,23 @@ class ProfileViewModel: ObservableObject {
     }
     
     var vulnerableTerritories: [TerritoryInventoryItem] {
-        // Combine vengeance items (high priority) with expiring territories
+        // Combine vengeance items (high priority) with expiring/expired territories
         let now = Date()
-        let threshold = now.addingTimeInterval(24 * 3600) // 24 hours
-        let expiring = territoryInventory.filter { $0.expiresAt < threshold && $0.expiresAt > now }
-        return vengeanceItems + expiring
+        let warningThreshold = now.addingTimeInterval(24 * 3600) // Expires in < 24 hours
+        let gracePeriodThreshold = now.addingTimeInterval(-24 * 3600) // Expired < 24 hours ago
+        
+        let vulnerable = territoryInventory.filter { item in
+            // 1. Está a punto de expirar? (Futuro cercano)
+            let isExpiringSoon = item.expiresAt < warningThreshold && item.expiresAt > now
+            // 2. Ya expiró pero está en periodo de gracia? (Pasado reciente)
+            let isRecentlyExpired = item.expiresAt <= now && item.expiresAt > gracePeriodThreshold
+            
+            print("DEBUG: Checking item \(item.id) - Expires: \(item.expiresAt). Now: \(now). Soon: \(isExpiringSoon), ExpiredGrace: \(isRecentlyExpired)")
+            
+            return isExpiringSoon || isRecentlyExpired
+        }
+        print("DEBUG: Vulnerable count: \(vulnerable.count). Vengeance count: \(vengeanceItems.count)")
+        return vengeanceItems + vulnerable
     }
     
     private var cancellables = Set<AnyCancellable>()
@@ -196,6 +208,14 @@ class ProfileViewModel: ObservableObject {
                 self?.refreshLocalStats()
             }
             .store(in: &cancellables)
+            
+        // NEW: Observe vengeance details (async fetch results)
+        TerritoryRepository.shared.$vengeanceTerritoryDetails
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshLocalStats()
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Actions
@@ -225,6 +245,10 @@ class ProfileViewModel: ObservableObject {
                 if let user = user {
                     print("DEBUG: ProfileViewModel: Received user update (hasAcknowledgedDecReset: \(user.hasAcknowledgedDecReset ?? true))")
                     self.updateWithUser(user)
+                    // Ensure local territory store is in sync with Firestore (vital for expiration updates)
+                    if let userId = user.id {
+                        await TerritoryRepository.shared.syncUserTerritories(userId: userId, store: self.territoryStore)
+                    }
                 } else {
                     print("DEBUG: ProfileViewModel: Could not fetch user profile or user is nil for ID: \(userId)")
                 }
@@ -284,8 +308,10 @@ class ProfileViewModel: ObservableObject {
             var matchedCell: TerritoryCell? = territoryStore.conqueredCells[target.cellId]
             
             if matchedCell == nil {
-                // Try to find in otherTerritories (cached from map)
-                if let remote = TerritoryRepository.shared.otherTerritories.first(where: { $0.id == target.cellId }) {
+                // Try to find in otherTerritories (cached from map) OR vengeanceTerritoryDetails (explicit fetch)
+                let repo = TerritoryRepository.shared
+                if let remote = repo.otherTerritories.first(where: { $0.id == target.cellId }) ?? 
+                                repo.vengeanceTerritoryDetails.first(where: { $0.id == target.cellId }) {
                     matchedCell = TerritoryCell(
                         id: remote.id ?? target.cellId,
                         centerLatitude: remote.centerLatitude,

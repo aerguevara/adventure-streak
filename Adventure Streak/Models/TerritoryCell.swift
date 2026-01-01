@@ -24,6 +24,7 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
     var ownerUploadedAt: Date?
     // NEW: Track which activity claimed this cell (critical for race condition handling)
     var activityId: String?
+    var isHotSpot: Bool?
     
     var centerCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: centerLatitude, longitude: centerLongitude)
@@ -35,7 +36,7 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
     
     // NEW: Explicit CodingKeys required for custom decoding
     enum CodingKeys: String, CodingKey {
-        case id, centerLatitude, centerLongitude, boundary, lastConqueredAt, expiresAt, ownerUserId, ownerDisplayName, ownerUploadedAt, activityId
+        case id, centerLatitude, centerLongitude, boundary, lastConqueredAt, expiresAt, ownerUserId, ownerDisplayName, ownerUploadedAt, activityId, isHotSpot
         case serverLastConqueredAt = "activityEndAt" // Fallback key used by server
     }
     
@@ -61,6 +62,7 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
         ownerDisplayName = try container.decodeIfPresent(String.self, forKey: .ownerDisplayName)
         ownerUploadedAt = try container.decodeIfPresent(Date.self, forKey: .ownerUploadedAt)
         activityId = try container.decodeIfPresent(String.self, forKey: .activityId)
+        isHotSpot = try container.decodeIfPresent(Bool.self, forKey: .isHotSpot)
         
         // Try to decode boundary, or calculate it if missing (migration)
         if let storedBoundary = try container.decodeIfPresent([TerritoryPoint].self, forKey: .boundary) {
@@ -93,10 +95,11 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(ownerDisplayName, forKey: .ownerDisplayName)
         try container.encodeIfPresent(ownerUploadedAt, forKey: .ownerUploadedAt)
         try container.encodeIfPresent(activityId, forKey: .activityId)
+        try container.encodeIfPresent(isHotSpot, forKey: .isHotSpot)
     }
     
     // Default init for creating new cells
-    init(id: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], lastConqueredAt: Date, expiresAt: Date, ownerUserId: String? = nil, ownerDisplayName: String? = nil, ownerUploadedAt: Date? = nil, activityId: String? = nil) {
+    init(id: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], lastConqueredAt: Date, expiresAt: Date, ownerUserId: String? = nil, ownerDisplayName: String? = nil, ownerUploadedAt: Date? = nil, activityId: String? = nil, isHotSpot: Bool? = nil) {
         self.id = id
         self.centerLatitude = centerLatitude
         self.centerLongitude = centerLongitude
@@ -107,5 +110,6 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
         self.ownerDisplayName = ownerDisplayName
         self.ownerUploadedAt = ownerUploadedAt
         self.activityId = activityId
+        self.isHotSpot = isHotSpot
     }
 }

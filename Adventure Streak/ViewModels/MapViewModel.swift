@@ -305,6 +305,8 @@ class MapViewModel: ObservableObject {
         // Sync the view's region with the ViewModel
         // Wrap in async to avoid "Publishing changes from within view updates" warning
         DispatchQueue.main.async {
+            // Guard against overwriting a programmatic move (like "Show on Map")
+            guard !self.shouldRecenter else { return }
             self.region = region
         }
     }
@@ -320,6 +322,31 @@ class MapViewModel: ObservableObject {
         
         self.region = newRegion
         self.shouldRecenter = true
+    }
+    
+    func selectTerritoryByCellId(_ cellId: String) {
+        // 1. Try local store first
+        if let cell = territoryStore.conqueredCells[cellId] {
+            let coord = CLLocationCoordinate2D(latitude: cell.centerLatitude, longitude: cell.centerLongitude)
+            self.region = MKCoordinateRegion(center: coord, span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005))
+            self.shouldRecenter = true
+            selectTerritory(id: cellId, ownerName: cell.ownerDisplayName, ownerUserId: cell.ownerUserId)
+            print("[Map] Navigating to local territory: \(cellId) at \(cell.centerLatitude), \(cell.centerLongitude)")
+            return
+        }
+        
+        // 2. Try remote territories (rivals/other)
+        if let remote = otherTerritories.first(where: { $0.id == cellId }) {
+            let coord = remote.centerCoordinate
+            self.region = MKCoordinateRegion(center: coord, span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005))
+            self.shouldRecenter = true
+            selectTerritory(id: cellId, ownerName: nil, ownerUserId: remote.userId)
+            print("[Map] Navigating to remote territory: \(cellId) at \(remote.centerLatitude), \(remote.centerLongitude)")
+            return
+        }
+        
+        // 3. Fallback: Parse from ID "x_y" if possible (for offline or emergency navigation)
+        // ... handled if coordinate extraction logic existed
     }
     
     func selectTerritory(id: String?, ownerName: String?, ownerUserId: String?) {

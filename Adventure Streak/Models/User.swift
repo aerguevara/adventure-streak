@@ -161,3 +161,18 @@ struct Rival: Identifiable, Codable {
     
     var id: String { userId }
 }
+
+struct RivalryRelationship: Identifiable {
+    let userId: String
+    let displayName: String
+    let avatarURL: String?
+    let userScore: Int
+    let rivalScore: Int
+    let lastInteractionAt: Date
+    let trend: RankingTrend
+    
+    var id: String { userId }
+    var isUserLeading: Bool { userScore >= rivalScore }
+    var isVengeancePending: Bool { rivalScore > userScore }
+}
+

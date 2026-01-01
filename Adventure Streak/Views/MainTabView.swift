@@ -10,10 +10,21 @@ struct MainTabView: View {
     let activityStore: ActivityStore
     let territoryStore: TerritoryStore
     
+    @State private var selectedTab = 0
+    
     var body: some View {
-        TabView {
-            WorkoutsView(viewModel: workoutsViewModel, profileViewModel: profileViewModel, badgesViewModel: badgesViewModel)
-                .tabItem {
+        TabView(selection: $selectedTab) {
+            WorkoutsView(
+                viewModel: workoutsViewModel,
+                profileViewModel: profileViewModel,
+                badgesViewModel: badgesViewModel,
+                onShowOnMap: { cellId in
+                    selectedTab = 1
+                    mapViewModel.selectTerritoryByCellId(cellId)
+                }
+            )
+            .tag(0)
+            .tabItem {
                     Label("Progreso", systemImage: "chart.bar.fill")
                 }
             
@@ -57,12 +68,14 @@ struct MainTabView: View {
                 }
                 .animation(.spring(), value: mapViewModel.selectedTerritoryId)
             }
+            .tag(1)
             .tabItem {
                 Label("Mapa", systemImage: "map")
             }
             
             // NEW: Added for multiplayer conquest feature
             SocialFeedView()
+            .tag(2)
             .tabItem {
                 Label("Social", systemImage: "person.2.fill")
             }
@@ -70,6 +83,7 @@ struct MainTabView: View {
             NavigationView {
                 RankingView()
             }
+            .tag(3)
             .tabItem {
                 Label("Ranking", systemImage: "trophy.fill")
             }

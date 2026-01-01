@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 @MainActor
 class SocialRelationsViewModel: ObservableObject {
@@ -7,6 +8,26 @@ class SocialRelationsViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     
     private let socialService = SocialService.shared
+    private var cancellables = Set<AnyCancellable>()
+    
+    init() {
+        socialService.$followingIds
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] ids in
+                guard let self = self else { return }
+                self.followers = self.followers.map { user in
+                    var u = user
+                    u.isFollowing = ids.contains(user.id)
+                    return u
+                }
+                self.following = self.following.map { user in
+                    var u = user
+                    u.isFollowing = ids.contains(user.id)
+                    return u
+                }
+            }
+            .store(in: &cancellables)
+    }
     
     func load(for userId: String) async {
         isLoading = true
@@ -27,28 +48,9 @@ class SocialRelationsViewModel: ObservableObject {
     func toggleFollow(userId: String, displayName: String) {
         if socialService.isFollowing(userId: userId) {
             socialService.unfollowUser(userId: userId)
-            followers = followers.map { user in
-                var u = user
-                if u.id == userId { u.isFollowing = false }
-                return u
-            }
-            following = following.map { user in
-                var u = user
-                if u.id == userId { u.isFollowing = false }
-                return u
-            }
         } else {
             socialService.followUser(userId: userId, displayName: displayName)
-            followers = followers.map { user in
-                var u = user
-                if u.id == userId { u.isFollowing = true }
-                return u
-            }
-            following = following.map { user in
-                var u = user
-                if u.id == userId { u.isFollowing = true }
-                return u
-            }
         }
+        // Se elimina la actualización manual; el observador en init se encarga
     }
 }

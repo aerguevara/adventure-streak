@@ -54,7 +54,9 @@ class TerritoryStore: ObservableObject {
     
     func removeExpiredCells(now: Date) {
         let originalCount = conqueredCells.count
-        conqueredCells = conqueredCells.filter { $0.value.expiresAt > now }
+        // Keep cells until 24 hours AFTER expiration so user can see "Expired" state
+        let gracePeriodThreshold = now.addingTimeInterval(-24 * 60 * 60)
+        conqueredCells = conqueredCells.filter { $0.value.expiresAt > gracePeriodThreshold }
 
         if conqueredCells.count != originalCount {
             persist()

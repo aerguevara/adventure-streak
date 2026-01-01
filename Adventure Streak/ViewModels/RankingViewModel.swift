@@ -139,11 +139,6 @@ class RankingViewModel: ObservableObject {
         } else {
             socialService.followUser(userId: entry.userId, displayName: entry.displayName)
         }
-        
-        // Update local state
-        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
-            entries[index].isFollowing.toggle()
-        }
     }
     
     func selectUser(userId: String) {

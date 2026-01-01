@@ -1,7 +1,7 @@
 import Foundation
 
 struct RankingEntry: Identifiable, Codable {
-    let id = UUID()
+    var id: String { userId }
     let userId: String
     let displayName: String
     let level: Int

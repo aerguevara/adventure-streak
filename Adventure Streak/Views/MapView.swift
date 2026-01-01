@@ -20,8 +20,10 @@ struct MapView: UIViewRepresentable {
         // Set initial region
         mapView.setRegion(viewModel.region, animated: false)
         
-        // Auto-follow user
-        mapView.userTrackingMode = .follow
+        // Auto-follow user only if not explicitly recentering to a territory
+        if !viewModel.shouldRecenter {
+            mapView.userTrackingMode = .follow
+        }
         
         // Request permissions only when the map is actually shown
         viewModel.checkLocationPermissions()
@@ -37,6 +39,7 @@ struct MapView: UIViewRepresentable {
         // 1. Update Region
         // Only update if we explicitly want to force a move (e.g. "Focus User" button)
         if viewModel.shouldRecenter {
+            mapView.userTrackingMode = .none // Stop following user to allow custom region move
             mapView.setRegion(viewModel.region, animated: true)
             // Reset flag async
             DispatchQueue.main.async {
@@ -75,11 +78,8 @@ struct MapView: UIViewRepresentable {
         let newTerritories = viewModel.visibleTerritories
         let newIds = Set(newTerritories.map { $0.id })
         
-        print("DEBUG: MapView updating territories. Current: \(currentIds.count), New: \(newIds.count)")
-        
+        // 1. Remove territories that are no longer visible
         let toRemoveIds = currentIds.subtracting(newIds)
-        let toAddIds = newIds.subtracting(currentIds)
-        
         if !toRemoveIds.isEmpty {
             let overlaysToRemove = mapView.overlays.filter { overlay in
                 guard let title = overlay.title, let id = title else { return false }
@@ -88,17 +88,52 @@ struct MapView: UIViewRepresentable {
             mapView.removeOverlays(overlaysToRemove)
         }
         
+        // 2. Detect State Changes for Persisting Territories (Local <-> Expired)
+        var staleIds = Set<String>()
+        // Optimization: Create map for O(1) lookup
+        let newTerritoryMap = Dictionary(uniqueKeysWithValues: newTerritories.map { ($0.id, $0) })
+        
+        for overlay in mapView.overlays {
+            if let polygon = overlay as? MKPolygon,
+               let id = polygon.title,
+               let cell = newTerritoryMap[id] {
+                
+                let expectedSubtitle = cell.expiresAt < Date() ? "expired" : "local"
+                // Only check overlays marked as territories (local/expired), ignore rivals for now
+                if (polygon.subtitle == "local" || polygon.subtitle == "expired") && polygon.subtitle != expectedSubtitle {
+                    staleIds.insert(id)
+                }
+            }
+        }
+        
+        // Remove stale overlays to force redraw
+        if !staleIds.isEmpty {
+            let staleOverlays = mapView.overlays.filter { overlay in
+                guard let title = overlay.title, let id = title else { return false }
+                return staleIds.contains(id)
+            }
+            mapView.removeOverlays(staleOverlays)
+        }
+        
+        // 3. Add New or Stale Territories
+        // We add if it's new OR if it was stale (removed above)
+        let toAddIds = newIds.subtracting(currentIds).union(staleIds)
+        
         if !toAddIds.isEmpty {
             let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id) }
             let newOverlays = territoriesToAdd.compactMap { cell -> MKPolygon? in
                 guard cell.boundary.count >= 3 else { return nil }
                 let coords = cell.boundary.map { $0.coordinate }
                 
-                // Ensure closure - REVERTED
-                
                 let polygon = MKPolygon(coordinates: coords, count: coords.count)
                 polygon.title = cell.id // ID stored in title
-                polygon.subtitle = "local" // Tag as local
+                
+                // Check for expiration
+                if cell.expiresAt < Date() {
+                    polygon.subtitle = "expired"
+                } else {
+                    polygon.subtitle = "local"
+                }
                 return polygon
             }
             mapView.addOverlays(newOverlays)
@@ -271,6 +306,9 @@ struct MapView: UIViewRepresentable {
                 if polygon.subtitle == "rival" {
                     renderer.strokeColor = .orange
                     renderer.fillColor = UIColor.orange.withAlphaComponent(0.3)
+                } else if polygon.subtitle == "expired" {
+                    renderer.strokeColor = .gray
+                    renderer.fillColor = UIColor.gray.withAlphaComponent(0.4)
                 } else {
                     renderer.strokeColor = .green
                     renderer.fillColor = UIColor.green.withAlphaComponent(0.5)

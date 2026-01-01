@@ -111,6 +111,10 @@ struct ProcessingSummaryModal: View {
                         victimsSection
                     }
                     
+                    if summary.vengeanceFulfilledCount > 0 {
+                        vengeanceSection
+                    }
+                    
                 }
                 .padding(.top, 20)
                 .padding(.bottom, 50)
@@ -187,6 +191,9 @@ struct ProcessingSummaryModal: View {
                     }
                     if summary.totalRecaptured > 0 {
                         SocialAchievementBadge(icon: "arrow.triangle.2.circlepath", text: "\(summary.totalRecaptured) Renovados", color: Color(hex: "BF5AF2"))
+                    }
+                    if summary.vengeanceFulfilledCount > 0 {
+                        SocialAchievementBadge(icon: "bolt.fill", text: "\(summary.vengeanceFulfilledCount) Venganzas", color: Color(hex: "22D3EE"))
                     }
                     if summary.highestRarity != "Común" {
                         SocialAchievementBadge(icon: "trophy.fill", text: summary.highestRarity.uppercased(), color: rarityColor(summary.highestRarity))
@@ -305,6 +312,30 @@ struct ProcessingSummaryModal: View {
         .padding()
         .background(Color.red.opacity(0.1))
         .cornerRadius(12)
+        .padding(.horizontal)
+    }
+
+    private var vengeanceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "bolt.fill")
+                    .foregroundColor(Color(hex: "22D3EE"))
+                Text("Venganzas Cumplidas: \(summary.vengeanceFulfilledCount)")
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            
+            Text("Has recuperado territorios que te fueron robados. ¡Bonus de +25 XP aplicado por cada uno!")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.7))
+        }
+        .padding()
+        .background(Color(hex: "22D3EE").opacity(0.1))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(hex: "22D3EE").opacity(0.3), lineWidth: 1)
+        )
         .padding(.horizontal)
     }
 

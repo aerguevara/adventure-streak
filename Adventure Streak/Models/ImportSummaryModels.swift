@@ -13,6 +13,7 @@ struct GlobalImportSummary {
     var locations: [String] = [] // Smart place names
     var totalDistance: Double = 0.0
     var totalRecaptured: Int = 0 
+    var vengeanceFulfilledCount: Int = 0
     var durationSeconds: Double = 0.0
     // For the mini-map visualization
     var routeCoordinates: [[CLLocationCoordinate2D]] = []
@@ -63,7 +64,7 @@ struct GlobalImportSummary {
     }
     
     // Overload to include missions, rarity AND territories
-    mutating func add(stats: TerritoryStats, xp: Int, distance: Double, duration: Double, victimNames: [String], location: String?, route: [RoutePoint], missions: [Mission]?, rarity: String, territories: [RemoteTerritory]?, activityType: ActivityType? = nil) {
+    mutating func add(stats: TerritoryStats, xp: Int, distance: Double, duration: Double, victimNames: [String], location: String? = nil, route: [RoutePoint] = [], missions: [Mission]?, rarity: String, territories: [RemoteTerritory]?, activityType: ActivityType? = nil) {
         // Call base add for core stats
         self.add(stats: stats, xp: xp, distance: distance, duration: duration, victimNames: victimNames, location: location, route: route, activityType: activityType)
         

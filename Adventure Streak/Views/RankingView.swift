@@ -464,7 +464,8 @@ struct RankingCard: View {
     var onCardTapped: (() -> Void)?
     
     var body: some View {
-        Button(action: { onCardTapped?() }) {
+        HStack(spacing: 16) {
+            // Contenido principal de la tarjeta (Tappable)
             HStack(spacing: 16) {
                 // Rank
                 Text("\(entry.position)")
@@ -510,51 +511,53 @@ struct RankingCard: View {
                     }
                     .frame(height: 4)
                 }
-                
-                Spacer()
-                
-                // Stats & Actions
-                HStack(spacing: 12) {
-                    // Stats & Trend
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("\(entry.weeklyXP)")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        HStack(spacing: 2) {
-                            Image(systemName: trendIcon)
-                            Text(trendText)
-                        }
-                        .font(.caption2)
-                        .foregroundColor(trendColor)
-                    }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { onCardTapped?() }
+            
+            Spacer()
+            
+            // Stats & Actions
+            HStack(spacing: 12) {
+                // Stats & Trend
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(entry.weeklyXP)")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
                     
-                    // Follow Button (Only for other users)
-                    if !entry.isCurrentUser {
-                        Button(action: {
-                            onFollowTapped?()
-                        }) {
-                            Image(systemName: entry.isFollowing ? "person.badge.minus" : "person.badge.plus")
-                                .font(.system(size: 14))
-                                .foregroundColor(entry.isFollowing ? .gray : .white)
-                                .padding(8)
-                                .background(entry.isFollowing ? Color.white.opacity(0.1) : Color(hex: "4C6FFF"))
-                                .clipShape(Circle())
-                        }
-                        .buttonStyle(.plain) // Ensure follow button is still tappable separately if needed, but in SwiftUI internal buttons in a Button can be tricky.
+                    HStack(spacing: 2) {
+                        Image(systemName: trendIcon)
+                        Text(trendText)
                     }
+                    .font(.caption2)
+                    .foregroundColor(trendColor)
+                }
+                .onTapGesture { onCardTapped?() } // También triggers card tap
+                
+                // Follow Button (Only for other users)
+                if !entry.isCurrentUser {
+                    Button(action: {
+                        onFollowTapped?()
+                    }) {
+                        Image(systemName: entry.isFollowing ? "person.badge.minus" : "person.badge.plus")
+                            .font(.system(size: 14))
+                            .foregroundColor(entry.isFollowing ? .gray : .white)
+                            .padding(8)
+                            .background(entry.isFollowing ? Color.white.opacity(0.1) : Color(hex: "4C6FFF"))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(16)
-            .background(.ultraThinMaterial)
-            .cornerRadius(24)
-            .overlay(
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(entry.isCurrentUser ? Color(hex: "4C6FFF").opacity(0.3) : Color.white.opacity(0.05), lineWidth: 1)
-            )
         }
-        .buttonStyle(.plain)
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .cornerRadius(24)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(entry.isCurrentUser ? Color(hex: "4C6FFF").opacity(0.3) : Color.white.opacity(0.05), lineWidth: 1)
+        )
     }
     
     var trendIcon: String {

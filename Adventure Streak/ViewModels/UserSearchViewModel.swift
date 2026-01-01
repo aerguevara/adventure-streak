@@ -23,6 +23,16 @@ class UserSearchViewModel: ObservableObject {
         
         // Load top active on init
         fetchTopActive()
+        
+        // NEW: Observar cambios globales en seguidos
+        socialService.$followingIds
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                self.searchResults = self.applyFollowStatus(to: self.searchResults)
+                self.topActive = self.applyFollowStatus(to: self.topActive)
+            }
+            .store(in: &cancellables)
     }
     
     private func performSearch(query: String) {
@@ -116,12 +126,6 @@ class UserSearchViewModel: ObservableObject {
             socialService.followUser(userId: entry.userId, displayName: entry.displayName)
         }
         
-        // Update local state
-        if let index = searchResults.firstIndex(where: { $0.id == entry.id }) {
-            searchResults[index].isFollowing.toggle()
-        }
-        if let index = topActive.firstIndex(where: { $0.id == entry.id }) {
-            topActive[index].isFollowing.toggle()
-        }
+        // Se elimina la actualización manual local; el sink de followingIds se encarga
     }
 }
