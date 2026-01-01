@@ -60,6 +60,17 @@ class SocialService: ObservableObject {
                     }
                     .store(in: &self.cancellables)
                     
+                // NEW: React to manual sync/reset notification
+                NotificationCenter.default.publisher(for: NSNotification.Name("TriggerImmediateImport"))
+                    .receive(on: RunLoop.main)
+                    .sink { [weak self] _ in
+                        guard let self = self else { return }
+                        print("📣 SocialService: TriggerImmediateImport received, restarting observers...")
+                        self.startObservingFollowing()
+                        self.feedRepository.observeFeed()
+                    }
+                    .store(in: &self.cancellables)
+
                 // NEW: React to login/logout
                 AuthenticationService.shared.$userId
                     .receive(on: RunLoop.main)

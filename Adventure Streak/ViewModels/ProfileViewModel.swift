@@ -42,10 +42,14 @@ class ProfileViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     @Published var reservedIcons: Set<String> = []
+    @Published var hasAcknowledgedDecReset: Bool = true // Default to true to avoid modal flicker
     
     // Rivals
     @Published var recentTheftVictims: [Rival] = []
     @Published var recentThieves: [Rival] = []
+    
+    private var lastSentTotalOwned: Int?
+    private var lastSentRecentCount: Int?
     
     // MARK: - Computed Properties
     var userTitle: String {
@@ -174,14 +178,16 @@ class ProfileViewModel: ObservableObject {
         // (In a real app we'd track the listener registration to remove it on deinit)
         
         _ = userRepository.observeUser(userId: userId) { [weak self] user in
-            guard let self = self else { return }
-            self.isLoading = false
-            
-            if let user = user {
-                print("DEBUG: Fetched user (ID: \(user.id ?? "nil")): \(user.displayName ?? "nil"), XP: \(user.xp), Level: \(user.level)")
-                self.updateWithUser(user)
-            } else {
-                print("DEBUG: Could not fetch user profile or user is nil for ID: \(userId)")
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.isLoading = false
+                
+                if let user = user {
+                    print("DEBUG: ProfileViewModel: Received user update (hasAcknowledgedDecReset: \(user.hasAcknowledgedDecReset ?? true))")
+                    self.updateWithUser(user)
+                } else {
+                    print("DEBUG: ProfileViewModel: Could not fetch user profile or user is nil for ID: \(userId)")
+                }
             }
         }
     }
@@ -237,11 +243,23 @@ class ProfileViewModel: ObservableObject {
         
         // Guardar agregados en Firestore (user document)
         if let userId = authService.userId {
-            userRepository.updateTerritoryStats(
-                userId: userId,
-                totalOwned: totalCellsConquered,
-                recentWindow: territoriesCount
-            )
+            let currentTotal = totalCellsConquered
+            let currentRecent = territoriesCount
+            
+            // BREAK LOOP: Only write if values have actually changed
+            if currentTotal != lastSentTotalOwned || currentRecent != lastSentRecentCount {
+                print("📤 ProfileViewModel: Syncing stats to Firestore (\(currentTotal) total, \(currentRecent) recent). Previous: (\(lastSentTotalOwned ?? -1), \(lastSentRecentCount ?? -1))")
+                lastSentTotalOwned = currentTotal
+                lastSentRecentCount = currentRecent
+                
+                userRepository.updateTerritoryStats(
+                    userId: userId,
+                    totalOwned: currentTotal,
+                    recentWindow: currentRecent
+                )
+            } else {
+                // print("😴 ProfileViewModel: Stats unchanged, skipping Firestore write.")
+            }
         }
     }
     
@@ -259,10 +277,20 @@ class ProfileViewModel: ObservableObject {
         self.recentTheftVictims = user.recentTheftVictims ?? []
         self.recentThieves = user.recentThieves ?? []
         self.mapIcon = user.mapIcon
+        if let icon = user.mapIcon, let userId = user.id {
+            MapIconCacheManager.shared.setIcon(icon, for: userId)
+        }
         
         // Sync GamificationService with fetched data
         // This will trigger the observers above to update the UI properties
         gamificationService.syncState(xp: user.xp, level: user.level)
+        
+        let isResetAcknowledged = user.hasAcknowledgedDecReset ?? true
+        print("DEBUG: ProfileViewModel: hasAcknowledgedDecReset is \(isResetAcknowledged). Show modal: \(!isResetAcknowledged)")
+        self.hasAcknowledgedDecReset = isResetAcknowledged
+        
+        // No proactive purge needed here anymore; ActivityStore.reconcile is now aggressive
+        // and will automatically remove local activities if they are missing from the server.
     }
     
     // MARK: - Avatar Upload
@@ -312,6 +340,8 @@ class ProfileViewModel: ObservableObject {
             try await userRepository.updateUserMapIcon(userId: userId, icon: icon)
             await MainActor.run {
                 self.mapIcon = icon
+                MapIconCacheManager.shared.setIcon(icon, for: userId)
+                AuthenticationService.shared.userMapIcon = icon
                 self.isLoading = false
             }
         } catch {
@@ -319,6 +349,37 @@ class ProfileViewModel: ObservableObject {
                 self.errorMessage = error.localizedDescription
                 self.isLoading = false
             }
+        }
+    }
+    
+    func acknowledgeDecReset() async {
+        guard let userId = authService.userId else { return }
+        do {
+            try await userRepository.acknowledgeDecReset(userId: userId)
+            
+            // Set onboarding date to the global reset date (or now as fallback)
+            // to allow re-importing workouts that happened during this "new era".
+            let safetyFloor = GameConfigService.shared.config.globalResetDate ?? Date()
+            UserDefaults.standard.set(safetyFloor.timeIntervalSince1970, forKey: "onboardingCompletionDate")
+            
+            // Clear all local caches to ensure a completely clean state after reset
+            ActivityStore.shared.clear()
+            TerritoryStore.shared.clear()
+            FeedRepository.shared.clear()
+            SocialService.shared.clear()
+            PendingRouteStore.shared.clear()
+            
+            // Recargar perfil del usuario inmediatamente (para refrescar XP/Nivel)
+            authService.refreshUserProfile(userId: userId)
+            
+            await MainActor.run {
+                self.hasAcknowledgedDecReset = true
+                
+                // NOTIFICATION: Tell WorkoutsViewModel to re-import immediately (HK + Remote)
+                NotificationCenter.default.post(name: NSNotification.Name("TriggerImmediateImport"), object: nil)
+            }
+        } catch {
+            print("Error acknowledging reset: \(error)")
         }
     }
     

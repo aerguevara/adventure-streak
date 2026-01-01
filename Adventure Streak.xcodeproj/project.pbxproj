@@ -464,7 +464,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
@@ -472,6 +472,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Adventure Streak";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Usamos tus entrenos y rutas de la app Salud para calcular XP, territorios y mostrar tu progreso.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Usamos tus entrenos y rutas de la app Salud para calcular XP, territorios y mostrar tu progreso.";
@@ -487,7 +488,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.9;
+				MARKETING_VERSION = 2.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -508,13 +509,14 @@
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure StreakRelease.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_DEBUG_DYLIB_SUPPORT = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Adventure-Streak-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Adventure Streak";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Usamos tus entrenos y rutas de la app Salud para calcular XP, territorios y mostrar tu progreso.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Usamos tus entrenos y rutas de la app Salud para calcular XP, territorios y mostrar tu progreso.";
@@ -530,7 +532,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.9;
+				MARKETING_VERSION = 2.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

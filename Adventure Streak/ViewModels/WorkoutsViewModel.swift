@@ -133,6 +133,29 @@ class WorkoutsViewModel: ObservableObject {
                 self?.importFromHealthKit()
             }
             .store(in: &cancellables)
+            
+    // NEW: Listen for immediate import triggers (e.g. from Reset)
+        NotificationCenter.default.publisher(for: NSNotification.Name("TriggerImmediateImport"))
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                print("🔄 Immediate Import Triggered! Reloading workouts from HK & Firestore...")
+                // Force sync check even if previously checked
+                self?.isCheckingForWorkouts = false 
+                self?.syncFromRemote() // NEW: Sync from Firestore
+                self?.importFromHealthKit()
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Trigger a manual sync from both HealthKit and Firestore
+    func syncFromRemote() {
+        guard let userId = AuthenticationService.shared.userId else { return }
+        Task {
+            await AuthenticationService.shared.fullSync(userId: userId)
+            await MainActor.run {
+                self.loadWorkouts()
+            }
+        }
     }
     
     func loadWorkouts() {
@@ -177,6 +200,7 @@ class WorkoutsViewModel: ObservableObject {
     
     func refresh() async {
         print("Pull-to-refresh -> refresh()")
+        syncFromRemote() // NEW: Sync from Firestore
         importFromHealthKit()
     }
     

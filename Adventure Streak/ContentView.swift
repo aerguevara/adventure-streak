@@ -105,6 +105,13 @@ struct ContentView: View {
                 break
             }
         }
+        .fullScreenCover(isPresented: .init(get: { authService.isAuthenticated && !profileViewModel.hasAcknowledgedDecReset }, set: { _ in })) {
+            ResetInfoView {
+                Task {
+                    await profileViewModel.acknowledgeDecReset()
+                }
+            }
+        }
     }
     
     private func startBackgroundServices() {

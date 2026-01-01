@@ -34,6 +34,7 @@ class TerritoryStore: ObservableObject {
     }
     
     func clear() {
+        guard !conqueredCells.isEmpty else { return }
         conqueredCells = [:]
         persist()
     }

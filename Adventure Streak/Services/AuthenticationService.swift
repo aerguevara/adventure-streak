@@ -17,6 +17,7 @@ class AuthenticationService: NSObject, ObservableObject {
     @Published var userEmail: String?
     @Published var userName: String?
     @Published var userAvatarURL: String?
+    @Published var userMapIcon: String?
     @Published var isSyncingData = false
     
     private let userDefaults = UserDefaults.standard
@@ -47,15 +48,21 @@ class AuthenticationService: NSObject, ObservableObject {
             
             // Sincronizar actividades remotas si ya hay sesión persistida
             Task {
-                self.isSyncingData = true
-                await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
-                await TerritoryRepository.shared.syncUserTerritories(userId: user.uid, store: TerritoryStore.shared)
-                self.isSyncingData = false
-                
+                await self.fullSync(userId: user.uid)
                 // Iniciar observación en tiempo real
                 ActivityStore.shared.startObserving(userId: user.uid)
             }
         }
+    }
+    
+    /// Realiza una sincronización completa de actividades y territorios desde Firestore.
+    func fullSync(userId: String) async {
+        self.isSyncingData = true
+        print("🔄 [AuthenticationService] Starting full sync for \(userId)")
+        await ActivityRepository.shared.ensureRemoteParity(userId: userId, territoryStore: TerritoryStore.shared)
+        await TerritoryRepository.shared.syncUserTerritories(userId: userId, store: TerritoryStore.shared)
+        self.isSyncingData = false
+        print("✅ [AuthenticationService] Full sync completed")
     }
     
     func startSignInWithApple() {
@@ -110,10 +117,7 @@ class AuthenticationService: NSObject, ObservableObject {
                     // Update local gamification state immediately
                     GamificationService.shared.syncState(xp: initialXP, level: initialLevel)
                     
-                    self.isSyncingData = true
-                    await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
-                    await TerritoryRepository.shared.syncUserTerritories(userId: user.uid, store: TerritoryStore.shared)
-                    self.isSyncingData = false
+                    await self.fullSync(userId: user.uid)
                     
                     ActivityStore.shared.startObserving(userId: user.uid)
                     
@@ -200,6 +204,7 @@ class AuthenticationService: NSObject, ObservableObject {
                         // Use remote name if it exists and is not empty, otherwise use Google name
                         let finalName = (remoteUser?.displayName?.isEmpty == false) ? remoteUser!.displayName! : resolvedName
                         self.userName = finalName
+                        self.userMapIcon = remoteUser?.mapIcon
 
                         // RECOVERY LOGIC: Use custom claims if provided in the token (preserved after reinstall)
                         Task {
@@ -214,6 +219,11 @@ class AuthenticationService: NSObject, ObservableObject {
                             // Sync with backend
                             UserRepository.shared.syncUser(user: firebaseUser, name: finalName, initialXP: recoveryXP, initialLevel: recoveryLevel)
                             
+                            // Cache icon if available
+                            if let icon = remoteUser?.mapIcon {
+                                MapIconCacheManager.shared.setIcon(icon, for: firebaseUser.uid)
+                            }
+
                             // Update Gamification
                             let isNewOrDummy = remoteUser == nil || (remoteUser?.xp == 0 && remoteUser?.joinedAt == nil)
                             if isNewOrDummy {
@@ -223,10 +233,7 @@ class AuthenticationService: NSObject, ObservableObject {
                             }
                             
                             // Sync Activities
-                            self.isSyncingData = true
-                            await ActivityRepository.shared.ensureRemoteParity(userId: firebaseUser.uid, territoryStore: TerritoryStore.shared)
-                            await TerritoryRepository.shared.syncUserTerritories(userId: firebaseUser.uid, store: TerritoryStore.shared)
-                            self.isSyncingData = false
+                            await self.fullSync(userId: firebaseUser.uid)
                             
                             ActivityStore.shared.startObserving(userId: firebaseUser.uid)
                             
@@ -251,9 +258,11 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userId = nil
             self.userName = nil
             self.userAvatarURL = nil
+            self.userMapIcon = nil
             self.userEmail = nil
             userListener?.remove()
             userListener = nil
+            MapIconCacheManager.shared.clear()
             Task { @MainActor in
                 ActivityStore.shared.clear()
                 TerritoryStore.shared.clear()
@@ -331,6 +340,7 @@ class AuthenticationService: NSObject, ObservableObject {
                     DispatchQueue.main.async {
                         self.userName = remoteName
                         self.userAvatarURL = user.avatarURL
+                        self.userMapIcon = user.mapIcon
                     }
                 }
                 
@@ -364,6 +374,32 @@ class AuthenticationService: NSObject, ObservableObject {
                         self.userName = name
                     }
                 }
+            }
+        }
+    }
+    
+    /// Refresca el perfil del usuario (XP, Nivel, etc) desde Firestore y sincroniza el estado local.
+    func refreshUserProfile(userId: String) {
+        UserRepository.shared.fetchUser(userId: userId) { [weak self] user in
+            guard let self = self, let user = user else { return }
+            
+            DispatchQueue.main.async {
+                let remoteName = user.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let remoteName = remoteName, !remoteName.isEmpty {
+                    self.userName = remoteName
+                }
+                self.userAvatarURL = user.avatarURL
+                self.userMapIcon = user.mapIcon
+                
+                // Sincronizar estado de gamificación
+                GamificationService.shared.syncState(xp: user.xp, level: user.level)
+                
+                // Cachear icono si está disponible
+                if let icon = user.mapIcon {
+                    MapIconCacheManager.shared.setIcon(icon, for: userId)
+                }
+                
+                print("👤 [AuthenticationService] Profile refreshed for \(userId): XP \(user.xp), Level \(user.level)")
             }
         }
     }
@@ -481,6 +517,7 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                         
                         self.userName = chosenName
                         self.userAvatarURL = remoteUser?.avatarURL
+                        self.userMapIcon = remoteUser?.mapIcon
                         
                         // RECOVERY LOGIC: Use custom claims if provided in the token (preserved after reinstall)
                         Task {
@@ -495,6 +532,11 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                             // Sync with robustness (will merge if exists, create if not)
                             UserRepository.shared.syncUser(user: user, name: chosenName, initialXP: recoveryXP, initialLevel: recoveryLevel)
                             
+                            // Cache icon if available
+                            if let icon = remoteUser?.mapIcon {
+                                MapIconCacheManager.shared.setIcon(icon, for: user.uid)
+                            }
+
                             // Ensure local gamification state is immediate
                             // If user is nil OR was partially created (missing XP and join date), apply initial/recovery stats
                             let isNewOrDummy = remoteUser == nil || (remoteUser?.xp == 0 && remoteUser?.joinedAt == nil)
@@ -505,10 +547,7 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                                 GamificationService.shared.syncState(xp: remoteUser.xp, level: remoteUser.level)
                             }
                             
-                            self.isSyncingData = true
-                            await ActivityRepository.shared.ensureRemoteParity(userId: user.uid, territoryStore: TerritoryStore.shared)
-                            await TerritoryRepository.shared.syncUserTerritories(userId: user.uid, store: TerritoryStore.shared)
-                            self.isSyncingData = false
+                            await self.fullSync(userId: user.uid)
                             
                             ActivityStore.shared.startObserving(userId: user.uid)
                         }

@@ -25,9 +25,23 @@ final class ActivitySyncService {
         let allExistingIds = localIds.union(remoteIds.compactMap { UUID(uuidString: $0) })
         
         // 3. Filter by date and existence
+        print("🔍 [Sync] Cutoff Date: \(cutoffDate)")
+        print("🔍 [Sync] Total HK Workouts fetched: \(hkWorkouts.count)")
+        
         let newHKWorkouts = hkWorkouts.filter { workout in
-            workout.endDate >= cutoffDate && !allExistingIds.contains(workout.uuid)
+            let isAfter = workout.endDate >= cutoffDate
+            let isNew = !allExistingIds.contains(workout.uuid)
+            if !isAfter && !isNew {
+                // Already exists and too old, skip
+            } else if isAfter && !isNew {
+                // New enough but already synced
+            } else if !isAfter && isNew {
+                 print("⏭️ [Sync] Skipping OLD workout: \(workoutName(for: workout) ?? "Unnamed") on \(workout.endDate)")
+            }
+            return isAfter && isNew
         }
+        
+        print("🔍 [Sync] New workouts to import: \(newHKWorkouts.count)")
         
         // 4. Map to ActivitySessions
         var sessions: [ActivitySession] = []

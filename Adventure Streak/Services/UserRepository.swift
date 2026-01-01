@@ -14,6 +14,23 @@ import FirebaseStorage
 import Firebase
 #endif
 
+enum UserError: LocalizedError {
+    case iconAlreadyInUse
+    case firestoreNotAvailable
+    case unknown(Error)
+    
+    var errorDescription: String? {
+        switch self {
+        case .iconAlreadyInUse:
+            return "Icon already in use"
+        case .firestoreNotAvailable:
+            return "Firestore not available"
+        case .unknown(let error):
+            return error.localizedDescription
+        }
+    }
+}
+
 @MainActor
 class UserRepository: ObservableObject {
     nonisolated static let shared = UserRepository()
@@ -164,37 +181,30 @@ class UserRepository: ObservableObject {
     
     func updateUserMapIcon(userId: String, icon: String) async throws {
         #if canImport(FirebaseFirestore)
-        guard let db = db as? Firestore else { return }
+        guard let db = db as? Firestore else { 
+            throw UserError.firestoreNotAvailable 
+        }
         
-        // Use a transaction to ensure uniqueness
+        // Use transaction pattern compatible with the current environment (non-throwing closure)
         _ = try await db.runTransaction({ (transaction, errorPointer) -> Any? in
             let iconRef = db.collection("reserved_icons").document(icon)
             let userRef = db.collection("users").document(userId)
             
             // 1. Check if icon is already reserved by someone else
-            let iconDoc: DocumentSnapshot
-            do {
-                iconDoc = try transaction.getDocument(iconRef)
-            } catch {
-                errorPointer?.pointee = error as NSError
+            guard let iconDoc = try? transaction.getDocument(iconRef) else {
                 return nil
             }
             
             if iconDoc.exists {
                 let ownerId = iconDoc.get("userId") as? String
                 if ownerId != userId {
-                    let error = NSError(domain: "AdventureStreak", code: 409, userInfo: [NSLocalizedDescriptionKey: "Icon already in use"])
-                    errorPointer?.pointee = error
+                    errorPointer?.pointee = UserError.iconAlreadyInUse as NSError
                     return nil
                 }
             }
             
             // 2. Get current user to see if they already have an icon reserved
-            let userDoc: DocumentSnapshot
-            do {
-                userDoc = try transaction.getDocument(userRef)
-            } catch {
-                errorPointer?.pointee = error as NSError
+            guard let userDoc = try? transaction.getDocument(userRef) else {
                 return nil
             }
             
@@ -216,14 +226,18 @@ class UserRepository: ObservableObject {
         })
         #endif
     }
-    #else
-    // Fallback signature if FirebaseAuth missing
-    func syncUser(user: Any, name: String?) {}
-    func updateTerritoryStats(userId: String, totalOwned: Int, recentWindow: Int) {}
-    func updateFCMToken(userId: String, token: String) {}
-    func removeFCMToken(userId: String, token: String) {}
-    #endif
-    #if canImport(FirebaseAuth)
+
+    func acknowledgeDecReset(userId: String) async throws {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        let userRef = db.collection("users").document(userId)
+        let data: [String: Any] = [
+            "hasAcknowledgedDecReset": true
+        ]
+        try await userRef.updateData(data)
+        #endif
+    }
+
     func fetchUser(userId: String, completion: @escaping (User?) -> Void) {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else {
@@ -249,10 +263,15 @@ class UserRepository: ObservableObject {
         #endif
     }
     
+    private var lastObservedResetState: Bool?
+    
     // NEW: Real-time observation
     func observeUser(userId: String, completion: @escaping (User?) -> Void) -> ListenerRegistration? {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return nil }
+        
+        // Reset local state tracking when starting a new observer
+        self.lastObservedResetState = nil
         
         return db.collection("users").document(userId).addSnapshotListener { documentSnapshot, error in
             guard let document = documentSnapshot else {
@@ -262,9 +281,23 @@ class UserRepository: ObservableObject {
             
             do {
                 let user = try document.data(as: User.self)
+                
+                // If the user hasn't acknowledged the reset yet, it means 
+                // the server just performed a reset. We clear local territories.
+                // We only do this ONCE per state change to avoid infinite loops with ProfileViewModel stats updates.
+                if user.hasAcknowledgedDecReset == false {
+                    if self.lastObservedResetState != false {
+                        print("🔄 UserRepository: Reset transition detected (false). Clearing TerritoryStore.")
+                        TerritoryStore.shared.clear()
+                        self.lastObservedResetState = false
+                    }
+                } else {
+                    self.lastObservedResetState = true
+                }
+                
                 completion(user)
             } catch {
-                print("Error decoding user snapshot: \(error)")
+                print("❌ UserRepository: Decoding error for user \(userId): \(error)")
                 completion(nil)
             }
         }
@@ -273,6 +306,11 @@ class UserRepository: ObservableObject {
         #endif
     }
     #else
+    // Fallback if FirebaseAuth missing
+    func syncUser(user: Any, name: String?) {}
+    func updateTerritoryStats(userId: String, totalOwned: Int, recentWindow: Int) {}
+    func updateFCMToken(userId: String, token: String) {}
+    func removeFCMToken(userId: String, token: String) {}
     func fetchUser(userId: String, completion: @escaping (Any?) -> Void) { completion(nil) }
     func observeUser(userId: String, completion: @escaping (Any?) -> Void) -> Any? { return nil }
     #endif

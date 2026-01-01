@@ -11,6 +11,7 @@ struct GameConfig: Equatable {
     var routeExpectedBundles: [String]
     var routeOptionalBundles: [String]
     var onboardingImportLimit: Int
+    var globalResetDate: Date? // Managed from Firebase
     
     static let `default`: GameConfig = {
         let mainId = Bundle.main.bundleIdentifier ?? "com.adventurestreak"
@@ -21,7 +22,8 @@ struct GameConfig: Equatable {
             territoryExpirationDays: 7,
             routeExpectedBundles: ["com.apple.", mainId, watchId],
             routeOptionalBundles: [],
-            onboardingImportLimit: 10
+            onboardingImportLimit: 10,
+            globalResetDate: nil
         )
     }()
     
@@ -40,7 +42,8 @@ struct GameConfig: Equatable {
             territoryExpirationDays: clampedTerritoryExpiration,
             routeExpectedBundles: routeExpectedBundles,
             routeOptionalBundles: routeOptionalBundles,
-            onboardingImportLimit: onboardingImportLimit
+            onboardingImportLimit: onboardingImportLimit,
+            globalResetDate: globalResetDate
         )
     }
     
@@ -102,21 +105,16 @@ final class GameConfigService: ObservableObject {
     }
     
     func cutoffDate(from reference: Date = Date()) -> Date {
+        // PURE & SIMPLE: Lookback X days from today.
+        // No floors, no onboarding locks. If Firebase says 28 days, we fetch 28 days.
+        let days = config.clampedLookbackDays
         let lookbackDate = Calendar.current.date(
             byAdding: .day,
-            value: -config.clampedLookbackDays,
+            value: -days,
             to: reference
         ) ?? reference
         
-
-        
-        let completionTimestamp = UserDefaults.standard.double(forKey: "onboardingCompletionDate")
-        if completionTimestamp > 0 {
-            let completionDate = Date(timeIntervalSince1970: completionTimestamp)
-            // Use the most recent of the two dates to avoid importing anything before onboarding was finished
-            return max(lookbackDate, completionDate)
-        }
-        
+        print("⚙️ [Config] Simple Cutoff: \(days) days lookback -> \(lookbackDate)")
         return lookbackDate
     }
     
@@ -156,13 +154,17 @@ final class GameConfigService: ObservableObject {
                     ?? (importLimitSource as? NSNumber)?.intValue
                     ?? loaded.onboardingImportLimit
                 
+                let resetTimestamp = data["globalResetDate"] as? Timestamp
+                let resetDate = resetTimestamp?.dateValue()
+                
                 loaded = GameConfig(
                     loadHistoricalWorkouts: loadHistorical,
                     workoutLookbackDays: lookback,
                     territoryExpirationDays: expiration,
                     routeExpectedBundles: expectedBundles,
                     routeOptionalBundles: optionalBundles,
-                    onboardingImportLimit: importLimit
+                    onboardingImportLimit: importLimit,
+                    globalResetDate: resetDate
                 )
             }
         } catch {

@@ -54,8 +54,30 @@ class ActivityStore: ObservableObject {
         print("🔍 ActivityStore: Starting real-time observer for \(userId)")
         activityListener = ActivityRepository.shared.observeActivities(userId: userId) { [weak self] updatedActivities in
             guard let self = self else { return }
-            print("📣 ActivityStore: Received \(updatedActivities.count) activities from Firestore")
+            print("📣 ActivityStore: Received snapshot update (\(updatedActivities.count) activities) for \(userId)")
+            
             DispatchQueue.main.async {
+                let remoteIds = Set(updatedActivities.map { $0.id })
+                let previousCount = self.activities.count
+                
+                // 1. Reconcile: Purge local activities that are gone from the server
+                self.activities.removeAll { local in
+                    // Aggressive reconcile: if it's missing from server and NOT actively uploading, it's a ghost.
+                    // We also skip purging 'error' state if we want to allow retries, 
+                    // but for a reset we definitely want it gone if the server is empty.
+                    let isStale = !remoteIds.contains(local.id) && local.processingStatus != .uploading
+                    
+                    if isStale {
+                        print("🗑️ ActivityStore: REMOVING local activity (missing from server/reset): \(local.id) from \(local.startDate)")
+                    }
+                    return isStale
+                }
+                
+                if self.activities.count != previousCount {
+                    print("🧹 ActivityStore: Local activities reconciled. Removed \(previousCount - self.activities.count) items.")
+                }
+                
+                // 2. Save/Update from remote snapshot
                 self.saveActivities(updatedActivities)
                 self.backfillSmartNames(for: updatedActivities)
                 self.isSynced = true
@@ -76,8 +98,18 @@ class ActivityStore: ObservableObject {
     
     
     func clear() {
+        print("🧹 ActivityStore: Clearing all activities")
         activities = []
         persist()
+    }
+    
+    func purgeBefore(date: Date) {
+        let previousCount = activities.count
+        activities.removeAll { $0.startDate < date }
+        if activities.count != previousCount {
+            print("🧹 ActivityStore: Purged \(previousCount - activities.count) activities before \(date)")
+            persist()
+        }
     }
     
     func updateActivity(_ updatedActivity: ActivitySession) {

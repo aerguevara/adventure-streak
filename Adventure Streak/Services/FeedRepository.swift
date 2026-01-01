@@ -55,7 +55,18 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
             .order(by: "date", descending: true)
             .limit(to: 50)
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let documents = snapshot?.documents, let self = self else { return }
+                if let error = error {
+                    print("❌ [FeedRepository] Firestore Listener Error: \(error.localizedDescription)")
+                    print("❌ [FeedRepository] Error details: \(error)")
+                    return
+                }
+                
+                guard let documents = snapshot?.documents, let self = self else { 
+                    print("⚠️ [FeedRepository] Received empty snapshot or self is nil")
+                    return 
+                }
+                
+                print("📝 [FeedRepository] Received \(documents.count) documents from Firestore")
                 
                 // OPTIMIZATION: Process heavy decoding and deduplication on background thread.
                 DispatchQueue.global(qos: .userInitiated).async {
@@ -63,6 +74,7 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
                     
                     DispatchQueue.main.async {
                         self.events = sorted
+                        print("✅ [FeedRepository] Updated events list (total: \(sorted.count))")
                     }
                 }
             }

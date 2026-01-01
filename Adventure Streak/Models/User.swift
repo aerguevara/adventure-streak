@@ -43,6 +43,9 @@ struct User: Identifiable, Codable {
     // Rivals
     var recentTheftVictims: [Rival]?
     var recentThieves: [Rival]?
+    
+    // Flag for global data reset acknowledgment
+    var hasAcknowledgedDecReset: Bool?
 
     init(id: String? = nil,
          email: String? = nil,
@@ -64,7 +67,8 @@ struct User: Identifiable, Codable {
          currentWeekDistanceKm: Double? = nil,
          forceLogoutVersion: Int? = nil,
          recentTheftVictims: [Rival]? = nil,
-         recentThieves: [Rival]? = nil) {
+         recentThieves: [Rival]? = nil,
+         hasAcknowledgedDecReset: Bool? = nil) {
         self.id = id
         self.email = email
         self.displayName = displayName
@@ -86,6 +90,7 @@ struct User: Identifiable, Codable {
         self.forceLogoutVersion = forceLogoutVersion
         self.recentTheftVictims = recentTheftVictims
         self.recentThieves = recentThieves
+        self.hasAcknowledgedDecReset = hasAcknowledgedDecReset
     }
 
     enum CodingKeys: String, CodingKey {
@@ -109,6 +114,7 @@ struct User: Identifiable, Codable {
         case forceLogoutVersion
         case recentTheftVictims
         case recentThieves
+        case hasAcknowledgedDecReset
     }
 
     init(from decoder: Decoder) throws {
@@ -142,6 +148,7 @@ struct User: Identifiable, Codable {
         
         recentTheftVictims = try container.decodeIfPresent([Rival].self, forKey: .recentTheftVictims)
         recentThieves = try container.decodeIfPresent([Rival].self, forKey: .recentThieves)
+        hasAcknowledgedDecReset = try container.decodeIfPresent(Bool.self, forKey: .hasAcknowledgedDecReset)
     }
 }
 
