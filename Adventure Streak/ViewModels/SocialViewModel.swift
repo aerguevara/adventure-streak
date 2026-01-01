@@ -144,7 +144,7 @@ class SocialViewModel: ObservableObject {
         
         self.stories = grouped.compactMap { (userId, activities) -> UserStory? in
             guard let firstActivity = activities.first else { return nil }
-            return UserStory(user: firstActivity.user, activities: activities.sorted(by: { $0.date > $1.date }))
-        }.sorted(by: { $0.latestDate > $1.latestDate })
+            return UserStory(user: firstActivity.user, activities: activities.sorted(by: { $0.date < $1.date }))
+        }.sorted(by: { $0.latestDate < $1.latestDate })
     }
 }
