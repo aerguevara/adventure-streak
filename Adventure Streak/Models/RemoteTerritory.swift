@@ -21,6 +21,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     let centerLongitude: Double
     // NEW: Store exact boundary
     let boundary: [TerritoryPoint]
+    let isHotSpot: Bool
     let expiresAt: Date
     // Domain time when the activity ended (not upload time)
     let activityEndAt: Date
@@ -36,7 +37,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case userId, centerLatitude, centerLongitude, boundary, expiresAt, activityEndAt, activityId, timestamp, uploadedAt
+        case userId, centerLatitude, centerLongitude, boundary, isHotSpot, expiresAt, activityEndAt, activityId, timestamp, uploadedAt
     }
     
     init(from decoder: Decoder) throws {
@@ -46,6 +47,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         centerLatitude = try container.decode(Double.self, forKey: .centerLatitude)
         centerLongitude = try container.decode(Double.self, forKey: .centerLongitude)
         expiresAt = try container.decode(Date.self, forKey: .expiresAt)
+        isHotSpot = try container.decodeIfPresent(Bool.self, forKey: .isHotSpot) ?? false
         activityEndAt = try container.decodeIfPresent(Date.self, forKey: .activityEndAt)
             ?? (try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date())
         activityId = try container.decodeIfPresent(String.self, forKey: .activityId)
@@ -67,7 +69,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     // Default init
-    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date, activityId: String? = nil) {
+    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date, activityId: String? = nil, isHotSpot: Bool = false) {
         self._id = DocumentID(wrappedValue: id)
         self.userId = userId
         self.centerLatitude = centerLatitude
@@ -76,6 +78,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         self.expiresAt = expiresAt
         self.activityEndAt = activityEndAt
         self.activityId = activityId
+        self.isHotSpot = isHotSpot
         self.timestamp = activityEndAt
         self.uploadedAt = nil
     }

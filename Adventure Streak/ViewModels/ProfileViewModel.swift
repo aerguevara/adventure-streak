@@ -13,11 +13,28 @@ import FirebaseFirestore
 import UIKit
 #endif
 
+// NEW: Struct for vengeance details
+struct ThieveryData {
+    let thiefName: String
+    let stolenAt: Date
+}
+
 struct TerritoryInventoryItem: Identifiable {
-    let id: String // activityId
+    let id: String // activityId or "vengeance_" + cellId
     let locationLabel: String
     let territories: [TerritoryCell]
     let expiresAt: Date
+    var isVengeance: Bool = false
+    var thieveryData: ThieveryData? = nil
+    
+    init(id: String, locationLabel: String, territories: [TerritoryCell], expiresAt: Date, isVengeance: Bool = false, thieveryData: ThieveryData? = nil) {
+        self.id = id
+        self.locationLabel = locationLabel
+        self.territories = territories
+        self.expiresAt = expiresAt
+        self.isVengeance = isVengeance
+        self.thieveryData = thieveryData
+    }
 }
 
 @MainActor
@@ -41,6 +58,13 @@ class ProfileViewModel: ObservableObject {
     @Published var mapIcon: String? = nil
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
+    
+    // NEW: Separated Inventory Lists (Owned vs Vengeance)
+    @Published var vengeanceItems: [TerritoryInventoryItem] = []
+    
+    // NEW: Active Rivalries
+    @Published var activeRivalries: [RivalryRelationship] = []
+    
     @Published var reservedIcons: Set<String> = []
     @Published var hasAcknowledgedDecReset: Bool = true // Default to true to avoid modal flicker
     
@@ -62,6 +86,14 @@ class ProfileViewModel: ObservableObject {
         case 51...99: return "Leyenda"
         default: return "Novato"
         }
+    }
+    
+    var vulnerableTerritories: [TerritoryInventoryItem] {
+        // Combine vengeance items (high priority) with expiring territories
+        let now = Date()
+        let threshold = now.addingTimeInterval(24 * 3600) // 24 hours
+        let expiring = territoryInventory.filter { $0.expiresAt < threshold && $0.expiresAt > now }
+        return vengeanceItems + expiring
     }
     
     private var cancellables = Set<AnyCancellable>()
@@ -156,6 +188,14 @@ class ProfileViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+            
+        // NEW: Observe vengeance targets from repository
+        TerritoryRepository.shared.$vengeanceTargets
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshLocalStats()
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Actions
@@ -237,6 +277,44 @@ class ProfileViewModel: ObservableObject {
                 expiresAt: expiry
             ))
         }
+
+        // Vengeance items logic
+        var vItems: [TerritoryInventoryItem] = []
+        for target in TerritoryRepository.shared.vengeanceTargets {
+            var matchedCell: TerritoryCell? = territoryStore.conqueredCells[target.cellId]
+            
+            if matchedCell == nil {
+                // Try to find in otherTerritories (cached from map)
+                if let remote = TerritoryRepository.shared.otherTerritories.first(where: { $0.id == target.cellId }) {
+                    matchedCell = TerritoryCell(
+                        id: remote.id ?? target.cellId,
+                        centerLatitude: remote.centerLatitude,
+                        centerLongitude: remote.centerLongitude,
+                        boundary: remote.boundary,
+                        lastConqueredAt: remote.activityEndAt,
+                        expiresAt: remote.expiresAt,
+                        ownerUserId: remote.userId,
+                        ownerDisplayName: nil,
+                        ownerUploadedAt: remote.uploadedAt?.dateValue(),
+                        activityId: remote.activityId,
+                        isHotSpot: remote.isHotSpot
+                    )
+                }
+            }
+            
+            if let cell = matchedCell {
+                vItems.append(TerritoryInventoryItem(
+                    id: "vengeance_\(target.cellId)",
+                    locationLabel: "¡RECLAMA TU HONOR!",
+                    territories: [cell],
+                    expiresAt: cell.expiresAt,
+                    isVengeance: true,
+                    thieveryData: ThieveryData(thiefName: target.thiefName, stolenAt: target.stolenAt)
+                ))
+            }
+        }
+
+        self.vengeanceItems = vItems
         
         // Sort by expiry date (closer first) to remind user to defend
         self.territoryInventory = inventory.sorted { $0.expiresAt < $1.expiresAt }
@@ -261,6 +339,64 @@ class ProfileViewModel: ObservableObject {
                 // print("😴 ProfileViewModel: Stats unchanged, skipping Firestore write.")
             }
         }
+        
+        // Calculate Active Rivalries
+        self.activeRivalries = calculateActiveRivalries()
+    }
+    
+    private func calculateActiveRivalries() -> [RivalryRelationship] {
+        var rivalsMap: [String: (String, String?, Int, Int, Date)] = [:] // userId -> (name, avatar, userScore, rivalScore, lastDate)
+        
+        // Process Thieves (They scored against me)
+        for rival in recentThieves {
+            rivalsMap[rival.userId] = (
+                rival.displayName,
+                rival.avatarURL,
+                0, // userScore (initial)
+                rival.count, // rivalScore
+                rival.lastInteractionAt
+            )
+        }
+        
+        // Process Victims (I scored against them)
+        for rival in recentTheftVictims {
+            if let existing = rivalsMap[rival.userId] {
+                // Update existing
+                let newDate = rival.lastInteractionAt > existing.4 ? rival.lastInteractionAt : existing.4
+                rivalsMap[rival.userId] = (
+                    existing.0,
+                    existing.1,
+                    rival.count, // Set userScore
+                    existing.3,
+                    newDate
+                )
+            } else {
+                // Add new
+                rivalsMap[rival.userId] = (
+                    rival.displayName,
+                    rival.avatarURL,
+                    rival.count, // userScore
+                    0, // rivalScore
+                    rival.lastInteractionAt
+                )
+            }
+        }
+        
+        return rivalsMap.compactMap { (userId, data) -> RivalryRelationship? in
+            let (name, avatar, userScore, rivalScore, date) = data
+            // Determine trend (simplified logic)
+            let trend: RankingTrend = userScore > rivalScore ? .up : (userScore < rivalScore ? .down : .neutral)
+            
+            return RivalryRelationship(
+                userId: userId,
+                displayName: name,
+                avatarURL: avatar,
+                userScore: userScore,
+                rivalScore: rivalScore,
+                lastInteractionAt: date,
+                trend: trend
+            )
+        }.sorted { $0.lastInteractionAt > $1.lastInteractionAt }
     }
     
     private func updateWithUser(_ user: User) {
@@ -279,6 +415,11 @@ class ProfileViewModel: ObservableObject {
         self.mapIcon = user.mapIcon
         if let icon = user.mapIcon, let userId = user.id {
             MapIconCacheManager.shared.setIcon(icon, for: userId)
+        }
+        
+        // NEW: Start observing vengeance targets
+        if let userId = user.id {
+            TerritoryRepository.shared.observeVengeanceTargets(userId: userId)
         }
         
         // Sync GamificationService with fetched data

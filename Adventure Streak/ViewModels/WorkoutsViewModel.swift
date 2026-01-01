@@ -79,6 +79,7 @@ class WorkoutsViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var processingCancellable: AnyCancellable?
     private var isCheckingForWorkouts = false
+    private var vengeanceTargetsBeforeImport: Set<String> = [] // NEW: For vengeance logic
     
     @Published var isImporting = false
     
@@ -482,6 +483,9 @@ class WorkoutsViewModel: ObservableObject {
                         // Safety delay to allow Firestore subcollections to propagate
                         try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
                         
+                        // NEW: Capture state before reading targets to detect fulfillment
+                        self.vengeanceTargetsBeforeImport = Set(TerritoryRepository.shared.vengeanceTargets.map { $0.cellId })
+                        
                         var summary = GlobalImportSummary()
                         for activity in completed {
                             // Extract stats
@@ -515,7 +519,6 @@ class WorkoutsViewModel: ObservableObject {
                                     activityId: cell.activityId
                                 )
                             }
-                            
                             // Calculate distance in km
                             let distanceKm = activity.distanceMeters / 1000.0
                             let duration = activity.durationSeconds
@@ -540,6 +543,11 @@ class WorkoutsViewModel: ObservableObject {
                                 activityType: activity.activityType
                             )
                         }
+                         
+                         // NEW: Calculate how many vengeance targets were fulfilled (now that all activities are processed)
+                         let vengeanceAfter = Set(TerritoryRepository.shared.vengeanceTargets.map { $0.cellId })
+                         summary.vengeanceFulfilledCount = self.vengeanceTargetsBeforeImport.subtracting(vengeanceAfter).count
+
                         
                         await MainActor.run {
                                 self.processingSummaryData = summary

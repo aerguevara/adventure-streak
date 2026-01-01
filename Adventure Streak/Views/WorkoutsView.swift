@@ -10,12 +10,14 @@ struct WorkoutsView: View {
     @State private var showNotifications = false
     @State private var showImportAlert = false
     @State private var scrollOffset: CGFloat = 0
+    var onShowOnMap: (String) -> Void
     
     // Init with dependency injection
-    init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel) {
+    init(viewModel: WorkoutsViewModel, profileViewModel: ProfileViewModel, badgesViewModel: BadgesViewModel, onShowOnMap: @escaping (String) -> Void) {
         self.viewModel = viewModel
         self.profileViewModel = profileViewModel
         self.badgesViewModel = badgesViewModel
+        self.onShowOnMap = onShowOnMap
     }
     
     var body: some View {
@@ -26,33 +28,7 @@ struct WorkoutsView: View {
                 
                 ScrollView {
                     VStack(spacing: 32) {
-                        // A) Header
-                        headerSection
-                        
-                        // B) Main Progress Card
-                        progressCard
-                        
-                        // D) Territory Inventory
-                        territoryInventorySection
-                        
-                        // New Territory Stats Grid
-                        territoryStatsGrid
-                        
-                        // Rivals Section
-                        if !profileViewModel.recentTheftVictims.isEmpty || !profileViewModel.recentThieves.isEmpty {
-                            territoryRivalsSection
-                        }
-
-                        // E) Achievements
-                        achievementsSection
-                        
-                        
-                        // F) Feed
-                        feedSection
-                        
-                        #if DEBUG
-                        debugSection
-                        #endif
+                        mainContent
                     }
                     .padding(.top, 20)
                     .padding(.bottom, 40)
@@ -87,10 +63,12 @@ struct WorkoutsView: View {
                     NotificationsView()
                 }
                 .sheet(isPresented: $viewModel.showProcessingSummary) {
-                if let summary = viewModel.processingSummaryData {
-                    ProcessingSummaryModal(summary: summary, isPresented: $viewModel.showProcessingSummary)
+                    if let summary = viewModel.processingSummaryData {
+                        ProcessingSummaryModal(summary: summary, isPresented: $viewModel.showProcessingSummary)
+                    } else {
+                        ProgressView()
+                    }
                 }
-            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 Task {
                     print("App entered foreground -> auto-refreshing workouts health data...")
@@ -126,6 +104,58 @@ struct WorkoutsView: View {
         }
     }
     
+    var mainContent: some View {
+        Group {
+            topContent
+            bottomContent
+        }
+    }
+
+    var topContent: some View {
+        Group {
+            // A) Header
+            headerSection
+            
+            // B) Main Progress Card
+            progressCard
+            
+            // C) Vulnerability Alerts
+            if !profileViewModel.vulnerableTerritories.isEmpty {
+                TerritoryVulnerabilityWidget(
+                    vulnerableTerritories: profileViewModel.vulnerableTerritories,
+                    onShowOnMap: onShowOnMap
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            
+            // D) Territory Inventory
+            territoryInventorySection
+            
+            // New Territory Stats Grid
+            territoryStatsGrid
+        }
+    }
+
+    var bottomContent: some View {
+        Group {
+            // Rivals Section
+            if !profileViewModel.recentTheftVictims.isEmpty || !profileViewModel.recentThieves.isEmpty {
+                territoryRivalsSection
+            }
+
+            // E) Achievements
+            achievementsSection
+            
+            
+            // F) Feed
+            feedSection
+            
+            #if DEBUG
+            debugSection
+            #endif
+        }
+    }
+
     // MARK: - A) Header
     var headerSection: some View {
         HStack(spacing: 16) {
@@ -297,6 +327,8 @@ struct WorkoutsView: View {
     // MARK: - D) Territory Inventory
     var territoryInventorySection: some View {
         VStack(alignment: .leading, spacing: 16) {
+            let allItems = profileViewModel.vengeanceItems + profileViewModel.territoryInventory
+            
             HStack {
                 Text("Tus Territorios")
                     .font(.headline)
@@ -304,13 +336,13 @@ struct WorkoutsView: View {
                 
                 Spacer()
                 
-                Text("\(profileViewModel.territoryInventory.count) activos")
+                Text("\(allItems.count) activos")
                     .font(.subheadline)
                     .foregroundColor(.gray)
             }
             .padding(.horizontal)
             
-            if profileViewModel.territoryInventory.isEmpty {
+            if allItems.isEmpty {
                 Text("No tienes territorios activos. ¡Sal a explorar!")
                     .font(.subheadline)
                     .foregroundColor(.gray)
@@ -319,8 +351,13 @@ struct WorkoutsView: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
-                        ForEach(profileViewModel.territoryInventory) { item in
+                        ForEach(allItems) { item in
                             TerritoryInventoryCard(item: item)
+                                .onTapGesture {
+                                    if let cell = item.territories.first {
+                                        onShowOnMap(cell.id)
+                                    }
+                                }
                         }
                     }
                     .padding(.horizontal)
@@ -455,24 +492,16 @@ struct WorkoutsView: View {
     // MARK: - Rivals Section
     var territoryRivalsSection: some View {
         VStack(spacing: 24) {
-            if !profileViewModel.recentTheftVictims.isEmpty {
+            if !profileViewModel.activeRivalries.isEmpty {
                 RivalsRowView(
-                    title: "Has robado a",
-                    rivals: profileViewModel.recentTheftVictims,
-                    color: Color(hex: "32D74B") // Green
-                )
-            }
-            
-            if !profileViewModel.recentThieves.isEmpty {
-                RivalsRowView(
-                    title: "Te han robado",
-                    rivals: profileViewModel.recentThieves,
-                    color: Color(hex: "FF3B30") // Red
+                    title: "Rivalidades Activas",
+                    rivalries: profileViewModel.activeRivalries
                 )
             }
         }
         .padding(.vertical, 8)
     }
+
     
     #if DEBUG
     var debugSection: some View {

@@ -11,10 +11,12 @@ class TerritoryRepository: ObservableObject {
     static let shared = TerritoryRepository()
     
     @Published var otherTerritories: [RemoteTerritory] = []
+    @Published var vengeanceTargets: [VengeanceTarget] = []
     @Published private(set) var hasInitialSnapshot: Bool = false
     
     private var db: Any? // Type-erased Firestore reference to avoid build errors if SDK missing
     private var listener: Any?
+    private var vengeanceListener: Any?
     private var currentRegion: MKCoordinateRegion?
     private var isObserving = false
     
@@ -33,6 +35,39 @@ class TerritoryRepository: ObservableObject {
         isObserving = true
         
         setupListener(query: db.collection("remote_territories").limit(to: 1000))
+        #endif
+    }
+    
+    // NEW: Observe vengeance targets for the current user
+    func observeVengeanceTargets(userId: String) {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore, !userId.isEmpty else { return }
+        
+        #if canImport(FirebaseFirestore)
+        if let currentListener = vengeanceListener as? ListenerRegistration {
+            currentListener.remove()
+        }
+        #endif
+        
+        print("[Territories] Observing vengeance targets for user \(userId)...")
+        vengeanceListener = db.collection("users").document(userId).collection("vengeance_targets")
+            .addSnapshotListener { [weak self] (snapshot, error) in
+                guard let documents = snapshot?.documents else {
+                    print("Error fetching vengeance targets: \(error?.localizedDescription ?? "Unknown error")")
+                    return
+                }
+                
+                let targets = documents.compactMap { doc -> VengeanceTarget? in
+                    var target = try? doc.data(as: VengeanceTarget.self)
+                    target?.id = doc.documentID
+                    return target
+                }
+                
+                DispatchQueue.main.async {
+                    self?.vengeanceTargets = targets
+                    print("[Territories] Updated vengeance targets (\(targets.count) targets found)")
+                }
+            }
         #endif
     }
     
@@ -184,7 +219,8 @@ class TerritoryRepository: ObservableObject {
                 boundary: cell.boundary,
                 expiresAt: cell.expiresAt,
                 activityEndAt: cell.lastConqueredAt,
-                activityId: cell.activityId ?? activityId
+                activityId: cell.activityId ?? activityId,
+                isHotSpot: cell.isHotSpot ?? false
             )
             
             do {
@@ -237,7 +273,8 @@ class TerritoryRepository: ObservableObject {
                     ownerUserId: remote.userId,
                     ownerDisplayName: nil, // Will be filled locally if needed
                     ownerUploadedAt: remote.uploadedAt?.dateValue(),
-                    activityId: remote.activityId
+                    activityId: remote.activityId,
+                    isHotSpot: remote.isHotSpot
                 )
             }
             
