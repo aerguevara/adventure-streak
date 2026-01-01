@@ -4,10 +4,16 @@
     "description": "Administrative tools and tests for Adventure Streak",
     "main": "index.js",
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "script": "ts-node"
     },
     "dependencies": {
         "firebase-admin": "^13.6.0"
+    },
+    "devDependencies": {
+        "ts-node": "^10.9.2",
+        "typescript": "^5.3.3",
+        "@types/node": "^20.11.0"
     },
     "private": true
 }
