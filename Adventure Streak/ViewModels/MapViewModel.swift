@@ -24,6 +24,8 @@ class MapViewModel: ObservableObject {
     @Published var selectedTerritoryOwnerAvatarData: Data?
     @Published var selectedTerritoryOwnerIcon: String?
     @Published var userIcons: [String: String] = [:]
+    // NEW: Version counter to trigger UI refreshes when icons are loaded
+    @Published var iconVersion: Int = 0
     
     @Published var activities: [ActivitySession] = []
     @Published var isTracking = false
@@ -63,13 +65,28 @@ class MapViewModel: ObservableObject {
         self.configService = configService
         
         setupBindings()
-        // REMOVED: Static observation replaced by region-based observation in bindings
-        // territoryRepository.observeTerritories()
         
         Task {
             await configService.loadConfigIfNeeded()
+            
+            // PRE-LOAD: Use AuthenticationService and Cache to avoid flickering
+            let auth = AuthenticationService.shared
+            if let userId = auth.userId {
+                // 1. Try AuthenticationService (should have it if just logged in or synced)
+                if let authIcon = auth.userMapIcon {
+                    self.userIcons[userId] = authIcon
+                    MapIconCacheManager.shared.setIcon(authIcon, for: userId)
+                } 
+                // 2. Try Cache fallback
+                else if let cachedIcon = MapIconCacheManager.shared.getIcon(for: userId) {
+                    self.userIcons[userId] = cachedIcon
+                }
+                // 3. Last resort: Fetch from Firestore
+                else {
+                    await fetchIcons(for: [userId])
+                }
+            }
         }
-        
     }
     
     func checkLocationPermissions() {
@@ -147,7 +164,17 @@ class MapViewModel: ObservableObject {
                 print("DEBUG: Found \(visible.count) visible territories in region (Filtered by config window).")
                 
                 // 2. Hard Cap: Never return more than 500 polygons to keep UI smooth
-                return Array(visible.prefix(500))
+                let result = Array(visible.prefix(500))
+                
+                // NEW: Trigger icon fetch for local territories if needed
+                let owners = Set(result.compactMap { $0.ownerUserId })
+                if !owners.isEmpty {
+                    Task { [weak self] in
+                        await self?.fetchIcons(for: owners)
+                    }
+                }
+                
+                return result
             }
             .receive(on: RunLoop.main)
             .assign(to: &$visibleTerritories)
@@ -489,7 +516,16 @@ class MapViewModel: ObservableObject {
         var newIconsFound = false
         
         for userId in userIds {
-            guard userIcons[userId] == nil else { continue }
+            // Priority: Local State > Global Cache > Firestore
+            if userIcons[userId] != nil { continue }
+            
+            if let cachedIcon = MapIconCacheManager.shared.getIcon(for: userId) {
+                await MainActor.run {
+                    self.userIcons[userId] = cachedIcon
+                }
+                newIconsFound = true
+                continue
+            }
             
             do {
                 let doc = try await db.collection("users").document(userId).getDocument()
@@ -497,6 +533,7 @@ class MapViewModel: ObservableObject {
                     await MainActor.run {
                         self.userIcons[userId] = icon
                     }
+                    MapIconCacheManager.shared.setIcon(icon, for: userId)
                     newIconsFound = true
                 }
             } catch {
@@ -505,9 +542,12 @@ class MapViewModel: ObservableObject {
         }
         
         // If we selected a territory whose owner's icon just arrived, update it
-        if newIconsFound, let selectedId = selectedTerritoryOwnerId {
+        if newIconsFound {
             await MainActor.run {
-                self.selectedTerritoryOwnerIcon = self.userIcons[selectedId]
+                self.iconVersion += 1
+                if let selectedId = selectedTerritoryOwnerId {
+                    self.selectedTerritoryOwnerIcon = self.userIcons[selectedId]
+                }
             }
         }
         #endif

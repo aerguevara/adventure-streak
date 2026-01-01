@@ -17,12 +17,9 @@ struct ActivityCardView: View {
         self.reactionState = reactionState
         self.onReaction = onReaction
         
-        // Predetermine loading state based on territory impact
-        let hasImpact = activity.activityData.newZonesCount > 0 || 
-                         activity.activityData.defendedZonesCount > 0 || 
-                         activity.activityData.recapturedZonesCount > 0 || 
-                         activity.activityData.stolenZonesCount > 0
-        self._isLoadingTerritories = State(initialValue: hasImpact)
+        // Predetermine loading state based on activity type if it has an ID
+        let isOutdoor = activity.activityData.activityType.isOutdoor
+        self._isLoadingTerritories = State(initialValue: isOutdoor && activity.activityId != nil)
     }
 
     private var mergedReactionState: ActivityReactionState {
@@ -144,7 +141,7 @@ struct ActivityCardView: View {
         .padding(.horizontal, 12)
         .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
         .task {
-            if hasTerritoryImpact && territoryCells.isEmpty {
+            if activity.activityId != nil && activity.activityData.activityType.isOutdoor && territoryCells.isEmpty {
                 await loadTerritories()
             }
         }

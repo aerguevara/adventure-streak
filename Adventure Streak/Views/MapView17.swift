@@ -17,6 +17,18 @@ struct MapView17: View {
                         MapPolygon(coordinates: TerritoryGrid.polygon(for: cell))
                             .foregroundStyle(Color.green.opacity(0.4))
                             .stroke(Color.green, lineWidth: 1)
+                        
+                        if position.region?.span.latitudeDelta ?? 0 < 0.05 {
+                            Annotation("", coordinate: cell.centerCoordinate) {
+                                let auth = AuthenticationService.shared
+                                let userId = cell.ownerUserId ?? auth.userId ?? ""
+                                let icon = viewModel.userIcons[userId] ?? "🚩"
+                                Text(icon)
+                                    .font(.system(size: 22))
+                                    .shadow(color: .black, radius: 2, x: 0, y: 1)
+                                    .id("\(userId)_\(icon)") // Force re-render when icon changes
+                            }
+                        }
                     }
                     
                     ForEach(viewModel.otherTerritories) { territory in
@@ -26,9 +38,11 @@ struct MapView17: View {
                         
                         if position.region?.span.latitudeDelta ?? 0 < 0.05 {
                             Annotation("", coordinate: territory.centerCoordinate) {
-                                Text(viewModel.userIcons[territory.userId] ?? "🚩")
+                                let icon = viewModel.userIcons[territory.userId] ?? "🚩"
+                                Text(icon)
                                     .font(.system(size: 22))
                                     .shadow(color: .black, radius: 2, x: 0, y: 1)
+                                    .id("\(territory.userId)_\(icon)") // Force re-render when icon changes
                             }
                         }
                     }

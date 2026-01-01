@@ -94,7 +94,15 @@ struct SocialPostDetailView: View {
                                 }
                             }
                         } else {
-                            SocialAchievementBadge(icon: "star.fill", text: "Entrenamiento de Interior", color: .purple)
+                            HStack(spacing: 8) {
+                                SocialAchievementBadge(icon: post.activityData.activityType.iconName, 
+                                                       text: "Entrenamiento de \(post.activityData.activityType.displayName)", 
+                                                       color: post.activityData.activityType.color)
+                                
+                                if post.activityData.activityType.isOutdoor {
+                                    SocialAchievementBadge(icon: "map", text: "Sin Impacto Territorial", color: .secondary)
+                                }
+                            }
                         }
                     }
                     .padding(.bottom, 25)

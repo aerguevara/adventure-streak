@@ -47,8 +47,27 @@ struct MapView: UIViewRepresentable {
         // 2. Smart Diffing for Local Territories (Green)
         updateTerritories(mapView: mapView, context: context)
         
-        // 2. Smart Diffing for Rival Territories (Orange)
+        // 3. Smart Diffing for Rival Territories (Orange)
         updateRivals(mapView: mapView, context: context)
+        
+        // 4. Force refresh of icons if version changed
+        if context.coordinator.lastIconVersion != viewModel.iconVersion {
+            context.coordinator.lastIconVersion = viewModel.iconVersion
+            refreshAllIcons(mapView: mapView)
+        }
+    }
+    
+    private func refreshAllIcons(mapView: MKMapView) {
+        let annotations = mapView.annotations.filter { !($0 is MKUserLocation) }
+        for annotation in annotations {
+            if let title = annotation.title as? String, title.hasSuffix("_icon") {
+                if let view = mapView.view(for: annotation) {
+                    let userId = annotation.subtitle as? String ?? ""
+                    let icon = viewModel.userIcons[userId] ?? "🚩"
+                    view.image = MapIconGenerator.shared.icon(for: icon, size: 22)
+                }
+            }
+        }
     }
     
     private func updateTerritories(mapView: MKMapView, context: Context) {
@@ -86,6 +105,41 @@ struct MapView: UIViewRepresentable {
         }
         
         context.coordinator.renderedTerritoryIds = newIds
+        
+        // Update Local Icons
+        updateLocalAnnotations(mapView: mapView, context: context)
+    }
+    
+    private func updateLocalAnnotations(mapView: MKMapView, context: Context) {
+        let currentIds = context.coordinator.renderedLocalIconIds
+        let newTerritories = viewModel.visibleTerritories
+        let newIds = Set(newTerritories.map { $0.id + "_icon" })
+        
+        let toRemoveIds = currentIds.subtracting(newIds)
+        let toAddIds = newIds.subtracting(currentIds)
+        
+        if !toRemoveIds.isEmpty {
+            let annotationsToRemove = mapView.annotations.filter { annotation in
+                guard let title = annotation.title, let id = title else { return false }
+                return toRemoveIds.contains(id)
+            }
+            mapView.removeAnnotations(annotationsToRemove)
+        }
+        
+        if !toAddIds.isEmpty {
+            let auth = AuthenticationService.shared
+            let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id + "_icon") }
+            let newAnnotations = territoriesToAdd.map { cell -> MKPointAnnotation in
+                let annotation = MKPointAnnotation()
+                annotation.coordinate = cell.centerCoordinate
+                annotation.title = cell.id + "_icon"
+                annotation.subtitle = cell.ownerUserId ?? auth.userId
+                return annotation
+            }
+            mapView.addAnnotations(newAnnotations)
+        }
+        
+        context.coordinator.renderedLocalIconIds = newIds
     }
     
     private func updateRivals(mapView: MKMapView, context: Context) {
@@ -165,8 +219,10 @@ struct MapView: UIViewRepresentable {
     class Coordinator: NSObject, MKMapViewDelegate {
         var parent: MapView
         var renderedTerritoryIds: Set<String> = []
+        var renderedLocalIconIds: Set<String> = []
         var renderedRivalIds: Set<String> = []
         var renderedRivalIconIds: Set<String> = []
+        var lastIconVersion: Int = 0
         
         init(_ parent: MapView) {
             self.parent = parent
