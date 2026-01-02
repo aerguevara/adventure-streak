@@ -15,6 +15,7 @@ import UIKit
 
 // NEW: Struct for vengeance details
 struct ThieveryData {
+    let thiefId: String
     let thiefName: String
     let stolenAt: Date
 }
@@ -314,6 +315,7 @@ class ProfileViewModel: ObservableObject {
             var combinedCells: [TerritoryCell] = []
             var locationLabel = "¡RECLAMA TU HONOR!"
             var minExpiry = Date.distantFuture
+            var thiefId = "" // NEW
             var thiefName = ""
             var stolenAt = Date()
             
@@ -326,6 +328,7 @@ class ProfileViewModel: ObservableObject {
                 
                 // Metadata common to group (take from first)
                 if thiefName.isEmpty {
+                    thiefId = target.thiefId // NEW
                     thiefName = target.thiefName
                     stolenAt = target.stolenAt
                 }
@@ -369,7 +372,7 @@ class ProfileViewModel: ObservableObject {
                     territories: combinedCells,
                     expiresAt: minExpiry,
                     isVengeance: true,
-                    thieveryData: ThieveryData(thiefName: thiefName, stolenAt: stolenAt)
+                    thieveryData: ThieveryData(thiefId: thiefId, thiefName: thiefName, stolenAt: stolenAt) // Updated
                 ))
             }
         }
