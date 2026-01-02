@@ -18,12 +18,14 @@ struct DocumentID<T: Codable>: Codable {
 struct VengeanceTarget: Identifiable, Codable, Equatable {
     @DocumentID var id: String? // Cell ID
     let cellId: String
+    let activityId: String? // NEW: For grouping
     let centerLatitude: Double
     let centerLongitude: Double
     let thiefId: String
     let thiefName: String
     let stolenAt: Date
     let xpReward: Int
+    var locationLabel: String? // NEW: Added for displaying zone name
     
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: centerLatitude, longitude: centerLongitude)

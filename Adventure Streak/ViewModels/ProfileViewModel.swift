@@ -302,47 +302,75 @@ class ProfileViewModel: ObservableObject {
             ))
         }
 
-        // Vengeance items logic
+        // Vengeance items logic (Grouped by ActivityId)
         var vItems: [TerritoryInventoryItem] = []
-        for target in TerritoryRepository.shared.vengeanceTargets {
-            var matchedCell: TerritoryCell? = territoryStore.conqueredCells[target.cellId]
+        
+        // Group by activityId (or cellId if missing)
+        let vengeanceGroups = Dictionary(grouping: TerritoryRepository.shared.vengeanceTargets) { target in
+            target.activityId ?? target.cellId
+        }
+        
+        for (groupId, targets) in vengeanceGroups {
+            var combinedCells: [TerritoryCell] = []
+            var locationLabel = "¡RECLAMA TU HONOR!"
+            var minExpiry = Date.distantFuture
+            var thiefName = ""
+            var stolenAt = Date()
             
-            print("DEBUG: Processing vengeance target \(target.cellId)")
-            if matchedCell == nil {
-                // Try to find in otherTerritories (cached from map) OR vengeanceTerritoryDetails (explicit fetch)
-                let repo = TerritoryRepository.shared
-                if let remote = repo.otherTerritories.first(where: { $0.id == target.cellId }) ?? 
-                                repo.vengeanceTerritoryDetails.first(where: { $0.id == target.cellId }) {
-                    print("DEBUG: Found details for \(target.cellId) in remote cache")
-                    matchedCell = TerritoryCell(
-                        id: remote.id ?? target.cellId,
-                        centerLatitude: remote.centerLatitude,
-                        centerLongitude: remote.centerLongitude,
-                        boundary: remote.boundary,
-                        lastConqueredAt: remote.activityEndAt,
-                        expiresAt: remote.expiresAt,
-                        ownerUserId: remote.userId,
-                        ownerDisplayName: nil,
-                        ownerUploadedAt: remote.uploadedAt?.dateValue(),
-                        activityId: remote.activityId,
-                        isHotSpot: remote.isHotSpot
-                    )
-                } else {
-                     print("DEBUG: Details NOT found for \(target.cellId). Details count: \(repo.vengeanceTerritoryDetails.count)")
+            // Collect cells for this group
+            for target in targets {
+                // Determine label (use first available)
+                if let label = target.locationLabel, locationLabel == "¡RECLAMA TU HONOR!" {
+                    locationLabel = label
+                }
+                
+                // Metadata common to group (take from first)
+                if thiefName.isEmpty {
+                    thiefName = target.thiefName
+                    stolenAt = target.stolenAt
+                }
+                
+                // Find cell details
+                var matchedCell: TerritoryCell? = territoryStore.conqueredCells[target.cellId]
+                
+                if matchedCell == nil {
+                    // Search in remote caches
+                    let repo = TerritoryRepository.shared
+                    if let remote = repo.otherTerritories.first(where: { $0.id == target.cellId }) ??
+                                    repo.vengeanceTerritoryDetails.first(where: { $0.id == target.cellId }) {
+                        matchedCell = TerritoryCell(
+                            id: remote.id ?? target.cellId,
+                            centerLatitude: remote.centerLatitude,
+                            centerLongitude: remote.centerLongitude,
+                            boundary: remote.boundary,
+                            lastConqueredAt: remote.activityEndAt,
+                            expiresAt: remote.expiresAt,
+                            ownerUserId: remote.userId,
+                            ownerDisplayName: nil,
+                            ownerUploadedAt: remote.uploadedAt?.dateValue(),
+                            activityId: remote.activityId,
+                            isHotSpot: remote.isHotSpot
+                        )
+                    }
+                }
+                
+                if let cell = matchedCell {
+                    combinedCells.append(cell)
+                    if cell.expiresAt < minExpiry {
+                        minExpiry = cell.expiresAt
+                    }
                 }
             }
             
-            if let cell = matchedCell {
+            if !combinedCells.isEmpty {
                 vItems.append(TerritoryInventoryItem(
-                    id: "vengeance_\(target.cellId)",
-                    locationLabel: "¡RECLAMA TU HONOR!",
-                    territories: [cell],
-                    expiresAt: cell.expiresAt,
+                    id: "vengeance_group_\(groupId)",
+                    locationLabel: locationLabel,
+                    territories: combinedCells,
+                    expiresAt: minExpiry,
                     isVengeance: true,
-                    thieveryData: ThieveryData(thiefName: target.thiefName, stolenAt: target.stolenAt)
+                    thieveryData: ThieveryData(thiefName: thiefName, stolenAt: stolenAt)
                 ))
-            } else {
-                 print("DEBUG: Failed to create matchedCell for \(target.cellId)")
             }
         }
 

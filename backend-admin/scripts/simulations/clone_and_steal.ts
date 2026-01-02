@@ -17,14 +17,30 @@ const db = admin.firestore();
 db.settings({ databaseId: 'adventure-streak-pre' });
 
 async function simulateTheftByDuplicate() {
-    const originalActivityId = 'EF8B71EE-253E-45C9-A28E-663CF8FD887A';
-    const attackerUserId = 'DQN1tyypsEZouksWzmFeSIYip7b2';
+    const targetCellId = "-1915_20408";
+    const attackerUserId = 'JaSFY1oPRUfJmuIgFf1LUzl6yOp2'; // Use known secondary user
     const newActivityId = uuidv4().toUpperCase();
 
-    console.log(`🚀 Simulating Theft: Duplicating ${originalActivityId} for Attacker ${attackerUserId}`);
-    console.log(`🆕 New Activity ID: ${newActivityId}`);
+    console.log(`🚀 Simulating Theft: Targeting cell ${targetCellId} for Attacker ${attackerUserId}`);
 
     try {
+        // 0. Determine Activity ID from Cell
+        const cellRef = db.collection('remote_territories').doc(targetCellId);
+        const cellSnap = await cellRef.get();
+        if (!cellSnap.exists) {
+            console.error(`❌ Target cell ${targetCellId} not found!`);
+            return;
+        }
+
+        const originalActivityId = cellSnap.data()?.activityId;
+        if (!originalActivityId) {
+            console.error(`❌ Target cell ${targetCellId} has no activityId!`);
+            return;
+        }
+
+        console.log(`🎯 Found original activity ID: ${originalActivityId}`);
+        console.log(`🆕 New Activity ID: ${newActivityId}`);
+
         // 1. Fetch Original Activity Metadata
         const originalRef = db.collection('activities').doc(originalActivityId);
         const originalSnap = await originalRef.get();
