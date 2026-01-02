@@ -2,6 +2,7 @@ import SwiftUI
 
 struct EnergyProgressBar: View {
     let progress: Double // 0 to 1
+    let color: Color
     let isUrgent: Bool
     
     @State private var pulseOpacity = 1.0
@@ -16,7 +17,7 @@ struct EnergyProgressBar: View {
                 
                 // Progress
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(isUrgent ? Color.red : (progress > 0.5 ? Color.green : Color.yellow))
+                    .fill(color)
                     .frame(width: geometry.size.width * CGFloat(progress), height: 6)
                     .opacity(isUrgent ? pulseOpacity : 1.0)
             }
@@ -65,10 +66,10 @@ struct TerritoryInventoryCard: View {
                     Spacer()
                     Text(expirationText)
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(isExpiringSoon ? .red : .green)
+                        .foregroundColor(statusColor)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background((isExpiringSoon ? Color.red : Color.green).opacity(0.1))
+                        .background(statusColor.opacity(0.1))
                         .cornerRadius(8)
                 }
             }
@@ -117,7 +118,7 @@ struct TerritoryInventoryCard: View {
                     }
                 } else {
                     VStack(spacing: 6) {
-                        EnergyProgressBar(progress: energyProgress, isUrgent: isUrgent)
+                        EnergyProgressBar(progress: energyProgress, color: statusColor, isUrgent: isUrgent)
                             .padding(.top, 4)
                         
                         HStack(spacing: 4) {
@@ -160,8 +161,14 @@ struct TerritoryInventoryCard: View {
         return "Vence en \(hours)h"
     }
     
-    private var isExpiringSoon: Bool {
-        return item.expiresAt.timeIntervalSinceNow < 86400 * 3 // Less than 3 days
+    // Unified color logic
+    private var statusColor: Color {
+        let remaining = item.expiresAt.timeIntervalSinceNow
+        
+        if remaining < 0 { return .gray } // Expired -> Gray
+        if remaining < 86400 * 3 { return .red } // < 3 days -> Red
+        if remaining < 86400 * 7 { return .yellow } // < 7 days -> Yellow
+        return .green // > 7 days -> Green
     }
     
     private var isUrgent: Bool {
@@ -173,14 +180,13 @@ struct TerritoryInventoryCard: View {
         let remaining = item.expiresAt.timeIntervalSinceNow
         return max(0, min(1.0, remaining / maxDuration))
     }
-    
+
     private func relativeTime(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         formatter.locale = Locale(identifier: "es_ES")
         
         let relative = formatter.localizedString(for: date, relativeTo: Date())
-        // Remove "hace " from the beginning to control it in the UI
         return relative.replacingOccurrences(of: "hace ", with: "")
     }
 }
