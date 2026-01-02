@@ -80,6 +80,30 @@ class AuthenticationService: NSObject, ObservableObject {
     }
     
     func signInAnonymously(completion: @escaping (Bool, Error?) -> Void) {
+        #if DEBUG
+        print("🛠️ [AuthenticationService] DEBUG MODE: Using fixed simulator user ID: DQN1tyypsEZouksWzmFeSIYip7b2")
+        let debugUID = "DQN1tyypsEZouksWzmFeSIYip7b2"
+        
+        Task { @MainActor in
+            self.isAuthenticated = true
+            self.userId = debugUID
+            self.userEmail = nil
+            
+            // Sync/Fetch profile info
+            self.refreshUserProfile(userId: debugUID)
+            
+            NotificationService.shared.syncCachedFCMToken(for: debugUID)
+            NotificationService.shared.refreshFCMTokenIfNeeded(for: debugUID)
+            
+            self.observeForceLogout(for: debugUID)
+            
+            await self.fullSync(userId: debugUID)
+            
+            ActivityStore.shared.startObserving(userId: debugUID)
+            
+            completion(true, nil)
+        }
+        #else
         Auth.auth().signInAnonymously { authResult, error in
             if let error = error {
                 print("Error signing in anonymously: \(error.localizedDescription)")
@@ -129,6 +153,7 @@ class AuthenticationService: NSObject, ObservableObject {
                 }
             }
         }
+        #endif
     }
     
     func signInWithGoogle(completion: @escaping (Bool, Error?) -> Void) {
