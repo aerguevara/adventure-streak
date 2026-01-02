@@ -31,7 +31,7 @@ async function clearPRE() {
         "users",
         "reserved_icons",
         "debug_mock_workouts",
-        "config" // Limpiamos config también para que el sync de PROD traiga la versión oficial
+        "config"
     ];
 
     for (const colName of collections) {
@@ -39,13 +39,11 @@ async function clearPRE() {
         const snapshot = await db.collection(colName).get();
         console.log(`      Found ${snapshot.size} documents.`);
 
-        // Deleting in batches to avoid memory/timeout issues
         const docs = snapshot.docs;
         for (let i = 0; i < docs.length; i += 500) {
             const batch = db.batch();
             const chunk = docs.slice(i, i + 500);
             for (const doc of chunk) {
-                // Recursive delete for subcollections
                 await deleteDocRecursive(doc.ref, db);
             }
             await batch.commit();

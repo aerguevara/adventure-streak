@@ -182,9 +182,13 @@ class TerritoryRepository: ObservableObject {
                     .whereField(FieldPath.documentID(), in: chunk)
                     .getDocuments()
                 for doc in snapshot.documents {
-                    var territory = try? doc.data(as: RemoteTerritory.self)
-                    territory?.id = doc.documentID
-                    if let territory { results.append(territory) }
+                    do {
+                        var territory = try doc.data(as: RemoteTerritory.self)
+                        territory.id = doc.documentID
+                        results.append(territory)
+                    } catch {
+                         print("❌ [TerritoryRepository] Error decoding territory \(doc.documentID): \(error)")
+                    }
                 }
             } catch {
                 print("[Territories] fetchTerritories error: \(error)")
@@ -296,11 +300,11 @@ class TerritoryRepository: ObservableObject {
                 )
             }
             
-            if !territories.isEmpty {
+            if !territories.isEmpty || snapshot.isEmpty {
                 await MainActor.run {
-                    store.upsertCells(territories)
+                    store.reconcileUserTerritories(userId: userId, remoteCells: territories)
                 }
-                print("[Territories] Pulled \(territories.count) territories from Firestore.")
+                print("[Territories] Reconciled \(territories.count) territories from Firestore for user \(userId).")
             }
         } catch {
             print("[Territories] Error syncing user territories: \(error)")

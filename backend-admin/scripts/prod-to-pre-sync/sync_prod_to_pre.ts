@@ -3,8 +3,8 @@ import { getFirestore } from "firebase-admin/firestore";
 import { readFileSync } from "fs";
 
 /**
- * Script for Phase 0: Sync PROD to PRE environment.
- * It copies all documents and subcollections from the '(default)' database
+ * Script to sync PROD environment to PRE environment.
+ * Copies all documents and subcollections from the '(default)' database
  * to the 'adventure-streak-pre' database instance.
  */
 
@@ -25,7 +25,7 @@ async function syncProdToPre() {
     const dbPre = getFirestore("adventure-streak-pre");
 
     try {
-        // ACTIVAR MODO SILENCIOSO ANTES DE EMPEZAR
+        // ACTIVATE SILENT MODE BEFORE STARTING
         await setSilentMode(dbPre, true);
 
         const collections = [
@@ -68,9 +68,7 @@ async function syncProdToPre() {
 
         console.log("🏁 Sync Complete.");
     } finally {
-        // Opcional: podríamos desactivarlo aquí, pero como vamos a ejecutar
-        // los scripts de reset justo después, mejor dejarlo activo por seguridad.
-        // await setSilentMode(dbPre, false);
+        // Silent mode remains active by default for safety after a fresh sync.
     }
 }
 
@@ -83,10 +81,8 @@ async function copyDocRecursive(doc: any, targetDb: any) {
     const data = doc.data();
     if (!data) return;
 
-    // Write doc to target database
     await targetDb.doc(doc.ref.path).set(data);
 
-    // List and copy subcollections recursively
     const subCollections = await doc.ref.listCollections();
     for (const subCol of subCollections) {
         const subSnapshot = await subCol.get();

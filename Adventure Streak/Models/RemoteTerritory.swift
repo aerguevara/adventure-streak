@@ -38,6 +38,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     
     enum CodingKeys: String, CodingKey {
         case userId, centerLatitude, centerLongitude, boundary, isHotSpot, expiresAt, activityEndAt, activityId, timestamp, uploadedAt
+        case lastConqueredAt // NEW: Match Firestore field
     }
     
     init(from decoder: Decoder) throws {
@@ -48,8 +49,15 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         centerLongitude = try container.decode(Double.self, forKey: .centerLongitude)
         expiresAt = try container.decode(Date.self, forKey: .expiresAt)
         isHotSpot = try container.decodeIfPresent(Bool.self, forKey: .isHotSpot) ?? false
-        activityEndAt = try container.decodeIfPresent(Date.self, forKey: .activityEndAt)
-            ?? (try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date())
+        
+        // Prioritize lastConqueredAt (Server Truth), then activityEndAt, then timestamp
+        if let lastConquered = try container.decodeIfPresent(Date.self, forKey: .lastConqueredAt) {
+            activityEndAt = lastConquered
+        } else {
+            activityEndAt = try container.decodeIfPresent(Date.self, forKey: .activityEndAt)
+                ?? (try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date())
+        }
+        
         activityId = try container.decodeIfPresent(String.self, forKey: .activityId)
         timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? activityEndAt
         uploadedAt = try container.decodeIfPresent(Timestamp.self, forKey: .uploadedAt)
@@ -81,5 +89,20 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         self.isHotSpot = isHotSpot
         self.timestamp = activityEndAt
         self.uploadedAt = nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(centerLatitude, forKey: .centerLatitude)
+        try container.encode(centerLongitude, forKey: .centerLongitude)
+        try container.encode(boundary, forKey: .boundary)
+        try container.encode(expiresAt, forKey: .expiresAt)
+        try container.encode(isHotSpot, forKey: .isHotSpot)
+        try container.encode(activityEndAt, forKey: .activityEndAt)
+        try container.encode(activityEndAt, forKey: .lastConqueredAt) // Map to new server field
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encodeIfPresent(activityId, forKey: .activityId)
+        try container.encodeIfPresent(uploadedAt, forKey: .uploadedAt)
     }
 }

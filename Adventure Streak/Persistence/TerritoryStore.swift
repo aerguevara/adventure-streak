@@ -48,6 +48,24 @@ class TerritoryStore: ObservableObject {
         }
     }
     
+    /// Reconciles local cache with a list of territories known by the server for a specific user.
+    /// This ensures that territories stolen or lost on the server are removed from the local store.
+    func reconcileUserTerritories(userId: String, remoteCells: [TerritoryCell]) {
+        // 1. Keep cells that don't belong to this user (if any, though usually this store is user-specific)
+        var updatedCells = conqueredCells.filter { $0.value.ownerUserId != userId }
+        
+        // 2. Add/Update cells from the server
+        for cell in remoteCells {
+            updatedCells[cell.id] = cell
+        }
+        
+        // 3. Update the published dictionary and persist
+        conqueredCells = updatedCells
+        persist()
+        
+        print("[TerritoryStore] Reconciled: \(remoteCells.count) server cells, total in store: \(conqueredCells.count)")
+    }
+    
     func fetchAllCells() -> [TerritoryCell] {
         return Array(conqueredCells.values)
     }

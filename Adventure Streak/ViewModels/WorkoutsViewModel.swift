@@ -497,14 +497,10 @@ class WorkoutsViewModel: ObservableObject {
                             
                             // Fetch actual territory geometries from repository (Subcollection of Activity)
                             let territories = await ActivityRepository.shared.fetchTerritoriesForActivity(activityId: activity.id.uuidString)
-                            print("🔍 [Monitor] Fetched \(territories.count) territories for activity \(activity.id)")
+                            print("🔍 [Monitor] Fetched \(territories.count) territories for activity \(activity.id) (For summary display only)")
                             
-                            // Map local TerritoryCell to RemoteTerritory for GlobalImportSummary compatibility if needed
-                            // Or hydrate local store directly
-                            if !territories.isEmpty {
-                                TerritoryStore.shared.upsertCells(territories)
-                                print("✅ [Monitor] Hydrated TerritoryStore with \(territories.count) new cells")
-                            }
+                            // [REMOVED] TerritoryStore.shared.upsertCells(territories)
+                            // Adhering to "Server is Truth" philosophy. We wait for global reconciliation.
                             
                             // Map to RemoteTerritory for GlobalImportSummary
                             let remoteTerritories = territories.map { cell in
@@ -558,10 +554,11 @@ class WorkoutsViewModel: ObservableObject {
                                 
                                 // FINAL RESET
                                 // FINAL RESET
-                                // isImporting = false removed to keep bar visible until sheet covers it
-                                // It will be set to false by showProcessingSummary.didSet when sheet dismisses
                                 self.importTotal = 0
                                 self.importProcessed = 0
+                                
+                                // NEW: Trigger a official sync to pick up the server's truth in the main collection
+                                self.syncFromRemote()
                             }
                         }
                     }

@@ -330,7 +330,7 @@ struct WorkoutsView: View {
             let allItems = profileViewModel.vengeanceItems + profileViewModel.territoryInventory
             
             HStack {
-                Text("Tus Territorios")
+                Text("Radar de Mantenimiento")
                     .font(.headline)
                     .foregroundColor(.white)
                 
