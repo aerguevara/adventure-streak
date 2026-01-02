@@ -311,7 +311,13 @@ class TerritoryRepository: ObservableObject {
                 )
             }
             
-            if !territories.isEmpty || snapshot.isEmpty {
+        if !territories.isEmpty || snapshot.isEmpty {
+                // DEBUG: Log what we found
+                print("[Territories] Fetched \(territories.count) valid territories for user \(userId) from \(snapshot.documents.count) docs.")
+                if territories.count < snapshot.documents.count {
+                    print("[Territories] WARNING: Decoded fewer territories than fetched. \(snapshot.documents.count - territories.count) failed decoding.")
+                }
+                
                 await MainActor.run {
                     store.reconcileUserTerritories(userId: userId, remoteCells: territories)
                 }

@@ -96,14 +96,16 @@ class ProfileViewModel: ObservableObject {
         let gracePeriodThreshold = now.addingTimeInterval(-24 * 3600) // Expired < 24 hours ago
         
         let vulnerable = territoryInventory.filter { item in
-            // 1. Está a punto de expirar? (Futuro cercano)
+            // 1. Hot Spot?
+            let isHotSpot = item.territories.contains { $0.isHotSpot == true }
+            // 2. Está a punto de expirar? (Futuro cercano)
             let isExpiringSoon = item.expiresAt < warningThreshold && item.expiresAt > now
-            // 2. Ya expiró pero está en periodo de gracia? (Pasado reciente)
+            // 3. Ya expiró pero está en periodo de gracia? (Pasado reciente)
             let isRecentlyExpired = item.expiresAt <= now && item.expiresAt > gracePeriodThreshold
             
-            print("DEBUG: Checking item \(item.id) - Expires: \(item.expiresAt). Now: \(now). Soon: \(isExpiringSoon), ExpiredGrace: \(isRecentlyExpired)")
+            // print("DEBUG: Checking item \(item.id) - HotSpot: \(isHotSpot), Soon: \(isExpiringSoon), Grace: \(isRecentlyExpired)")
             
-            return isExpiringSoon || isRecentlyExpired
+            return isHotSpot || isExpiringSoon || isRecentlyExpired
         }
         print("DEBUG: Vulnerable count: \(vulnerable.count). Vengeance count: \(vengeanceItems.count)")
         return vengeanceItems + vulnerable
