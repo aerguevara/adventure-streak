@@ -27,6 +27,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     let activityEndAt: Date
     // NEW: Activity that conquered this territory
     let activityId: String?
+    let locationLabel: String? // NEW: Store location label
     // Legacy field; kept for backward compatibility
     let timestamp: Date
     @ServerTimestamp var uploadedAt: Timestamp?
@@ -37,7 +38,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case userId, centerLatitude, centerLongitude, boundary, isHotSpot, expiresAt, activityEndAt, activityId, timestamp, uploadedAt
+        case userId, centerLatitude, centerLongitude, boundary, isHotSpot, expiresAt, activityEndAt, activityId, locationLabel, timestamp, uploadedAt
         case lastConqueredAt // NEW: Match Firestore field
     }
     
@@ -59,6 +60,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         }
         
         activityId = try container.decodeIfPresent(String.self, forKey: .activityId)
+        locationLabel = try container.decodeIfPresent(String.self, forKey: .locationLabel)
         timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? activityEndAt
         uploadedAt = try container.decodeIfPresent(Timestamp.self, forKey: .uploadedAt)
         
@@ -77,7 +79,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     // Default init
-    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date, activityId: String? = nil, isHotSpot: Bool = false) {
+    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date, activityId: String? = nil, isHotSpot: Bool = false, locationLabel: String? = nil) {
         self._id = DocumentID(wrappedValue: id)
         self.userId = userId
         self.centerLatitude = centerLatitude
@@ -87,6 +89,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         self.activityEndAt = activityEndAt
         self.activityId = activityId
         self.isHotSpot = isHotSpot
+        self.locationLabel = locationLabel
         self.timestamp = activityEndAt
         self.uploadedAt = nil
     }
@@ -103,6 +106,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         try container.encode(activityEndAt, forKey: .lastConqueredAt) // Map to new server field
         try container.encode(timestamp, forKey: .timestamp)
         try container.encodeIfPresent(activityId, forKey: .activityId)
+        try container.encodeIfPresent(locationLabel, forKey: .locationLabel)
         try container.encodeIfPresent(uploadedAt, forKey: .uploadedAt)
     }
 }

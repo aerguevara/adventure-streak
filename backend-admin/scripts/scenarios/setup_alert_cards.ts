@@ -12,7 +12,8 @@ const app = admin.initializeApp({
 
 const db = getFirestore(app, "adventure-streak-pre");
 
-const USER_ID = 'DQN1tyypsEZouksWzmFeSIYip7b2'; // Our test user
+// 1. Define the Target User (Current Simulator User from Logs)
+const USER_ID = 'CVZ34x99UuU6fCrOEc8Wg5nPYX82'; // Our test user
 
 async function setupAlertScenarios() {
     console.log(`🚀 Setting up Alert Card Scenarios for User: ${USER_ID}`);

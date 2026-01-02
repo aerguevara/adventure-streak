@@ -103,7 +103,7 @@ class ProfileViewModel: ObservableObject {
             // 3. Ya expiró pero está en periodo de gracia? (Pasado reciente)
             let isRecentlyExpired = item.expiresAt <= now && item.expiresAt > gracePeriodThreshold
             
-            // print("DEBUG: Checking item \(item.id) - HotSpot: \(isHotSpot), Soon: \(isExpiringSoon), Grace: \(isRecentlyExpired)")
+            print("DEBUG: Checking item \(item.id) - HotSpot: \(isHotSpot) (flag: \(item.territories.first?.isHotSpot)), Soon: \(isExpiringSoon) (exp: \(item.expiresAt)), Grace: \(isRecentlyExpired)")
             
             return isHotSpot || isExpiringSoon || isRecentlyExpired
         }
@@ -293,9 +293,16 @@ class ProfileViewModel: ObservableObject {
         let grouped = Dictionary(grouping: cells) { $0.activityId ?? "unknown" }
         
         var inventory: [TerritoryInventoryItem] = []
+        print("DEBUG: [ProfileViewModel] Refreshing items. Activities in store: \(activityStore.activities.count)")
         for (activityId, groupCells) in grouped where activityId != "unknown" {
-            let label = activityStore.activities.first { $0.id.uuidString == activityId }?.locationLabel ?? "Exploración"
+            let activity = activityStore.activities.first { $0.id.uuidString == activityId }
+            let cellLabel = groupCells.first?.locationLabel
+            
+            // Priority: 1. Real activity label, 2. Cell's own label (from script), 3. Catch-all
+            let label = activity?.locationLabel ?? cellLabel ?? "Exploración"
             let expiry = groupCells.map { $0.expiresAt }.min() ?? Date()
+            
+            print("DEBUG: [ProfileViewModel] activityId: \(activityId) -> activityFound: \(activity != nil), cellLabel: \(cellLabel ?? "NIL"), FINAL: \(label)")
             
             inventory.append(TerritoryInventoryItem(
                 id: activityId,
@@ -354,7 +361,8 @@ class ProfileViewModel: ObservableObject {
                             ownerDisplayName: nil,
                             ownerUploadedAt: remote.uploadedAt?.dateValue(),
                             activityId: remote.activityId,
-                            isHotSpot: remote.isHotSpot
+                            isHotSpot: remote.isHotSpot,
+                            locationLabel: remote.locationLabel
                         )
                     }
                 }
@@ -379,7 +387,8 @@ class ProfileViewModel: ObservableObject {
             }
         }
 
-        self.vengeanceItems = vItems
+        // Sort by stolenAt (most recent first) to avoid flasheo and have a logical order
+        self.vengeanceItems = vItems.sorted { ($0.thieveryData?.stolenAt ?? Date.distantPast) > ($1.thieveryData?.stolenAt ?? Date.distantPast) }
         
         // Sort by expiry date (closer first) to remind user to defend
         self.territoryInventory = inventory.sorted { $0.expiresAt < $1.expiresAt }

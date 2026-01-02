@@ -110,7 +110,7 @@ struct VulnerableTerritoryCard: View {
                 
                 // Context Info
                 if let thievery = item.thieveryData, item.isVengeance {
-                    Text("Robado por \(thievery.thiefName)")
+                    Text("Robado hace \(relativeTime(thievery.stolenAt)) por \(thievery.thiefName)")
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundColor(.gray)
                 } else if isExpired {
@@ -172,6 +172,15 @@ struct VulnerableTerritoryCard: View {
         return "\(hours)h \(minutes)m"
     }
     
+    private func relativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        formatter.locale = Locale(identifier: "es_ES")
+        
+        let relative = formatter.localizedString(for: date, relativeTo: Date())
+        return relative.replacingOccurrences(of: "hace ", with: "")
+    }
+
     private func loadAvatarURL() async {
         guard let thiefId = item.thieveryData?.thiefId else { return }
         // Simple logic to try fetching avatar URL. 

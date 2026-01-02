@@ -307,7 +307,8 @@ class TerritoryRepository: ObservableObject {
                     ownerDisplayName: nil, // Will be filled locally if needed
                     ownerUploadedAt: remote.uploadedAt?.dateValue(),
                     activityId: remote.activityId,
-                    isHotSpot: remote.isHotSpot
+                    isHotSpot: remote.isHotSpot,
+                    locationLabel: remote.locationLabel
                 )
             }
             
