@@ -248,7 +248,8 @@ class UserRepository: ObservableObject {
         db.collection("users").document(userId).getDocument(source: .default) { (document, error) in
             if let document = document, document.exists {
                 do {
-                    let user = try document.data(as: User.self)
+                    var user = try document.data(as: User.self)
+                    user.id = document.documentID
                     completion(user)
                 } catch {
                     print("Error decoding user: \(error)")
@@ -280,7 +281,9 @@ class UserRepository: ObservableObject {
             }
             
             do {
-                let user = try document.data(as: User.self)
+                var user = try document.data(as: User.self)
+                // FORCE ID ASSIGNMENT: Custom init(from:) in User model bypasses @DocumentID auto-mapping
+                user.id = document.documentID
                 
                 // If the user hasn't acknowledged the reset yet, it means 
                 // the server just performed a reset. We clear local territories.

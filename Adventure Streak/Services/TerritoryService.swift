@@ -41,7 +41,5 @@ class TerritoryService {
         return TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0, stolenCellsCount: 0)
     }
     
-    func recalculateExpiredCells() {
-        territoryStore.removeExpiredCells(now: Date())
-    }
+
 }

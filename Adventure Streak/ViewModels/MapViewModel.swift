@@ -336,7 +336,8 @@ class MapViewModel: ObservableObject {
         }
         
         // 2. Try remote territories (rivals/other)
-        if let remote = otherTerritories.first(where: { $0.id == cellId }) {
+        if let remote = otherTerritories.first(where: { $0.id == cellId }) ?? 
+                        TerritoryRepository.shared.vengeanceTerritoryDetails.first(where: { $0.id == cellId }) {
             let coord = remote.centerCoordinate
             self.region = MKCoordinateRegion(center: coord, span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005))
             self.shouldRecenter = true

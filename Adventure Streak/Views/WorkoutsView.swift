@@ -327,7 +327,7 @@ struct WorkoutsView: View {
     // MARK: - D) Territory Inventory
     var territoryInventorySection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            let allItems = profileViewModel.vengeanceItems + profileViewModel.territoryInventory
+            let allItems = profileViewModel.territoryInventory
             
             HStack {
                 Text("Radar de Mantenimiento")

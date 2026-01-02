@@ -20,8 +20,7 @@ class TerritoryStore: ObservableObject {
             DispatchQueue.main.async {
                 // Convert list to dictionary for faster access
                 self.conqueredCells = Dictionary(uniqueKeysWithValues: cells.map { ($0.id, $0) })
-                self.removeExpiredCells(now: Date())
-                self.scheduleCleanupTimer()
+                // NO Local Cleanup: Trust Server Sync
             }
         }
     }
@@ -68,26 +67,6 @@ class TerritoryStore: ObservableObject {
     
     func fetchAllCells() -> [TerritoryCell] {
         return Array(conqueredCells.values)
-    }
-    
-    func removeExpiredCells(now: Date) {
-        let originalCount = conqueredCells.count
-        // Keep cells until 24 hours AFTER expiration so user can see "Expired" state
-        let gracePeriodThreshold = now.addingTimeInterval(-24 * 60 * 60)
-        conqueredCells = conqueredCells.filter { $0.value.expiresAt > gracePeriodThreshold }
-
-        if conqueredCells.count != originalCount {
-            persist()
-        }
-    }
-
-    private func scheduleCleanupTimer() {
-        cleanupTimer?.invalidate()
-        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 60 * 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.removeExpiredCells(now: Date())
-            }
-        }
     }
 
     private func persist() {

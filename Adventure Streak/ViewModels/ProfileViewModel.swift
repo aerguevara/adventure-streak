@@ -307,11 +307,13 @@ class ProfileViewModel: ObservableObject {
         for target in TerritoryRepository.shared.vengeanceTargets {
             var matchedCell: TerritoryCell? = territoryStore.conqueredCells[target.cellId]
             
+            print("DEBUG: Processing vengeance target \(target.cellId)")
             if matchedCell == nil {
                 // Try to find in otherTerritories (cached from map) OR vengeanceTerritoryDetails (explicit fetch)
                 let repo = TerritoryRepository.shared
                 if let remote = repo.otherTerritories.first(where: { $0.id == target.cellId }) ?? 
                                 repo.vengeanceTerritoryDetails.first(where: { $0.id == target.cellId }) {
+                    print("DEBUG: Found details for \(target.cellId) in remote cache")
                     matchedCell = TerritoryCell(
                         id: remote.id ?? target.cellId,
                         centerLatitude: remote.centerLatitude,
@@ -325,6 +327,8 @@ class ProfileViewModel: ObservableObject {
                         activityId: remote.activityId,
                         isHotSpot: remote.isHotSpot
                     )
+                } else {
+                     print("DEBUG: Details NOT found for \(target.cellId). Details count: \(repo.vengeanceTerritoryDetails.count)")
                 }
             }
             
@@ -337,6 +341,8 @@ class ProfileViewModel: ObservableObject {
                     isVengeance: true,
                     thieveryData: ThieveryData(thiefName: target.thiefName, stolenAt: target.stolenAt)
                 ))
+            } else {
+                 print("DEBUG: Failed to create matchedCell for \(target.cellId)")
             }
         }
 
@@ -445,7 +451,10 @@ class ProfileViewModel: ObservableObject {
         
         // NEW: Start observing vengeance targets
         if let userId = user.id {
+            print("DEBUG: [ProfileViewModel] updateWithUser calling observeVengeanceTargets for \(userId)")
             TerritoryRepository.shared.observeVengeanceTargets(userId: userId)
+        } else {
+            print("ERROR: [ProfileViewModel] updateWithUser user.id is NIL. Cannot observe vengeance.")
         }
         
         // Sync GamificationService with fetched data

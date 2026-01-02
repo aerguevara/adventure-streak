@@ -41,8 +41,12 @@ class TerritoryRepository: ObservableObject {
     
     // NEW: Observe vengeance targets for the current user
     func observeVengeanceTargets(userId: String) {
+        print("DEBUG: [TerritoryRepository] observeVengeanceTargets called for: '\(userId)'")
         #if canImport(FirebaseFirestore)
-        guard let db = db as? Firestore, !userId.isEmpty else { return }
+        guard let db = db as? Firestore, !userId.isEmpty else { 
+            print("ERROR: [TerritoryRepository] Early exit. DB is nil? \(db == nil). UserID empty? \(userId.isEmpty)")
+            return 
+        }
         
         #if canImport(FirebaseFirestore)
         if let currentListener = vengeanceListener as? ListenerRegistration {
@@ -58,10 +62,17 @@ class TerritoryRepository: ObservableObject {
                     return
                 }
                 
-                let targets = documents.compactMap { doc -> VengeanceTarget? in
-                    var target = try? doc.data(as: VengeanceTarget.self)
-                    target?.id = doc.documentID
-                    return target
+                print("[Territories] Vengeance snapshot received with \(documents.count) documents.")
+                
+                var targets: [VengeanceTarget] = []
+                for doc in documents {
+                    do {
+                        var target = try doc.data(as: VengeanceTarget.self)
+                        target.id = doc.documentID
+                        targets.append(target)
+                    } catch {
+                         print("❌ [TerritoryRepository] Error decoding VengeanceTarget \(doc.documentID): \(error)")
+                    }
                 }
                 
                 DispatchQueue.main.async {
