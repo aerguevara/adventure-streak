@@ -43,6 +43,7 @@ struct VulnerableTerritoryCard: View {
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     
                     if item.isVengeance {
                         Text("RECUPERA TU TERRITORIO")
