@@ -104,6 +104,46 @@ struct UserProfileView: View {
                             .padding(.horizontal)
                         }
                         
+                        // Badges Section
+                        if let badges = user.badges, !badges.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Insignias")
+                                    .font(.title3)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal)
+                                
+                                LazyVGrid(columns: [
+                                    GridItem(.adaptive(minimum: 60), spacing: 12)
+                                ], spacing: 12) {
+                                    ForEach(badges, id: \.self) { badgeId in
+                                        let def = BadgeSystem.getDefinition(for: badgeId)
+                                        
+                                        VStack(spacing: 4) {
+                                            Text(def.icon)
+                                                .font(.system(size: 32))
+                                                .padding(10)
+                                                .background(def.color.opacity(0.15))
+                                                .clipShape(Circle())
+                                                .overlay(
+                                                    Circle().stroke(def.color.opacity(0.3), lineWidth: 1)
+                                                )
+                                            
+                                            Text(def.name)
+                                                .font(.caption2)
+                                                .fontWeight(.medium)
+                                                .foregroundColor(.gray)
+                                                .multilineTextAlignment(.center)
+                                                .lineLimit(2)
+                                                .frame(height: 24)
+                                        }
+                                        .frame(height: 80)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        
                         Spacer(minLength: 40)
                     }
                 }

@@ -69,40 +69,56 @@ class GamificationRepository: ObservableObject {
     }
     // NEW: Fetch all badges with their unlocked status for a user
     func fetchBadges(userId: String, completion: @escaping ([Badge]) -> Void) {
-        // 1. Define all available badges (Static Definitions)
-        var allBadges = [
-            Badge.definition(id: "first_steps", name: "First Steps", shortDescription: "Complete your first activity", longDescription: "Awarded for completing your very first activity tracking session.", icon: "figure.walk", category: .activity),
-            Badge.definition(id: "week_streak", name: "On Fire", shortDescription: "Maintain a 1-week streak", longDescription: "Awarded for maintaining your adventure streak for 7 consecutive days.", icon: "flame.fill", category: .streak),
-            Badge.definition(id: "explorer_novice", name: "Novice Explorer", shortDescription: "Conquer 10 territory cells", longDescription: "Awarded for conquering a total of 10 unique territory cells.", icon: "map.fill", category: .territory),
-            Badge.definition(id: "marathoner", name: "Marathoner", shortDescription: "Travel 42km total", longDescription: "Awarded for accumulating 42 kilometers of total distance traveled.", icon: "figure.run", category: .distance),
-            Badge.definition(id: "defensor", name: "Defender", shortDescription: "Recapture a lost territory", longDescription: "Awarded for recapturing a territory that was taken by another player.", icon: "shield.fill", category: .territory)
-        ]
-        
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else {
-            completion(allBadges)
+            completion([])
             return
         }
         
-        // 2. Fetch unlocked badges from Firestore
-        db.collection("users").document(userId).collection("badges").getDocuments { (snapshot, error) in
-            if let documents = snapshot?.documents {
-                let unlockedIds = Set(documents.compactMap { $0.data()["badgeId"] as? String })
+        // 1. Fetch User Doc to get "badges" array
+        db.collection("users").document(userId).getDocument { (snapshot, error) in
+            let userData = snapshot?.data() ?? [:]
+            let unlockedIds = Set(userData["badges"] as? [String] ?? [])
+            
+            // 2. Generate Badge List from BadgeSystem definitions
+            var allBadges: [Badge] = []
+            
+            // Iterate over all definitions in BadgeSystem
+            for (_, def) in BadgeSystem.definitions {
                 
-                // 3. Merge status
-                for i in 0..<allBadges.count {
-                    if unlockedIds.contains(allBadges[i].id) {
-                        allBadges[i].isUnlocked = true
-                        // Ideally we would fetch the timestamp too, but for MVP just marking true is enough
-                        // or we could map it from the document if we needed the date
-                    }
+                // Determine Category based on ID (simple heuristic or need to add category to BadgeDefinition)
+                var cat: BadgeCategory = .training
+                let id = def.id
+                if ["shadow_hunter", "chaos_lord", "takeover", "reconquest_king", "uninvited", "streak_breaker", "white_glove", "lightning_counter", "summit_looter"].contains(id) {
+                    cat = .aggressive
+                } else if ["steel_influencer", "war_correspondent", "sports_spirit", "community_voice", "trust_circle"].contains(id) {
+                    cat = .social
                 }
+                
+                let badge = Badge(
+                    id: def.id,
+                    name: def.name,
+                    shortDescription: def.description, // Mapping description
+                    longDescription: def.description,   // Mapping description
+                    isUnlocked: unlockedIds.contains(def.id),
+                    unlockedAt: nil, // Timestamp not stored in array, assume recent if needed
+                    iconSystemName: def.icon, // Using the emoji/icon string here. View must handle it.
+                    category: cat
+                )
+                
+                allBadges.append(badge)
             }
+            
+            // Sort: Unlocked first, then by name? Or by category?
+            // Let's sort by Category then Name.
+            // But 'aggressive' vs 'social' order?
+            // For now just consistent sort by ID or Name.
+            allBadges.sort { $0.isUnlocked && !$1.isUnlocked } 
+            
             completion(allBadges)
         }
         #else
-        // Fallback for no Firestore
-        completion(allBadges)
+        completion([])
         #endif
     }
     // NEW: Fetch weekly ranking (One-shot)

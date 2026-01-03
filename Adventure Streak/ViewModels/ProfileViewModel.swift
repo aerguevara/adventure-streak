@@ -103,7 +103,7 @@ class ProfileViewModel: ObservableObject {
             // 3. Ya expiró pero está en periodo de gracia? (Pasado reciente)
             let isRecentlyExpired = item.expiresAt <= now && item.expiresAt > gracePeriodThreshold
             
-            print("DEBUG: Checking item \(item.id) - HotSpot: \(isHotSpot) (flag: \(item.territories.first?.isHotSpot)), Soon: \(isExpiringSoon) (exp: \(item.expiresAt)), Grace: \(isRecentlyExpired)")
+            print("DEBUG: Checking item \(item.id) - HotSpot: \(isHotSpot) (flag: \(item.territories.first?.isHotSpot ?? false)), Soon: \(isExpiringSoon) (exp: \(item.expiresAt)), Grace: \(isRecentlyExpired)")
             
             return isHotSpot || isExpiringSoon || isRecentlyExpired
         }

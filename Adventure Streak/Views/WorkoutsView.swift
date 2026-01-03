@@ -394,11 +394,17 @@ struct WorkoutsView: View {
                     HStack(spacing: 16) {
                         ForEach(badgesViewModel.badges.prefix(3)) { badge in
                             AchievementCard(badge: badge)
+                                .onTapGesture {
+                                    badgesViewModel.selectedBadge = badge
+                                }
                         }
                     }
                     .padding(.horizontal)
                 }
             }
+        }
+        .sheet(item: $badgesViewModel.selectedBadge) { badge in
+            BadgeDetailModal(badge: badge)
         }
     }
     
@@ -565,23 +571,16 @@ struct AchievementCard: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: badge.iconSystemName)
-                .font(.title)
-                .foregroundColor(badge.isUnlocked ? Color(hex: "FFD60A") : .gray)
-                .frame(width: 50, height: 50)
-                .background(Color.white.opacity(0.05))
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(badge.isUnlocked ? Color(hex: "FFD60A").opacity(0.5) : Color.clear, lineWidth: 1)
-                )
+            ThreeDBadgeView(badge: badge, size: 70)
+                .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 5)
             
             VStack(spacing: 4) {
                 Text(badge.name)
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
                 
                 Text(badge.category.rawValue.capitalized)
                     .font(.caption2)
@@ -589,7 +588,7 @@ struct AchievementCard: View {
             }
         }
         .padding(12)
-        .frame(width: 110)
+        .frame(width: 120, height: 160)
         .background(.ultraThinMaterial)
         .cornerRadius(16)
         .overlay(
@@ -600,11 +599,9 @@ struct AchievementCard: View {
     
     var categoryColor: Color {
         switch badge.category {
-        case .territory: return .green
-        case .streak: return .orange
-        case .distance: return .blue
-        case .activity: return .purple
-        case .misc: return .gray
+        case .aggressive: return Color(hex: "FF3B30")
+        case .social: return Color(hex: "5856D6")
+        case .training: return Color(hex: "32D74B")
         }
     }
 }

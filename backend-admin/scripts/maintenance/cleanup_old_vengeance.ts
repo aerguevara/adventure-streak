@@ -10,7 +10,16 @@ const app = admin.initializeApp({
     databaseURL: "https://adventure-streak-pre-default-rtdb.europe-west1.firebasedatabase.app"
 });
 
-const db = getFirestore(app, "adventure-streak-pre");
+const args = process.argv.slice(2);
+const envArg = args[0]?.toUpperCase();
+
+if (!envArg || !["PRE", "PRO"].includes(envArg)) {
+    console.error("❌ Usage: npx ts-node scripts/maintenance/cleanup_old_vengeance.ts [PRE|PRO]");
+    process.exit(1);
+}
+
+const databaseId = envArg === "PRE" ? "adventure-streak-pre" : "(default)";
+const db = getFirestore(app, databaseId);
 
 async function cleanupOldVengeance() {
     console.log(`🧹 Starting cleanup of old vengeance targets in PRE...`);

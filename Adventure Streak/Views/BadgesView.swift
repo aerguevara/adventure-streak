@@ -21,9 +21,9 @@ struct BadgesView: View {
                     emptyStateView
                 } else {
                     // 2. Badges Grid
-                    LazyVGrid(columns: columns, spacing: 16) {
+                    LazyVGrid(columns: columns, spacing: 24) {
                         ForEach(viewModel.badges) { badge in
-                            BadgeCard(badge: badge)
+                            ThreeDBadgeView(badge: badge, size: 140)
                                 .onTapGesture {
                                     viewModel.onBadgeSelected(badge)
                                 }
@@ -37,7 +37,7 @@ struct BadgesView: View {
         .navigationTitle("Medallas y Logros")
         .background(Color(UIColor.systemGroupedBackground))
         .sheet(item: $viewModel.selectedBadge) { badge in
-            BadgeDetailView(badge: badge)
+            BadgeDetailModal(badge: badge)
         }
         .refreshable {
             viewModel.fetchBadges()
@@ -79,131 +79,5 @@ struct BadgesView: View {
                 .padding(.horizontal)
         }
         .padding(.top, 40)
-    }
-}
-
-struct BadgeCard: View {
-    let badge: Badge
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(badge.isUnlocked ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
-                    .frame(width: 60, height: 60)
-                
-                Image(systemName: badge.iconSystemName)
-                    .font(.system(size: 24))
-                    .foregroundColor(badge.isUnlocked ? .blue : .gray)
-            }
-            
-            VStack(spacing: 4) {
-                Text(badge.name)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(badge.isUnlocked ? .primary : .secondary)
-                
-                if badge.isUnlocked {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                } else {
-                    Image(systemName: "lock.fill")
-                        .font(.caption)
-                        .foregroundColor(.gray.opacity(0.5))
-                }
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(16)
-        .opacity(badge.isUnlocked ? 1.0 : 0.7)
-        .saturation(badge.isUnlocked ? 1.0 : 0.0)
-    }
-}
-
-struct BadgeDetailView: View {
-    let badge: Badge
-    @Environment(\.presentationMode) var presentationMode
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                // Large Icon
-                ZStack {
-                    Circle()
-                        .fill(badge.isUnlocked ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
-                        .frame(width: 120, height: 120)
-                    
-                    Image(systemName: badge.iconSystemName)
-                        .font(.system(size: 50))
-                        .foregroundColor(badge.isUnlocked ? .blue : .gray)
-                }
-                .padding(.top, 40)
-                
-                VStack(spacing: 8) {
-                    Text(badge.name)
-                        .font(.title)
-                        .fontWeight(.bold)
-                    
-                    if badge.isUnlocked {
-                        Text("DESBLOQUEADO")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4)
-                            .background(Color.green.opacity(0.2))
-                            .foregroundColor(.green)
-                            .cornerRadius(8)
-                    } else {
-                        Text("BLOQUEADO")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4)
-                            .background(Color.gray.opacity(0.2))
-                            .foregroundColor(.gray)
-                            .cornerRadius(8)
-                    }
-                }
-                
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Descripción")
-                            .font(.headline)
-                        Text(badge.longDescription)
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Divider()
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Cómo desbloquear")
-                            .font(.headline)
-                        Text(badge.shortDescription) // Using short description as the condition
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding()
-                .background(Color(UIColor.secondarySystemBackground))
-                .cornerRadius(12)
-                .padding(.horizontal)
-                
-                Spacer()
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cerrar") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-            }
-        }
     }
 }
