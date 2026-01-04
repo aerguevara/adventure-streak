@@ -78,7 +78,6 @@ struct ActivityCardView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(1.2)
                         )
-                        )
                         .padding(.horizontal, 12)
                 } else if !territoryCells.isEmpty {
                     TerritoryMinimapView(territories: territoryCells)
