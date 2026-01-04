@@ -78,6 +78,7 @@ class WorkoutsViewModel: ObservableObject {
     private let pendingRouteStore: PendingRouteStore
     private var cancellables = Set<AnyCancellable>()
     private var processingCancellable: AnyCancellable?
+    private let reloadSubject = PassthroughSubject<Void, Never>() // NEW: For debouncing
     private var isCheckingForWorkouts = false
     private var vengeanceTargetsBeforeImport: Set<String> = [] // NEW: For vengeance logic
     
@@ -94,25 +95,32 @@ class WorkoutsViewModel: ObservableObject {
         self.configService = configService
         self.pendingRouteStore = pendingRouteStore
         
+        // NEW: Load/Debounce logic
+        reloadSubject
+            .receive(on: RunLoop.main)
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] in
+                self?.loadWorkouts()
+            }
+            .store(in: &cancellables)
+            
         Task {
             await configService.loadConfigIfNeeded()
-            await MainActor.run {
-                self.loadWorkouts()
-            }
+            self.reloadSubject.send()
         }
 
-        // Recargar cuando el store de actividades cambie (ej. tras volver a iniciar sesión y sincronizar desde remoto)
+        // Recargar cuando el store de actividades cambie
         self.activityStore.$activities
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.loadWorkouts()
+                self?.reloadSubject.send()
             }
             .store(in: &cancellables)
         
         configService.$config
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.loadWorkouts()
+                self?.reloadSubject.send()
             }
             .store(in: &cancellables)
             
@@ -120,7 +128,7 @@ class WorkoutsViewModel: ObservableObject {
         AuthenticationService.shared.$userId
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.loadWorkouts()
+                self?.reloadSubject.send()
             }
             .store(in: &cancellables)
             
@@ -153,9 +161,7 @@ class WorkoutsViewModel: ObservableObject {
         guard let userId = AuthenticationService.shared.userId else { return }
         Task {
             await AuthenticationService.shared.fullSync(userId: userId)
-            await MainActor.run {
-                self.loadWorkouts()
-            }
+            self.reloadSubject.send()
         }
     }
     
@@ -190,13 +196,6 @@ class WorkoutsViewModel: ObservableObject {
                     endDateTime: formatDateTime(activity.endDate)
                 )
             }
-        
-        // DEBUG: Log mission data
-        print("📊 Loaded \(self.workouts.count) workouts")
-        for workout in self.workouts.prefix(3) {
-            print("   Workout: \(workout.title)")
-            print("   Mission: \(workout.missionName ?? "NONE")")
-        }
     }
     
     func refresh() async {
@@ -489,7 +488,7 @@ class WorkoutsViewModel: ObservableObject {
                         var summary = GlobalImportSummary()
                         for activity in completed {
                             // Extract stats
-                            let stats = activity.territoryStats ?? TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0, stolenCellsCount: 0)
+                            let stats = activity.territoryStats ?? TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0, stolenCellsCount: 0, totalLootXP: 0, totalConsolidationXP: 0, totalStreakInterruptionXP: 0)
                             let xp = activity.xpBreakdown?.total ?? 0
 
                             let victims = activity.conqueredVictims ?? []

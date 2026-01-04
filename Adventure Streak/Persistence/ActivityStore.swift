@@ -171,17 +171,23 @@ class ActivityStore: ObservableObject {
         return streak
     }
     
+    private var isBackfilling = false
+    
     /// Checks for activities missing a location label and generates one.
     private func backfillSmartNames(for activities: [ActivitySession]) {
-        // Filter candidates: No label, and reasonably recent (optimization) or ignore date limit if user wants all.
-        // Let's process all but throttle to avoid rate limits.
+        guard !isBackfilling else { return }
+        
+        // Filter candidates: No label, and reasonably recent (optimization)
         let candidates = activities.filter { $0.locationLabel == nil }
         
         guard !candidates.isEmpty else { return }
         
         print("🌍 [Backfill] Found \(candidates.count) activities missing Smart Names. Starting backfill...")
+        isBackfilling = true
         
         Task {
+            defer { isBackfilling = false }
+            
             for activity in candidates {
                 // Throttle: 2 seconds between requests to avoid CLGeocoder limit (50 req/60s)
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -193,28 +199,33 @@ class ActivityStore: ObservableObject {
                     route = await ActivityRepository.shared.fetchRouteForActivity(activityId: activity.id.uuidString)
                 }
                 
-                guard !route.isEmpty else {
-                    print("⚠️ [Backfill] Skipped \(activity.id) (No route available)")
-                    continue
+                // 2. Generate Name
+                var smartName: String?
+                if !route.isEmpty {
+                    smartName = await SmartPlaceNameService.shared.generateSmartTitle(for: route)
                 }
                 
-                // 2. Generate Name
-                if let smartName = await SmartPlaceNameService.shared.generateSmartTitle(for: route) {
-                    print("✅ [Backfill] Generated: '\(smartName)' for \(activity.id)")
-                    
-                    // 3. Update Remote
-                    await ActivityRepository.shared.updateLocationLabel(activityId: activity.id, label: smartName)
-                    // 3.1 Update Feed (NEW)
-                    await FeedRepository.shared.updateLocationLabel(activityId: activity.id.uuidString, label: smartName)
-                    
-                    // 4. Update Local
-                    await MainActor.run {
-                        if let index = self.activities.firstIndex(where: { $0.id == activity.id }) {
-                            var updated = self.activities[index]
-                            updated.locationLabel = smartName
-                            self.activities[index] = updated
-                            self.persist()
-                        }
+                // 3. Update (Even if it fails or route is empty, we set a default to stop retrying)
+                let finalName = smartName ?? activity.displayName
+                
+                if let name = smartName {
+                    print("✅ [Backfill] Generated: '\(name)' for \(activity.id)")
+                } else {
+                    print("⚠️ [Backfill] No route or name for \(activity.id). Using default: \(finalName)")
+                }
+                
+                // 3.1 Update Remote
+                await ActivityRepository.shared.updateLocationLabel(activityId: activity.id, label: finalName)
+                // 3.2 Update Feed
+                await FeedRepository.shared.updateLocationLabel(activityId: activity.id.uuidString, label: finalName)
+                
+                // 4. Update Local
+                await MainActor.run {
+                    if let index = self.activities.firstIndex(where: { $0.id == activity.id }) {
+                        var updated = self.activities[index]
+                        updated.locationLabel = finalName
+                        self.activities[index] = updated
+                        self.persist()
                     }
                 }
             }

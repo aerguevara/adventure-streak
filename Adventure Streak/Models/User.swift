@@ -22,6 +22,7 @@ struct User: Identifiable, Codable {
     var mapIcon: String?
     var xp: Int
     var level: Int
+    var totalActivities: Int?
     
     // Aggregated territory stats (propagados desde la app)
     var totalCellsOwned: Int?
@@ -64,6 +65,7 @@ struct User: Identifiable, Codable {
          totalStolenTerritories: Int? = nil,
          totalDefendedTerritories: Int? = nil,
          totalRecapturedTerritories: Int? = nil,
+         totalActivities: Int? = nil,
          prestige: Int? = nil,
          currentStreakWeeks: Int? = nil,
          bestWeeklyDistanceKm: Double? = nil,
@@ -87,6 +89,7 @@ struct User: Identifiable, Codable {
         self.totalStolenTerritories = totalStolenTerritories
         self.totalDefendedTerritories = totalDefendedTerritories
         self.totalRecapturedTerritories = totalRecapturedTerritories
+        self.totalActivities = totalActivities
         self.prestige = prestige
         self.currentStreakWeeks = currentStreakWeeks
         self.bestWeeklyDistanceKm = bestWeeklyDistanceKm
@@ -112,6 +115,7 @@ struct User: Identifiable, Codable {
         case totalStolenTerritories
         case totalDefendedTerritories
         case totalRecapturedTerritories
+        case totalActivities
         case prestige
         case currentStreakWeeks
         case bestWeeklyDistanceKm
@@ -146,6 +150,7 @@ struct User: Identifiable, Codable {
         totalStolenTerritories = try container.decodeIfPresent(Int.self, forKey: .totalStolenTerritories)
         totalDefendedTerritories = try container.decodeIfPresent(Int.self, forKey: .totalDefendedTerritories)
         totalRecapturedTerritories = try container.decodeIfPresent(Int.self, forKey: .totalRecapturedTerritories)
+        totalActivities = try container.decodeIfPresent(Int.self, forKey: .totalActivities)
         prestige = try container.decodeIfPresent(Int.self, forKey: .prestige)
         currentStreakWeeks = try container.decodeIfPresent(Int.self, forKey: .currentStreakWeeks)
         bestWeeklyDistanceKm = try container.decodeIfPresent(Double.self, forKey: .bestWeeklyDistanceKm)

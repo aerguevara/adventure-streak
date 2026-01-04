@@ -22,14 +22,23 @@ final class BackgroundTaskService: Sendable {
     }
     
     func scheduleRefresh() {
-        let request = BGAppRefreshTaskRequest(identifier: refreshIdentifier)
-        // Programamos próximo intento en ~1 hora para no saturar; iOS ajusta según heurísticas
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
-        do {
-            try BGTaskScheduler.shared.submit(request)
-            print("📅 [BackgroundTaskService] Task scheduled: \(refreshIdentifier)")
-        } catch {
-            print("❌ No se pudo programar BGTask: \(error)")
+        // Enviar a una cola de background para no bloquear y dar un pequeño respiro al sistema en el arranque
+        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 2.0) {
+            let request = BGAppRefreshTaskRequest(identifier: self.refreshIdentifier)
+            request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
+            do {
+                try BGTaskScheduler.shared.submit(request)
+                print("📅 [BackgroundTaskService] Task scheduled: \(self.refreshIdentifier)")
+            } catch {
+                // Silenciamos el log si el error es "unavailable" (Code 1) durante el arranque/foreground,
+                // ya que iOS lo auto-gestionará cuando sea apropiado.
+                let nsError = error as NSError
+                if nsError.domain == BGTaskScheduler.errorDomain && nsError.code == 1 {
+                    // No imprimimos error ruidoso para Code 1 si estamos en foreground activo
+                    return
+                }
+                print("❌ No se pudo programar BGTask: \(error)")
+            }
         }
     }
     

@@ -225,12 +225,18 @@ final class ActivityRepository {
                 }
                 
                 let activities = documents.compactMap { doc -> ActivitySession? in
+                    // STRICT VALIDATION: Ensure the document ID is a valid UUID
+                    // If it's a simulation ID (like SIM_...) it will return nil and be ignored.
+                    guard let activityId = UUID(uuidString: doc.documentID) else {
+                        print("⚠️ [ActivityRepository] Skipping malformed activity ID: \(doc.documentID)")
+                        return nil
+                    }
+
                     do {
-                        // Use Firestore's built-in decoder for robustness and correct type handling (e.g. Timestamps)
                         let remote = try doc.data(as: FirestoreActivity.self)
                         
                         return ActivitySession(
-                            id: UUID(uuidString: remote.id ?? doc.documentID) ?? UUID(),
+                            id: activityId,
                             startDate: remote.startDate,
                             endDate: remote.endDate,
                             activityType: remote.activityType,
@@ -432,12 +438,15 @@ final class ActivityRepository {
             
             var activities: [ActivitySession] = []
             for doc in snapshot.documents {
+                // STRICT VALIDATION
+                guard let activityId = UUID(uuidString: doc.documentID) else { continue }
+
                 do {
                     let remote = try doc.data(as: FirestoreActivity.self)
                     let route = await fetchRouteChunks(activityId: doc.documentID, expectedCount: remote.routeChunkCount ?? 0, fallbackRoute: remote.route)
                     
                     let session = ActivitySession(
-                        id: UUID(uuidString: remote.id ?? doc.documentID) ?? UUID(),
+                        id: activityId,
                         startDate: remote.startDate,
                         endDate: remote.endDate,
                         activityType: remote.activityType,
@@ -483,8 +492,14 @@ final class ActivityRepository {
             guard remote.userId == userId else { return nil }
             let route = await fetchRouteChunks(activityId: doc.documentID, expectedCount: remote.routeChunkCount ?? 0, fallbackRoute: remote.route)
             
+            // STRICT VALIDATION
+            guard let activityIdFromDoc = UUID(uuidString: doc.documentID) else {
+                print("⚠️ [ActivityRepository] Skipping malformed activity ID in fetchActivity: \(doc.documentID)")
+                return nil
+            }
+
             return ActivitySession(
-                id: UUID(uuidString: remote.id ?? doc.documentID) ?? activityId,
+                id: activityIdFromDoc,
                 startDate: remote.startDate,
                 endDate: remote.endDate,
                 activityType: remote.activityType,
@@ -607,10 +622,13 @@ final class ActivityRepository {
             let doc = try await db.collection("activities").document(id).getDocument()
             if doc.data() == nil { continue }
             do {
+                // STRICT VALIDATION
+                guard let activityIdFromDoc = UUID(uuidString: doc.documentID) else { continue }
+
                 let remote = try doc.data(as: FirestoreActivity.self)
                 let route = await fetchRouteChunks(activityId: doc.documentID, expectedCount: remote.routeChunkCount ?? 0, fallbackRoute: remote.route)
                 let session = ActivitySession(
-                    id: UUID(uuidString: remote.id ?? doc.documentID) ?? UUID(),
+                    id: activityIdFromDoc,
                     startDate: remote.startDate,
                     endDate: remote.endDate,
                     activityType: remote.activityType,

@@ -102,6 +102,11 @@ struct ProcessingSummaryModal: View {
                     }
                     .padding(.horizontal)
                     
+                    // NEW: Gamification Bonuses Section
+                    if summary.totalLootXP > 0 || summary.totalConsolidationXP > 0 || summary.totalStreakInterruptionXP > 0 {
+                        bonusesSection
+                    }
+                    
                     // Additional Details (like Missions/Victims) specific to Summary
                     if !summary.completedMissions.isEmpty {
                         missionsSection
@@ -399,11 +404,56 @@ struct ProcessingSummaryModal: View {
             self.position = .region(newRegion)
         }
     }
-
+    
+    private var bonusesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Bonos de Territorio")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            VStack(spacing: 8) {
+                if summary.totalLootXP > 0 {
+                    BonusRow(icon: "bag.fill", title: "Botín Acumulado", value: "+\(summary.totalLootXP) XP", color: .yellow)
+                }
+                if summary.totalConsolidationXP > 0 {
+                    BonusRow(icon: "fortress", title: "Defensa Consolidada", value: "+\(summary.totalConsolidationXP) XP", color: .blue)
+                }
+                if summary.totalStreakInterruptionXP > 0 {
+                    BonusRow(icon: "bolt.shield.fill", title: "Interrupción de Racha", value: "+\(summary.totalStreakInterruptionXP) XP", color: .red)
+                }
+            }
+            .padding()
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(16)
+        }
+        .padding(.horizontal)
+    }
 
     private func formatDuration(_ seconds: Double) -> String {
         let minutes = Int(seconds) / 60
         return "\(minutes)m"
+    }
+}
+
+struct BonusRow: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(color)
+                .frame(width: 24)
+            Text(title)
+                .foregroundColor(.white.opacity(0.9))
+                .font(.subheadline)
+            Spacer()
+            Text(value)
+                .foregroundColor(color)
+                .font(.subheadline.bold())
+        }
     }
 }
 

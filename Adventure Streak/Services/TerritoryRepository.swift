@@ -39,21 +39,24 @@ class TerritoryRepository: ObservableObject {
         #endif
     }
     
+    private var observingVengeanceUserId: String?
+    private var isSyncingUser = false
+    
     // NEW: Observe vengeance targets for the current user
     func observeVengeanceTargets(userId: String) {
-        print("DEBUG: [TerritoryRepository] observeVengeanceTargets called for: '\(userId)'")
         #if canImport(FirebaseFirestore)
-        guard let db = db as? Firestore, !userId.isEmpty else { 
-            print("ERROR: [TerritoryRepository] Early exit. DB is nil? \(db == nil). UserID empty? \(userId.isEmpty)")
-            return 
+        guard let db = db as? Firestore, !userId.isEmpty else { return }
+        
+        // Prevent redundant listener setup
+        if observingVengeanceUserId == userId {
+            return
         }
         
-        #if canImport(FirebaseFirestore)
         if let currentListener = vengeanceListener as? ListenerRegistration {
             currentListener.remove()
         }
-        #endif
         
+        observingVengeanceUserId = userId
         print("[Territories] Observing vengeance targets for user \(userId)...")
         vengeanceListener = db.collection("users").document(userId).collection("vengeance_targets")
             .addSnapshotListener { [weak self] (snapshot, error) in
@@ -253,7 +256,10 @@ class TerritoryRepository: ObservableObject {
                 expiresAt: cell.expiresAt,
                 activityEndAt: cell.lastConqueredAt,
                 activityId: cell.activityId ?? activityId,
-                isHotSpot: cell.isHotSpot ?? false
+                isHotSpot: cell.isHotSpot ?? false,
+                locationLabel: cell.locationLabel,
+                firstConqueredAt: cell.firstConqueredAt,
+                defenseCount: cell.defenseCount
             )
             
             do {
@@ -285,7 +291,10 @@ class TerritoryRepository: ObservableObject {
     // NEW: Sync user's territories from Firestore to local store
     func syncUserTerritories(userId: String, store: TerritoryStore) async {
         #if canImport(FirebaseFirestore)
-        guard let db = db as? Firestore else { return }
+        guard let db = db as? Firestore, !isSyncingUser else { return }
+        isSyncingUser = true
+        
+        defer { isSyncingUser = false }
         
         print("[Territories] Syncing territories for user \(userId)...")
         do {
@@ -307,6 +316,8 @@ class TerritoryRepository: ObservableObject {
                     ownerDisplayName: nil, // Will be filled locally if needed
                     ownerUploadedAt: remote.uploadedAt?.dateValue(),
                     activityId: remote.activityId,
+                    firstConqueredAt: remote.firstConqueredAt,
+                    defenseCount: remote.defenseCount,
                     isHotSpot: remote.isHotSpot,
                     locationLabel: remote.locationLabel
                 )

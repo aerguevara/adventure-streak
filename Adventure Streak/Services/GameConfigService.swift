@@ -11,6 +11,7 @@ struct GameConfig: Equatable {
     var routeExpectedBundles: [String]
     var routeOptionalBundles: [String]
     var onboardingImportLimit: Int
+    var initialImportDays: Int // NEW
     var globalResetDate: Date? // Managed from Firebase
     
     static let `default`: GameConfig = {
@@ -23,6 +24,7 @@ struct GameConfig: Equatable {
             routeExpectedBundles: ["com.apple.", mainId, watchId],
             routeOptionalBundles: [],
             onboardingImportLimit: 10,
+            initialImportDays: 0,
             globalResetDate: nil
         )
     }()
@@ -43,6 +45,7 @@ struct GameConfig: Equatable {
             routeExpectedBundles: routeExpectedBundles,
             routeOptionalBundles: routeOptionalBundles,
             onboardingImportLimit: onboardingImportLimit,
+            initialImportDays: initialImportDays,
             globalResetDate: globalResetDate
         )
     }
@@ -69,14 +72,11 @@ final class GameConfigService: ObservableObject {
     
     func loadConfigIfNeeded() async {
         if isLoaded {
-            print("[Config] Already loaded. Historical: \(config.loadHistoricalWorkouts), Lookback days: \(config.clampedLookbackDays)")
             return
         }
         
         if let loadTask = loadTask {
-            print("[Config] Awaiting in-flight load task")
-            let config = await loadTask.value
-            apply(config)
+            _ = await loadTask.value
             return
         }
         
@@ -105,17 +105,30 @@ final class GameConfigService: ObservableObject {
     }
     
     func cutoffDate(from reference: Date = Date()) -> Date {
-        // PURE & SIMPLE: Lookback X days from today.
-        // No floors, no onboarding locks. If Firebase says 28 days, we fetch 28 days.
+        // 1. Global Window (e.g. 32 days lookback from today)
         let days = config.clampedLookbackDays
-        let lookbackDate = Calendar.current.date(
+        let globalLookback = Calendar.current.date(
             byAdding: .day,
             value: -days,
             to: reference
         ) ?? reference
         
-        print("⚙️ [Config] Simple Cutoff: \(days) days lookback -> \(lookbackDate)")
-        return lookbackDate
+        // 2. User Personal Anchor (Onboarding Completion)
+        let userAnchorTimestamp = UserDefaults.standard.double(forKey: "onboardingCompletionDate")
+        if userAnchorTimestamp > 0 {
+            let userAnchorDate = Date(timeIntervalSince1970: userAnchorTimestamp)
+            
+            // HYBRID STRATEGY: Return the most recent (restrictive) date
+            // If user joined today: max(32d ago, Today) = Today
+            // If user joined 1y ago: max(32d ago, 1y ago) = 32d ago
+            let finalDate = userAnchorDate > globalLookback ? userAnchorDate : globalLookback
+            
+            print("⚙️ [Config] Hybrid Cutoff: Global \(globalLookback) vs User \(userAnchorDate) -> Final: \(finalDate)")
+            return finalDate
+        }
+        
+        print("⚙️ [Config] Simple Cutoff: \(days) days lookback -> \(globalLookback)")
+        return globalLookback
     }
     
     private func fetchRemoteConfig() async -> GameConfig? {
@@ -157,6 +170,8 @@ final class GameConfigService: ObservableObject {
                 let resetTimestamp = data["globalResetDate"] as? Timestamp
                 let resetDate = resetTimestamp?.dateValue()
                 
+                let initialImport = data["initialImportDays"] as? Int ?? loaded.initialImportDays
+                
                 loaded = GameConfig(
                     loadHistoricalWorkouts: loadHistorical,
                     workoutLookbackDays: lookback,
@@ -164,6 +179,7 @@ final class GameConfigService: ObservableObject {
                     routeExpectedBundles: expectedBundles,
                     routeOptionalBundles: optionalBundles,
                     onboardingImportLimit: importLimit,
+                    initialImportDays: initialImport,
                     globalResetDate: resetDate
                 )
             }

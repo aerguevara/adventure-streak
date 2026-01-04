@@ -23,6 +23,8 @@ class MapViewModel: ObservableObject {
     @Published var selectedTerritoryOwnerTerritories: Int?
     @Published var selectedTerritoryOwnerAvatarData: Data?
     @Published var selectedTerritoryOwnerIcon: String?
+    @Published var selectedTerritoryFirstConqueredAt: Date?
+    @Published var selectedTerritoryDefenseCount: Int?
     @Published var userIcons: [String: String] = [:]
     // NEW: Version counter to trigger UI refreshes when icons are loaded
     @Published var iconVersion: Int = 0
@@ -366,6 +368,18 @@ class MapViewModel: ObservableObject {
         selectedTerritoryOwnerId = finalOwnerId
         selectedTerritoryOwnerAvatarData = finalOwnerId.flatMap { AvatarCacheManager.shared.data(for: $0) }
         selectedTerritoryOwnerIcon = finalOwnerId.flatMap { userIcons[$0] }
+        
+        // Find the cell or remote to extract age and defenses
+        if let cell = territoryStore.conqueredCells[id ?? ""] {
+            selectedTerritoryFirstConqueredAt = cell.firstConqueredAt
+            selectedTerritoryDefenseCount = cell.defenseCount
+        } else if let remote = otherTerritories.first(where: { $0.id == id }) {
+            selectedTerritoryFirstConqueredAt = remote.firstConqueredAt
+            selectedTerritoryDefenseCount = remote.defenseCount
+        } else {
+            selectedTerritoryFirstConqueredAt = nil
+            selectedTerritoryDefenseCount = nil
+        }
         
         if let currentUserId,
            finalOwnerId == currentUserId {

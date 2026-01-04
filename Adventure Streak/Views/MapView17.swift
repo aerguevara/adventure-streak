@@ -92,6 +92,8 @@ struct MapView17: View {
                         ownerIcon: viewModel.selectedTerritoryOwnerIcon,
                         xp: viewModel.selectedTerritoryOwnerXP,
                         territories: viewModel.selectedTerritoryOwnerTerritories,
+                        firstConqueredAt: viewModel.selectedTerritoryFirstConqueredAt,
+                        defenseCount: viewModel.selectedTerritoryDefenseCount,
                         onClose: {
                             withAnimation(.spring()) {
                                 viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)

@@ -60,7 +60,7 @@ class GameEngine {
             territoryResult = await territoryService.processActivity(activity, ownerUserId: userId, ownerDisplayName: userName)
             print("ℹ️ Territory calculation delegated to Server (Local result empty)")
         } else {
-            territoryResult = ([], TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0, stolenCellsCount: 0), [])
+            territoryResult = ([], TerritoryStats(newCellsCount: 0, defendedCellsCount: 0, recapturedCellsCount: 0, stolenCellsCount: 0, totalLootXP: 0, totalConsolidationXP: 0, totalStreakInterruptionXP: 0), [])
             print("ℹ️ Actividad indoor: se omite conquista de territorios")
         }
         

@@ -350,7 +350,7 @@ struct WorkoutsView: View {
                     .padding(.vertical, 8)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
+                    LazyHStack(spacing: 16) {
                         ForEach(allItems) { item in
                             TerritoryInventoryCard(item: item)
                                 .onTapGesture {

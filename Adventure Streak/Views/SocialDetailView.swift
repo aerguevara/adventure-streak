@@ -37,6 +37,7 @@ struct SocialPostDetailView: View {
                                     }
                                 }
                             }
+                            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll, showsTraffic: false))
                         } else {
                             // Fallback for No Map
                             Rectangle()

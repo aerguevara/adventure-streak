@@ -162,7 +162,7 @@ class SocialService: ObservableObject {
             )
             
             return SocialPost(
-                id: UUID(uuidString: event.id ?? "") ?? UUID(),
+                id: event.id,
                 userId: userId,
                 user: user,
                 date: event.date,

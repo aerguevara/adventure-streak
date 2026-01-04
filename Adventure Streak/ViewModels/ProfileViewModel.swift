@@ -103,11 +103,8 @@ class ProfileViewModel: ObservableObject {
             // 3. Ya expiró pero está en periodo de gracia? (Pasado reciente)
             let isRecentlyExpired = item.expiresAt <= now && item.expiresAt > gracePeriodThreshold
             
-            print("DEBUG: Checking item \(item.id) - HotSpot: \(isHotSpot) (flag: \(item.territories.first?.isHotSpot ?? false)), Soon: \(isExpiringSoon) (exp: \(item.expiresAt)), Grace: \(isRecentlyExpired)")
-            
             return isHotSpot || isExpiringSoon || isRecentlyExpired
         }
-        print("DEBUG: Vulnerable count: \(vulnerable.count). Vengeance count: \(vengeanceItems.count)")
         return vengeanceItems + vulnerable
     }
     
@@ -221,6 +218,10 @@ class ProfileViewModel: ObservableObject {
             .store(in: &cancellables)
     }
     
+    private var lastUserUID: String = ""
+    private var lastUserXP: Int = -1
+    private var lastUserLevel: Int = -1
+    
     // MARK: - Actions
     func fetchProfileData() {
         isLoading = true
@@ -235,25 +236,25 @@ class ProfileViewModel: ObservableObject {
             return
         }
         
-        print("DEBUG: Observing User ID: \(userId)")
-        
-        // Remove existing listener if any
-        // (In a real app we'd track the listener registration to remove it on deinit)
-        
         _ = userRepository.observeUser(userId: userId) { [weak self] user in
             Task { @MainActor in
                 guard let self = self else { return }
                 self.isLoading = false
                 
                 if let user = user {
-                    print("DEBUG: ProfileViewModel: Received user update (hasAcknowledgedDecReset: \(user.hasAcknowledgedDecReset ?? true))")
-                    self.updateWithUser(user)
-                    // Ensure local territory store is in sync with Firestore (vital for expiration updates)
-                    if let userId = user.id {
-                        await TerritoryRepository.shared.syncUserTerritories(userId: userId, store: self.territoryStore)
+                    // DEDUPLICATION: Only update if it's a new user or stats changed
+                    if self.lastUserUID != user.id || self.lastUserXP != user.xp || self.lastUserLevel != user.level {
+                        self.lastUserUID = user.id ?? ""
+                        self.lastUserXP = user.xp
+                        self.lastUserLevel = user.level
+                        
+                        self.updateWithUser(user)
+                        
+                        // Sync territories only if needed (once per load or when count changes)
+                        if let userId = user.id {
+                            await TerritoryRepository.shared.syncUserTerritories(userId: userId, store: self.territoryStore)
+                        }
                     }
-                } else {
-                    print("DEBUG: ProfileViewModel: Could not fetch user profile or user is nil for ID: \(userId)")
                 }
             }
         }
@@ -292,17 +293,16 @@ class ProfileViewModel: ObservableObject {
         let cells = territoryStore.conqueredCells.values
         let grouped = Dictionary(grouping: cells) { $0.activityId ?? "unknown" }
         
+        // OPTIMIZATION: Index activities for O(1) lookup during grouping
+        let activitiesMap = Dictionary(uniqueKeysWithValues: activityStore.activities.map { ($0.id.uuidString, $0) })
+        
         var inventory: [TerritoryInventoryItem] = []
-        print("DEBUG: [ProfileViewModel] Refreshing items. Activities in store: \(activityStore.activities.count)")
         for (activityId, groupCells) in grouped where activityId != "unknown" {
-            let activity = activityStore.activities.first { $0.id.uuidString == activityId }
+            let activity = activitiesMap[activityId] // Fast lookup!
             let cellLabel = groupCells.first?.locationLabel
             
-            // Priority: 1. Real activity label, 2. Cell's own label (from script), 3. Catch-all
             let label = activity?.locationLabel ?? cellLabel ?? "Exploración"
             let expiry = groupCells.map { $0.expiresAt }.min() ?? Date()
-            
-            print("DEBUG: [ProfileViewModel] activityId: \(activityId) -> activityFound: \(activity != nil), cellLabel: \(cellLabel ?? "NIL"), FINAL: \(label)")
             
             inventory.append(TerritoryInventoryItem(
                 id: activityId,
@@ -393,26 +393,9 @@ class ProfileViewModel: ObservableObject {
         // Sort by expiry date (closer first) to remind user to defend
         self.territoryInventory = inventory.sorted { $0.expiresAt < $1.expiresAt }
         
-        // Guardar agregados en Firestore (user document)
-        if let userId = authService.userId {
-            let currentTotal = totalCellsConquered
-            let currentRecent = territoriesCount
-            
-            // BREAK LOOP: Only write if values have actually changed
-            if currentTotal != lastSentTotalOwned || currentRecent != lastSentRecentCount {
-                print("📤 ProfileViewModel: Syncing stats to Firestore (\(currentTotal) total, \(currentRecent) recent). Previous: (\(lastSentTotalOwned ?? -1), \(lastSentRecentCount ?? -1))")
-                lastSentTotalOwned = currentTotal
-                lastSentRecentCount = currentRecent
-                
-                userRepository.updateTerritoryStats(
-                    userId: userId,
-                    totalOwned: currentTotal,
-                    recentWindow: currentRecent
-                )
-            } else {
-                // print("😴 ProfileViewModel: Stats unchanged, skipping Firestore write.")
-            }
-        }
+        // NO WRITES TO FIRESTORE HERE.
+        // The backend now computes all stats during activity processing.
+        // This breaks the infinite update loop and improves performance.
         
         // Calculate Active Rivalries
         self.activeRivalries = calculateActiveRivalries()
@@ -483,6 +466,12 @@ class ProfileViewModel: ObservableObject {
         self.totalStolen = user.totalStolenTerritories ?? 0
         self.totalDefended = user.totalDefendedTerritories ?? 0
         self.totalRecaptured = user.totalRecapturedTerritories ?? 0
+        
+        // NEW: Assign counts directly from server-side computed fields
+        self.activitiesCount = user.totalActivities ?? 0
+        self.territoriesCount = user.totalCellsOwned ?? 0
+        self.totalCellsConquered = user.totalCellsOwned ?? 0
+        self.streakWeeks = user.currentStreakWeeks ?? 0
         
         self.recentTheftVictims = user.recentTheftVictims ?? []
         self.recentThieves = user.recentThieves ?? []

@@ -107,15 +107,18 @@ class OnboardingViewModel: ObservableObject {
     func completeOnboarding() {
         // Only set the date if it doesn't exist (preserving the first onboarding discovery anchor)
         if onboardingCompletionDate == 0 {
-            let days = GameConfigService.shared.config.workoutLookbackDays
-            let initialHistoryStart = Calendar.current.date(
+            // READ CONFIGURATION
+            let daysToImport = GameConfigService.shared.config.initialImportDays
+            
+            // CALCULATE ANCHOR (Start of "The User's Story")
+            let anchorDate = Calendar.current.date(
                 byAdding: .day,
-                value: -days,
+                value: -daysToImport,
                 to: Date()
             ) ?? Date()
             
-            onboardingCompletionDate = initialHistoryStart.timeIntervalSince1970
-            print("[OnboardingViewModel] First onboarding completed. Cutoff anchor set to: \(initialHistoryStart)")
+            onboardingCompletionDate = anchorDate.timeIntervalSince1970
+            print("[OnboardingViewModel] First onboarding completed. Configured initial import: \(daysToImport) days. Anchor set to: \(anchorDate)")
         }
         hasCompletedOnboarding = true
     }

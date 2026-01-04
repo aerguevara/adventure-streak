@@ -303,17 +303,37 @@ struct MapView: UIViewRepresentable {
             if let polygon = overlay as? MKPolygon {
                 let renderer = MKPolygonRenderer(polygon: polygon)
                 
+                let id = polygon.title ?? ""
+                
                 if polygon.subtitle == "rival" {
-                    renderer.strokeColor = .orange
-                    renderer.fillColor = UIColor.orange.withAlphaComponent(0.3)
+                    // Check for "Aura Dorada" (Target > 15 days)
+                    let firstConq = parent.viewModel.otherTerritories.first(where: { $0.id == id })?.firstConqueredAt
+                    let isAncient = firstConq.map { Date().timeIntervalSince($0) > 15 * 24 * 3600 } ?? false
+                    
+                    if isAncient {
+                        renderer.strokeColor = UIColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0) // Gold
+                        renderer.fillColor = UIColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 0.4)
+                        renderer.lineWidth = 3
+                    } else {
+                        renderer.strokeColor = .orange
+                        renderer.fillColor = UIColor.orange.withAlphaComponent(0.3)
+                        renderer.lineWidth = 1
+                    }
                 } else if polygon.subtitle == "expired" {
                     renderer.strokeColor = .gray
                     renderer.fillColor = UIColor.gray.withAlphaComponent(0.4)
+                    renderer.lineWidth = 1
                 } else {
+                    // Local / Defended
+                    let cell = parent.viewModel.territoryStore.conqueredCells[id]
+                    let defenseCount = cell?.defenseCount ?? 0
+                    
                     renderer.strokeColor = .green
                     renderer.fillColor = UIColor.green.withAlphaComponent(0.5)
+                    
+                    // Visual "Wall" reinforcement based on defenses
+                    renderer.lineWidth = CGFloat(1 + min(defenseCount, 4))
                 }
-                renderer.lineWidth = 1
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)

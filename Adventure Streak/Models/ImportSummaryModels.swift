@@ -15,6 +15,9 @@ struct GlobalImportSummary {
     var totalRecaptured: Int = 0 
     var vengeanceFulfilledCount: Int = 0
     var durationSeconds: Double = 0.0
+    var totalLootXP: Int = 0
+    var totalConsolidationXP: Int = 0
+    var totalStreakInterruptionXP: Int = 0
     // For the mini-map visualization
     var routeCoordinates: [[CLLocationCoordinate2D]] = []
     // NEW: Territory Polygons for map
@@ -82,5 +85,10 @@ struct GlobalImportSummary {
         if let newTerritories = territories {
                 self.territories.append(contentsOf: newTerritories)
         }
+        
+        // Handle new XP bonuses if available in Stats
+        self.totalLootXP += stats.totalLootXP ?? 0
+        self.totalConsolidationXP += stats.totalConsolidationXP ?? 0
+        self.totalStreakInterruptionXP += stats.totalStreakInterruptionXP ?? 0
     }
 }

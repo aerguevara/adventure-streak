@@ -59,6 +59,8 @@ struct MainTabView: View {
                             ownerIcon: mapViewModel.selectedTerritoryOwnerIcon,
                             xp: mapViewModel.selectedTerritoryOwnerXP,
                             territories: mapViewModel.selectedTerritoryOwnerTerritories,
+                            firstConqueredAt: mapViewModel.selectedTerritoryFirstConqueredAt,
+                            defenseCount: mapViewModel.selectedTerritoryDefenseCount,
                             onClose: {
                                 mapViewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
                             }

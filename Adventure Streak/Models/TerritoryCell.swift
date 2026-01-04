@@ -24,6 +24,8 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
     var ownerUploadedAt: Date?
     // NEW: Track which activity claimed this cell (critical for race condition handling)
     var activityId: String?
+    var firstConqueredAt: Date?
+    var defenseCount: Int?
     var isHotSpot: Bool?
     var locationLabel: String? // NEW: Store location label
     
@@ -37,7 +39,7 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
     
     // NEW: Explicit CodingKeys required for custom decoding
     enum CodingKeys: String, CodingKey {
-        case id, centerLatitude, centerLongitude, boundary, lastConqueredAt, expiresAt, ownerUserId, ownerDisplayName, ownerUploadedAt, activityId, isHotSpot, locationLabel
+        case id, centerLatitude, centerLongitude, boundary, lastConqueredAt, expiresAt, ownerUserId, ownerDisplayName, ownerUploadedAt, activityId, firstConqueredAt, defenseCount, isHotSpot, locationLabel
         case serverLastConqueredAt = "activityEndAt" // Fallback key used by server
     }
     
@@ -63,6 +65,8 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
         ownerDisplayName = try container.decodeIfPresent(String.self, forKey: .ownerDisplayName)
         ownerUploadedAt = try container.decodeIfPresent(Date.self, forKey: .ownerUploadedAt)
         activityId = try container.decodeIfPresent(String.self, forKey: .activityId)
+        firstConqueredAt = try container.decodeIfPresent(Date.self, forKey: .firstConqueredAt)
+        defenseCount = try container.decodeIfPresent(Int.self, forKey: .defenseCount)
         isHotSpot = try container.decodeIfPresent(Bool.self, forKey: .isHotSpot)
         locationLabel = try container.decodeIfPresent(String.self, forKey: .locationLabel)
         
@@ -97,12 +101,14 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(ownerDisplayName, forKey: .ownerDisplayName)
         try container.encodeIfPresent(ownerUploadedAt, forKey: .ownerUploadedAt)
         try container.encodeIfPresent(activityId, forKey: .activityId)
+        try container.encodeIfPresent(firstConqueredAt, forKey: .firstConqueredAt)
+        try container.encodeIfPresent(defenseCount, forKey: .defenseCount)
         try container.encodeIfPresent(isHotSpot, forKey: .isHotSpot)
         try container.encodeIfPresent(locationLabel, forKey: .locationLabel)
     }
     
     // Default init for creating new cells
-    init(id: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], lastConqueredAt: Date, expiresAt: Date, ownerUserId: String? = nil, ownerDisplayName: String? = nil, ownerUploadedAt: Date? = nil, activityId: String? = nil, isHotSpot: Bool? = nil, locationLabel: String? = nil) {
+    init(id: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], lastConqueredAt: Date, expiresAt: Date, ownerUserId: String? = nil, ownerDisplayName: String? = nil, ownerUploadedAt: Date? = nil, activityId: String? = nil, firstConqueredAt: Date? = nil, defenseCount: Int? = nil, isHotSpot: Bool? = nil, locationLabel: String? = nil) {
         self.id = id
         self.centerLatitude = centerLatitude
         self.centerLongitude = centerLongitude
@@ -113,6 +119,8 @@ struct TerritoryCell: Identifiable, Codable, Hashable {
         self.ownerDisplayName = ownerDisplayName
         self.ownerUploadedAt = ownerUploadedAt
         self.activityId = activityId
+        self.firstConqueredAt = firstConqueredAt
+        self.defenseCount = defenseCount
         self.isHotSpot = isHotSpot
         self.locationLabel = locationLabel
     }

@@ -4,12 +4,19 @@ import HealthKit
 final class ActivitySyncService {
     static let shared = ActivitySyncService()
     
+    @MainActor private(set) var isSyncing = false
+    
     private init() {}
     
     /// Finds workouts in HealthKit that are NEW and within the specified window.
     /// Does not filter by GPS route presence.
     @MainActor
     func findNewWorkouts(from cutoffDate: Date) async -> [ActivitySession] {
+        guard !isSyncing else {
+            print("⚠️ [Sync] Already syncing. Aborting second find request.")
+            return []
+        }
+        
         let userId = AuthenticationService.shared.userId ?? "unknown_user"
         
         // 1. Fetch from HealthKit
@@ -82,6 +89,13 @@ final class ActivitySyncService {
     /// Processes a list of activity sessions through the GameEngine.
     @MainActor
     func processSessions(_ sessions: [ActivitySession], progress: @escaping (Int, Int) -> Void) async {
+        guard !isSyncing else { return }
+        isSyncing = true
+        
+        defer {
+            isSyncing = false
+        }
+        
         let userId = AuthenticationService.shared.userId ?? "unknown_user"
         let userName = AuthenticationService.shared.userName
         let total = sessions.count

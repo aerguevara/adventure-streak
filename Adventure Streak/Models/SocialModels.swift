@@ -10,7 +10,7 @@ struct SocialUser: Identifiable, Codable, Hashable {
 }
 
 struct SocialPost: Identifiable, Codable, Hashable {
-    let id: UUID
+    let id: String
     let userId: String
     let user: SocialUser
     let date: Date

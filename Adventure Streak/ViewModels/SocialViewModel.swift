@@ -34,7 +34,9 @@ class SocialViewModel: ObservableObject {
     }
 
     func refresh() async {
-        isLoading = true
+        if posts.isEmpty {
+            isLoading = true
+        }
         await socialService.refreshFeed()
         isLoading = false
     }

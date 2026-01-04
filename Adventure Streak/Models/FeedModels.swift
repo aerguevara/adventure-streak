@@ -66,7 +66,7 @@ struct MiniMapRegion: Codable, Equatable, Hashable {
 // MARK: - Main Event Model
 
 struct FeedEvent: Identifiable, Codable {
-    var id: String?
+    var id: String
     let type: FeedEventType
     let date: Date
     

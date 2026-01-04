@@ -30,6 +30,8 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
     
     @Published var events: [FeedEvent] = []
     
+    private let store = JSONStore<FeedEvent>(filename: "feed_cache.json")
+    
     nonisolated private let db: Any? = {
         #if canImport(FirebaseFirestore)
         return Firestore.shared
@@ -40,7 +42,13 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
     
     private var listenerRegistration: ListenerRegistration?
     
-    nonisolated init() {}
+    nonisolated init() {
+        // Load cached events on main actor during startup
+        Task { @MainActor in
+            self.events = self.store.load()
+            print("📦 [FeedRepository] Loaded \(self.events.count) cached events")
+        }
+    }
     
     // NEW: Stream recent feed events
     func observeFeed() {
@@ -49,7 +57,6 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         
         // Remove existing listener if any
         listenerRegistration?.remove()
-        self.events = []
         
         listenerRegistration = db.collection("feed")
             .order(by: "date", descending: true)
@@ -75,6 +82,14 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
                     DispatchQueue.main.async {
                         self.events = sorted
                         print("✅ [FeedRepository] Updated events list (total: \(sorted.count))")
+                        
+                        // Save to cache
+                        do {
+                            try self.store.save(sorted)
+                            print("💾 [FeedRepository] Persisted \(sorted.count) events to disk")
+                        } catch {
+                            print("❌ [FeedRepository] Cache Save Error: \(error.localizedDescription)")
+                        }
                     }
                 }
             }
@@ -94,6 +109,9 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
             
             let sorted = processFeedDocuments(snapshot.documents)
             self.events = sorted
+            
+            // Save to cache
+            try? self.store.save(sorted)
         } catch {
             print("Error fetching latest feed: \(error)")
         }
@@ -115,11 +133,10 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         // Step 1: Group by Document ID (Firestore stability)
         var byDocId: [String: FeedEvent] = [:]
         for event in decoded {
-            if let id = event.id {
-                // If we have duplicates of the SAME document ID (rare in a single snapshot),
-                // we'd probably want the most complete version, but here we just take the first.
-                if byDocId[id] == nil { byDocId[id] = event }
-            }
+            let id = event.id
+            // If we have duplicates of the SAME document ID (rare in a single snapshot),
+            // we'd probably want the most complete version, but here we just take the first.
+            if byDocId[id] == nil { byDocId[id] = event }
         }
         
         // Step 2: Cross-document deduplication (identifying same activity across different docs)
@@ -145,7 +162,9 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
             let key = event.activityId.map { "act-\($0)-\(event.type.rawValue)" } ?? fallbackKey
             
             guard let existing = unique[key] else {
-                unique[key] = event
+                var firstEvent = event
+                firstEvent.id = key
+                unique[key] = firstEvent
                 continue
             }
             
@@ -186,7 +205,9 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
             }
             
             if shouldReplace {
-                unique[key] = event
+                var updatedEvent = event
+                updatedEvent.id = key
+                unique[key] = updatedEvent
             }
         }
         
@@ -199,8 +220,8 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         guard let db = db as? Firestore else { return }
         
         do {
-            if let id = event.id, !id.isEmpty {
-                try db.collection("feed").document(id).setData(from: event)
+            if !event.id.isEmpty {
+                try db.collection("feed").document(event.id).setData(from: event)
             } else {
                 try db.collection("feed").addDocument(from: event)
             }

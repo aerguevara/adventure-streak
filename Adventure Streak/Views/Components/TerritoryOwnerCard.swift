@@ -7,6 +7,8 @@ struct TerritoryOwnerCard: View {
     let ownerIcon: String?
     let xp: Int?
     let territories: Int?
+    let firstConqueredAt: Date?
+    let defenseCount: Int?
     let onClose: () -> Void
     
     var body: some View {
@@ -84,6 +86,31 @@ struct TerritoryOwnerCard: View {
             HStack(spacing: 24) {
                 MapStatItem(icon: "star.fill", value: "\(xp ?? 0) XP", color: Color(hex: "A259FF"))
                 MapStatItem(icon: "map.fill", value: "\(territories ?? 0) ZONAS", color: Color(hex: "32D74B"))
+                Spacer()
+            }
+            
+            // NEW: Gamification Stats Row
+            HStack(spacing: 24) {
+                // Nivel de Muro (Defenses)
+                let wallLevel = defenseCount ?? 0
+                MapStatItem(
+                    icon: "shield.fill",
+                    value: "MURO Lvl.\(wallLevel)",
+                    color: .orange
+                )
+                
+                // Accumulated Loot (Approximation: 2 XP per day)
+                if let firstConq = firstConqueredAt {
+                    let days = Int(Date().timeIntervalSince(firstConq) / (24 * 3600))
+                    if days > 0 {
+                        MapStatItem(
+                            icon: "bitcoinsign.circle.fill",
+                            value: "BOTÍN: \(days * 2) XP",
+                            color: .yellow
+                        )
+                    }
+                }
+                
                 Spacer()
             }
         }
