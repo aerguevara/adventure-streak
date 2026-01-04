@@ -78,17 +78,19 @@ struct ActivityCardView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(1.2)
                         )
-                        .padding(.horizontal, 8)
+                        )
+                        .padding(.horizontal, 12)
                 } else if !territoryCells.isEmpty {
                     TerritoryMinimapView(territories: territoryCells)
                         .aspectRatio(1.2, contentMode: .fill)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 12)
                         .transition(.opacity)
                 } else if !hasTerritoryImpact {
                     // Fallback for no maps - Premium Design
                     premiumNoMapFallback
+                        .padding(.horizontal, 12) // Consistent padding
                         .transition(.opacity)
                 }
             }
