@@ -78,21 +78,19 @@ struct ActivityCardView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(1.2)
                         )
-                        .padding(.horizontal, 12)
                 } else if !territoryCells.isEmpty {
                     TerritoryMinimapView(territories: territoryCells)
-                        .aspectRatio(1.2, contentMode: .fill)
+                        .aspectRatio(1.2, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .padding(.horizontal, 12)
                         .transition(.opacity)
                 } else if !hasTerritoryImpact {
                     // Fallback for no maps - Premium Design
                     premiumNoMapFallback
-                        .padding(.horizontal, 12) // Consistent padding
                         .transition(.opacity)
                 }
             }
+            .padding(.horizontal, 12) // Consistent padding for all map states
             .animation(.easeInOut(duration: 0.3), value: isLoadingTerritories)
             .animation(.easeInOut(duration: 0.3), value: territoryCells.isEmpty)
             
@@ -184,7 +182,6 @@ struct ActivityCardView: View {
             }
         }
         .frame(height: 200)
-        .padding(.horizontal, 8)
     }
 
     private func avatar(size: CGFloat) -> some View {
