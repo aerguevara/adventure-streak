@@ -43,7 +43,8 @@ final class ActivitySyncService {
             } else if isAfter && !isNew {
                 // New enough but already synced
             } else if !isAfter && isNew {
-                 print("⏭️ [Sync] Skipping OLD workout: \(workoutName(for: workout) ?? "Unnamed") on \(workout.endDate)")
+                 // Skip old workout silently to avoid console spam
+                 // print("⏭️ [Sync] Skipping OLD workout: \(workoutName(for: workout) ?? "Unnamed") on \(workout.endDate)")
             }
             return isAfter && isNew
         }

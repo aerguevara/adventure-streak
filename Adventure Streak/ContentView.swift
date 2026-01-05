@@ -29,7 +29,12 @@ struct ContentView: View {
         let terrService = TerritoryService(territoryStore: terrStore)
         _workoutsViewModel = StateObject(wrappedValue: WorkoutsViewModel(activityStore: actStore, territoryService: terrService, configService: GameConfigService.shared))
         
-        _profileViewModel = StateObject(wrappedValue: ProfileViewModel(activityStore: actStore, territoryStore: terrStore, configService: GameConfigService.shared))
+        _profileViewModel = StateObject(wrappedValue: ProfileViewModel(
+            activityStore: actStore, 
+            territoryStore: terrStore, 
+            configService: GameConfigService.shared,
+            locationService: locService // NEW: Pass the shared local instance
+        ))
     }
     
     var body: some View {
@@ -117,6 +122,7 @@ struct ContentView: View {
     private func startBackgroundServices() {
         HealthKitManager.shared.startBackgroundObservers()
         BackgroundTaskService.shared.scheduleRefresh()
+        locService.startMonitoring() // NEW: Start monitoring location proactively for treasure detection
         Task {
             NotificationService.shared.requestPermissions()
             NotificationService.shared.startObserving()

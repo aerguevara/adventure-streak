@@ -65,7 +65,8 @@ class FeedViewModel: ObservableObject {
         let conqueredCount = weeklyTerritories.count
         
         // 3. Streak
-        let streak = activityStore.calculateCurrentStreak()
+        // let streak = activityStore.calculateCurrentStreak() // DEPRECATED: Use server stats
+        let streak = 0 // Placeholder
         
         // 4. Lost / Rival (Placeholder for now as we don't track history of losses locally)
         let lostCount = 0 

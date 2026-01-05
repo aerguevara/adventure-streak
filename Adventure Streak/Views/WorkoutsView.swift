@@ -128,6 +128,9 @@ struct WorkoutsView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
             
+            // NEW: High Value Targets Carousel (Moved here)
+            highValueTargetsSection
+            
             // D) Territory Inventory
             territoryInventorySection
             
@@ -362,6 +365,48 @@ struct WorkoutsView: View {
                     }
                     .padding(.horizontal)
                 }
+            }
+        }
+    }
+    
+    // MARK: - NEW: High Value Targets Section
+    var highValueTargetsSection: some View {
+        Group {
+            if !profileViewModel.highValueTargets.isEmpty {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(Color(hex: "FFD700"))
+                        Text("Tesoros Cercanos")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Spacer()
+                        
+                        Text("ROBA XP")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "FFD700"))
+                            .cornerRadius(4)
+                    }
+                    .padding(.horizontal)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 16) {
+                            ForEach(profileViewModel.highValueTargets) { target in
+                                HighValueTargetCard(item: target)
+                                    .onTapGesture {
+                                        onShowOnMap(target.id)
+                                    }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+            } else {
+                EmptyView()
             }
         }
     }

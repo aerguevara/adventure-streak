@@ -337,18 +337,37 @@ class MapViewModel: ObservableObject {
             return
         }
         
-        // 2. Try remote territories (rivals/other)
-        if let remote = otherTerritories.first(where: { $0.id == cellId }) ?? 
-                        TerritoryRepository.shared.vengeanceTerritoryDetails.first(where: { $0.id == cellId }) {
-            let coord = remote.centerCoordinate
+        // 2. Try remote territories (rivals/other viewport-based)
+        if let remoteView = otherTerritories.first(where: { $0.id == cellId }) {
+            let coord = remoteView.centerCoordinate
             self.region = MKCoordinateRegion(center: coord, span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005))
             self.shouldRecenter = true
-            selectTerritory(id: cellId, ownerName: nil, ownerUserId: remote.userId)
-            print("[Map] Navigating to remote territory: \(cellId) at \(remote.centerLatitude), \(remote.centerLongitude)")
+            selectTerritory(id: cellId, ownerName: nil, ownerUserId: remoteView.userId)
+            print("[Map] Navigating to remote (viewport) territory: \(cellId) at \(remoteView.centerLatitude), \(remoteView.centerLongitude)")
+            return
+        }
+
+        // 3. Try proactive stable pool (Treasures from Progress tab)
+        if let proactive = territoryRepository.proactiveTerritories.first(where: { $0.id == cellId }) {
+            let coord = proactive.centerCoordinate
+            self.region = MKCoordinateRegion(center: coord, span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005))
+            self.shouldRecenter = true
+            selectTerritory(id: cellId, ownerName: nil, ownerUserId: proactive.userId)
+            print("[Map] Navigating to proactive (treasure) territory: \(cellId) at \(proactive.centerLatitude), \(proactive.centerLongitude)")
+            return
+        }
+
+        // 4. Try vengeance targets
+        if let vengeance = territoryRepository.vengeanceTerritoryDetails.first(where: { $0.id == cellId }) {
+            let coord = vengeance.centerCoordinate
+            self.region = MKCoordinateRegion(center: coord, span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005))
+            self.shouldRecenter = true
+            selectTerritory(id: cellId, ownerName: nil, ownerUserId: vengeance.userId)
+            print("[Map] Navigating to vengeance territory: \(cellId) at \(vengeance.centerLatitude), \(vengeance.centerLongitude)")
             return
         }
         
-        // 3. Fallback: Parse from ID "x_y" if possible (for offline or emergency navigation)
+        // 5. Fallback: Parse from ID "x_y" if possible (for offline or emergency navigation)
         // ... handled if coordinate extraction logic existed
     }
     

@@ -150,6 +150,7 @@ class ActivityStore: ObservableObject {
         return grouped
     }
     
+    @available(*, deprecated, message: "Use server-side stats from User profile instead to save battery.")
     func calculateCurrentStreak() -> Int {
         let grouped = getActivitiesByWeek()
         let calendar = Calendar.current

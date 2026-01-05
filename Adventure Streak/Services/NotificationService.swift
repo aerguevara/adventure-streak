@@ -17,6 +17,7 @@ class NotificationService: ObservableObject {
     
     private let userDefaults = UserDefaults.standard
     private let cachedTokenKey = "fcm_cached_token"
+    private let lastUploadedTokenBaseKey = "last_uploaded_fcm_token_"
     
     #if canImport(FirebaseFirestore)
     private var db = Firestore.shared
@@ -182,7 +183,19 @@ class NotificationService: ObservableObject {
     }
     
     private func uploadActiveToken(_ token: String, for userId: String) {
+        let lastKey = "\(lastUploadedTokenBaseKey)\(userId)"
+        let lastToken = userDefaults.string(forKey: lastKey)
+        
+        if lastToken == token {
+            print("ℹ️ [Notifications] FCM Token already synced for \(userId). Skipping redundant write.")
+            return
+        }
+        
+        print("🚀 [Notifications] FCM Token changed for \(userId). Updating server...")
         UserRepository.shared.updateFCMToken(userId: userId, token: token)
+        
+        // Optimistically update cache
+        userDefaults.set(token, forKey: lastKey)
     }
     
     // MARK: - Notification Creation

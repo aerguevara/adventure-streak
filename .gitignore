@@ -24,3 +24,7 @@ backend-admin/node_modules/
 backend-admin/secrets/
 *.log
 *.bak
+
+# Temporary Build Artifacts
+build_log*.txt
+build_output*.txt

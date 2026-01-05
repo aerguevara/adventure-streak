@@ -32,7 +32,7 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
     
     private let store = JSONStore<FeedEvent>(filename: "feed_cache.json")
     
-    nonisolated private let db: Any? = {
+    private var db: Any? = {
         #if canImport(FirebaseFirestore)
         return Firestore.shared
         #else
@@ -40,7 +40,13 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
         #endif
     }()
     
+    #if canImport(FirebaseFirestore)
     private var listenerRegistration: ListenerRegistration?
+    #else
+    private var listenerRegistration: Any?
+    #endif
+    private var lastDocument: QueryDocumentSnapshot? // NEW: For pagination
+    private var isFetchingNextPage = false
     
     nonisolated init() {
         // Load cached events on main actor during startup
@@ -75,6 +81,9 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
                 
                 print("📝 [FeedRepository] Received \(documents.count) documents from Firestore")
                 
+                // Store last document for pagination
+                self.lastDocument = documents.last
+                
                 // OPTIMIZATION: Process heavy decoding and deduplication on background thread.
                 DispatchQueue.global(qos: .userInitiated).async {
                     let sorted = self.processFeedDocuments(documents)
@@ -93,6 +102,46 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
                     }
                 }
             }
+        #endif
+    }
+    
+    /// NEW: Fetch the next page of feed events
+    func fetchNextPage() async {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore, let last = lastDocument, !isFetchingNextPage else { return }
+        isFetchingNextPage = true
+        defer { isFetchingNextPage = false }
+        
+        print("📥 [FeedRepository] Fetching next page...")
+        do {
+            let snapshot = try await db.collection("feed")
+                .order(by: "date", descending: true)
+                .start(afterDocument: last)
+                .limit(to: 30)
+                .getDocuments()
+            
+            let newDocs = snapshot.documents
+            guard !newDocs.isEmpty else { return }
+            
+            self.lastDocument = newDocs.last
+            
+            let newEvents = await Task.detached(priority: .userInitiated) {
+                return self.processFeedDocuments(newDocs)
+            }.value
+            
+            await MainActor.run {
+                // Combine and deduplicate
+                let combined = self.events + newEvents
+                // Reuse processFeedDocuments logic (simplified by just unique IDs)
+                var unique: [String: FeedEvent] = [:]
+                for event in combined {
+                    unique[event.id] = event
+                }
+                self.events = unique.values.sorted { $0.date > $1.date }
+            }
+        } catch {
+            print("❌ [FeedRepository] Pagination Error: \(error)")
+        }
         #endif
     }
     
@@ -256,7 +305,9 @@ class FeedRepository: ObservableObject, FeedRepositoryProtocol {
     }
     
     func clear() {
+        #if canImport(FirebaseFirestore)
         listenerRegistration?.remove()
+        #endif
         listenerRegistration = nil
         events = []
     }

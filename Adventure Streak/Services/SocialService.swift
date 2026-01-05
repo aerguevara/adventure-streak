@@ -457,57 +457,65 @@ class SocialService: ObservableObject {
         guard !userIds.isEmpty else { return }
         guard let db = db as? Firestore else { return }
         
-        for userId in userIds {
+        let idsArray = Array(userIds)
+        // Firestore 'in' query supports up to 10 elements (up to 30 in some versions, but 10 is safest/standard for older SDKs, actually up to 30 in modern ones).
+        // Let's use chunks of 10 for maximum compatibility.
+        let chunks = idsArray.chunked(into: 10)
+        
+        for chunk in chunks {
             do {
-                let doc = try await db.collection("users").document(userId).getDocument()
-                if let urlString = doc.get("avatarURL") as? String,
-                   let url = URL(string: urlString) {
-                    avatarCache[userId] = url
-                    // Download and cache data
-                    let (data, _) = try await URLSession.shared.data(from: url)
-                    avatarDataCache.save(data: data, for: userId)
-                } else {
-                    noAvatarIds.insert(userId) // Marcar para no reintentar
+                let snapshot = try await db.collection("users")
+                    .whereField(FieldPath.documentID(), in: chunk)
+                    .getDocuments()
+                
+                for doc in snapshot.documents {
+                    let userId = doc.documentID
+                    if let urlString = doc.get("avatarURL") as? String,
+                       let url = URL(string: urlString) {
+                        avatarCache[userId] = url
+                        // Download and cache data asynchronously
+                        Task.detached(priority: .background) {
+                            if let (data, _) = try? await URLSession.shared.data(from: url) {
+                                await MainActor.run {
+                                    AvatarCacheManager.shared.save(data: data, for: userId)
+                                    // Optionally trigger a refresh if needed, but updatePosts will handle it next time
+                                }
+                            }
+                        }
+                    } else {
+                        noAvatarIds.insert(userId)
+                    }
+                }
+                
+                // Mark IDs not found as noAvatar to avoid re-fetching
+                let foundIds = Set(snapshot.documents.map { $0.documentID })
+                for id in chunk {
+                    if !foundIds.contains(id) {
+                        noAvatarIds.insert(id)
+                    }
                 }
             } catch {
-                print("Error fetching avatar for \(userId): \(error)")
-                noAvatarIds.insert(userId)
+                print("❌ [SocialService] Error batch fetching avatars: \(error)")
+                chunk.forEach { noAvatarIds.insert($0) }
             }
         }
     }
-    
+
+    @MainActor
     func updateAvatar(for userId: String, url: URL, data: Data) {
         avatarCache[userId] = url
-        avatarDataCache.save(data: data, for: userId)
+        AvatarCacheManager.shared.save(data: data, for: userId)
+        noAvatarIds.remove(userId)
         
-        posts = posts.map { post in
-            if post.userId == userId {
-                let updatedUser = SocialUser(
-                    id: post.user.id,
-                    displayName: post.user.displayName,
-                    avatarURL: url,
-                    avatarData: data,
-                    level: post.user.level,
-                    isFollowing: post.user.isFollowing
-                )
-                return SocialPost(
-                    id: post.id,
-                    userId: post.userId,
-                    user: updatedUser,
-                    date: post.date,
-                    activityId: post.activityId,
-                    activityData: post.activityData,
-                    eventType: post.eventType,
-                    eventTitle: post.eventTitle,
-                    eventSubtitle: post.eventSubtitle,
-                    rarity: post.rarity,
-                    miniMapRegion: post.miniMapRegion
-                )
-            }
-            return post
+        // Trigger a re-calculation of posts to reflect the new avatar
+        self.updatePosts(from: self.feedRepository.events)
+    }
+}
+
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0 ..< Swift.min($0 + size, count)])
         }
     }
-    
-    // MARK: - Mock Data
-    // Removed mock data generation
 }

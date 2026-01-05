@@ -3,6 +3,7 @@ import CoreLocation
 import Combine
 
 class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
+    static let shared = LocationService()
     private let locationManager = CLLocationManager()
     
     @Published var currentLocation: CLLocation?

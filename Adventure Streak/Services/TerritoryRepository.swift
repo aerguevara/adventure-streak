@@ -11,6 +11,7 @@ class TerritoryRepository: ObservableObject {
     static let shared = TerritoryRepository()
     
     @Published var otherTerritories: [RemoteTerritory] = []
+    @Published var proactiveTerritories: [RemoteTerritory] = [] // NEW: Dedicated pool for nearby treasures
     @Published var vengeanceTargets: [VengeanceTarget] = []
     @Published var vengeanceTerritoryDetails: [RemoteTerritory] = [] // NEW: Store details for off-screen targets
     @Published private(set) var hasInitialSnapshot: Bool = false
@@ -18,8 +19,13 @@ class TerritoryRepository: ObservableObject {
     private var db: Any? // Type-erased Firestore reference to avoid build errors if SDK missing
     private var listener: Any?
     private var vengeanceListener: Any?
+    private var proactiveListener: Any? // Added for proactive fetch
     private var currentRegion: MKCoordinateRegion?
+    private var lastObservedRegion: MKCoordinateRegion? // NEW: For movement debouncing
     private var isObserving = false
+    
+    // NEW: Geohash range listeners for better spatial queries
+    private var geohashListeners: [String: Any] = [:] 
     
     init() {
         #if canImport(FirebaseFirestore)
@@ -35,7 +41,7 @@ class TerritoryRepository: ObservableObject {
         guard !isObserving else { return }
         isObserving = true
         
-        setupListener(query: db.collection("remote_territories").limit(to: 1000))
+        listener = setupRelativeListener(query: db.collection("remote_territories").limit(to: 1000))
         #endif
     }
     
@@ -103,76 +109,161 @@ class TerritoryRepository: ObservableObject {
         #endif
     }
     
-    // NEW: Listen for territories within a specific region
     func observeTerritories(in region: MKCoordinateRegion) {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         
-        // Calculate bounds with a bit of buffer (20%)
-        let latDelta = region.span.latitudeDelta * 1.2
-        let lonDelta = region.span.longitudeDelta * 1.2
+        // DEBOUNCING: Check if we've moved enough to justify a new query (20% threshold)
+        if let last = lastObservedRegion {
+            let latThreshold = last.span.latitudeDelta * 0.2
+            let lonThreshold = last.span.longitudeDelta * 0.2
+            
+            let latDiff = abs(region.center.latitude - last.center.latitude)
+            let lonDiff = abs(region.center.longitude - last.center.longitude)
+            
+            if latDiff < latThreshold && lonDiff < lonThreshold {
+                // Not enough movement, skip query to save bandwidth
+                return
+            }
+        }
         
-        let minLat = region.center.latitude - latDelta / 2
-        let maxLat = region.center.latitude + latDelta / 2
-        let minLon = region.center.longitude - lonDelta / 2
-        let maxLon = region.center.longitude + lonDelta / 2
-        
-        // Store current region for in-memory filtering of longitude if needed
+        self.lastObservedRegion = region
         self.currentRegion = region
         
-        // Cancel existing listener
-        #if canImport(FirebaseFirestore)
-        if let currentListener = listener as? ListenerRegistration {
-            currentListener.remove()
-        }
-        #endif
+        // Determine required Geohash precision based on zoom level
+        // Approx: span 0.1 deg (~11km) -> precision 5 (~4.9km x 4.9km)
+        // span 0.02 deg (~2km) -> precision 6 (~1.2km x 0.6km)
+        let precision = region.span.latitudeDelta > 0.1 ? 5 : 6
+        let centerHash = Geohash.encode(latitude: region.center.latitude, longitude: region.center.longitude, precision: precision)
+        let neighborHashes = Geohash.neighbours(for: centerHash)
         
-        // Firestore can only do range filters on one field easily. 
-        // We'll filter by Latitude on server and Longitude in memory.
-        let query = db.collection("remote_territories")
-            .whereField("centerLatitude", isGreaterThanOrEqualTo: minLat)
-            .whereField("centerLatitude", isLessThanOrEqualTo: maxLat)
-            .limit(to: 1000)
-            
+        // Remove listeners for hashes no longer needed
+        let currentHashes = Set(neighborHashes)
+        for hash in geohashListeners.keys {
+            if !currentHashes.contains(hash) {
+                if let listener = geohashListeners[hash] as? ListenerRegistration {
+                    listener.remove()
+                }
+                geohashListeners.removeValue(forKey: hash)
+            }
+        }
+        
+        // Create new listeners for revealed hashes
+        for hash in neighborHashes {
+            if geohashListeners[hash] == nil {
+                let query = db.collection("remote_territories")
+                    .whereField("geohash", isGreaterThanOrEqualTo: hash)
+                    .whereField("geohash", isLessThanOrEqualTo: hash + "~")
+                    .limit(to: 500)
+                
+                let listener = setupRelativeListener(query: query)
+                geohashListeners[hash] = listener
+            }
+        }
+        
         isObserving = true
-        setupListener(query: query, minLon: minLon, maxLon: maxLon)
         #endif
     }
     
-    private func setupListener(query: Query, minLon: Double? = nil, maxLon: Double? = nil) {
+    func observeProactiveZone(around center: CLLocationCoordinate2D, radiusInMeters: Double = 10000) {
         #if canImport(FirebaseFirestore)
-        listener = query.addSnapshotListener { [weak self] snapshot, error in
+        guard let db = db as? Firestore else { return }
+        
+        // Use Geohash for proactive zone (radius 10km -> precision 5 is enough)
+        let hash = Geohash.encode(latitude: center.latitude, longitude: center.longitude, precision: 5)
+        _ = Geohash.neighbours(for: hash)
+        
+        print("[Territories] Setting up proactive Geohash observation zone around \(center.latitude), \(center.longitude)")
+        
+        // For proactive zone, we'll use a simpler approach of one listener per neighbor or a combined query if possible.
+        // But Firestore 'in' query on geohash would require exact matches. 
+        // We'll use multiple listeners for the ranges.
+        
+        // (Simplified for now: just clear and rebuild proactive pool)
+        // In a real scenario, we might want to keep these listeners persistent too.
+        
+        // Remove existing proactive listeners if any (not shown in current struct but good practice)
+        
+        let query = db.collection("remote_territories")
+            .whereField("geohash", isGreaterThanOrEqualTo: hash)
+            .whereField("geohash", isLessThanOrEqualTo: hash + "~")
+            .limit(to: 500)
+            
+        proactiveListener = query.addSnapshotListener { [weak self] snapshot, error in
             guard let documents = snapshot?.documents else {
-                print("Error fetching territories: \(error?.localizedDescription ?? "Unknown error")")
+                print("[Territories] Error proactive fetching: \(error?.localizedDescription ?? "Unknown error")")
                 return
             }
             
-            // Perform heavy decoding on background thread to avoid freezing UI
             DispatchQueue.global(qos: .userInitiated).async {
                 let territories = documents.compactMap { doc -> RemoteTerritory? in
                     var territory = try? doc.data(as: RemoteTerritory.self)
-                    territory?.id = doc.documentID // Force assignment of ID
-                    
-                    // In-memory longitude filtering
-                    if let minLon = minLon, let maxLon = maxLon, let t = territory {
-                        if t.centerLongitude < minLon || t.centerLongitude > maxLon {
-                            return nil
-                        }
-                    }
-                    
+                    territory?.id = doc.documentID
                     return territory
                 }
                 
-                // Update UI on main thread
                 DispatchQueue.main.async {
-                    self?.otherTerritories = territories
+                    self?.proactiveTerritories = territories
                     self?.hasInitialSnapshot = true
+                    print("[Territories] Proactive pool updated: \(territories.count) targets found.")
                 }
             }
         }
         #endif
     }
     
+    private func setupRelativeListener(query: Query) -> ListenerRegistration? {
+        #if canImport(FirebaseFirestore)
+        return query.addSnapshotListener { [weak self] snapshot, error in
+            guard let changes = snapshot?.documentChanges else {
+                if let error = error {
+                    print("Error fetching territories: \(error.localizedDescription)")
+                }
+                return
+            }
+            
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard let self = self else { return }
+                
+                var currentTerritories = self.otherTerritories
+                var hasChanges = false
+                
+                for change in changes {
+                    let doc = change.document
+                    switch change.type {
+                    case .added, .modified:
+                        if var territory = try? doc.data(as: RemoteTerritory.self) {
+                            territory.id = doc.documentID
+                            if let index = currentTerritories.firstIndex(where: { $0.id == territory.id }) {
+                                currentTerritories[index] = territory
+                            } else {
+                                currentTerritories.append(territory)
+                            }
+                            hasChanges = true
+                        }
+                    case .removed:
+                        let id = doc.documentID
+                        if let index = currentTerritories.firstIndex(where: { $0.id == id }) {
+                            currentTerritories.remove(at: index)
+                            hasChanges = true
+                        }
+                    }
+                }
+                
+                if hasChanges {
+                    DispatchQueue.main.async {
+                        self.otherTerritories = currentTerritories
+                        self.hasInitialSnapshot = true
+                    }
+                }
+            }
+        }
+        #else
+        return nil
+        #endif
+    }
+    
+
     /// Espera a la primera sincronización remota (o timeout) para evitar cálculos con store vacío.
     func waitForInitialSync(timeout: TimeInterval = 3.0) async {
         if hasInitialSnapshot { return }
@@ -341,3 +432,4 @@ class TerritoryRepository: ObservableObject {
         #endif
     }
 }
+

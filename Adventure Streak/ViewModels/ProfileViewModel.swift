@@ -66,6 +66,9 @@ class ProfileViewModel: ObservableObject {
     // NEW: Active Rivalries
     @Published var activeRivalries: [RivalryRelationship] = []
     
+    // NEW: High Value Targets (Ancient territories with loot)
+    @Published var highValueTargets: [HighValueTargetItem] = []
+    
     @Published var reservedIcons: Set<String> = []
     @Published var hasAcknowledgedDecReset: Bool = true // Default to true to avoid modal flicker
     
@@ -117,6 +120,7 @@ class ProfileViewModel: ObservableObject {
     private let authService: AuthenticationService
     private let gamificationService: GamificationService
     private let configService: GameConfigService
+    private let locationService: LocationService // NEW
     #if canImport(FirebaseStorage)
     private let storage = Storage.storage()
     #endif
@@ -127,17 +131,20 @@ class ProfileViewModel: ObservableObject {
          userRepository: UserRepository = .shared,
          authService: AuthenticationService = .shared,
          gamificationService: GamificationService = .shared,
-         configService: GameConfigService) {
+         configService: GameConfigService,
+         locationService: LocationService = .shared) { // NEW
         self.activityStore = activityStore
         self.territoryStore = territoryStore
         self.userRepository = userRepository
         self.authService = authService
         self.gamificationService = gamificationService
         self.configService = configService
+        self.locationService = locationService // NEW
         
         // Initial load
         Task {
             await configService.loadConfigIfNeeded()
+            TerritoryRepository.shared.observeTerritories() // Ensure we have a pool of territories
             await MainActor.run {
                 self.fetchProfileData()
             }
@@ -201,6 +208,17 @@ class ProfileViewModel: ObservableObject {
             }
             .store(in: &cancellables)
             
+        // NEW: Observe location updates to trigger proactive treasure search
+        locationService.$currentLocation
+            .compactMap { $0?.coordinate }
+            .first() // Only trigger proactive zone once per load/location acquisition
+            .receive(on: RunLoop.main)
+            .sink { coordinate in
+                print("ProfileViewModel: Location acquired, triggering proactive target search...")
+                TerritoryRepository.shared.observeProactiveZone(around: coordinate)
+            }
+            .store(in: &cancellables)
+            
         // NEW: Observe vengeance targets from repository
         TerritoryRepository.shared.$vengeanceTargets
             .receive(on: RunLoop.main)
@@ -209,8 +227,8 @@ class ProfileViewModel: ObservableObject {
             }
             .store(in: &cancellables)
             
-        // NEW: Observe vengeance details (async fetch results)
-        TerritoryRepository.shared.$vengeanceTerritoryDetails
+        // NEW: Observe proactive territories (stableNearby treasures)
+        TerritoryRepository.shared.$proactiveTerritories
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.refreshLocalStats()
@@ -250,10 +268,10 @@ class ProfileViewModel: ObservableObject {
                         
                         self.updateWithUser(user)
                         
-                        // Sync territories only if needed (once per load or when count changes)
-                        if let userId = user.id {
-                            await TerritoryRepository.shared.syncUserTerritories(userId: userId, store: self.territoryStore)
-                        }
+                        // DEPRECATED: We no longer sync the entire inventory on every update.
+                        // if let userId = user.id {
+                        //     await TerritoryRepository.shared.syncUserTerritories(userId: userId, store: self.territoryStore)
+                        // }
                     }
                 }
             }
@@ -277,17 +295,15 @@ class ProfileViewModel: ObservableObject {
     
     // MARK: - Helpers
     private func refreshLocalStats() {
-        self.streakWeeks = activityStore.calculateCurrentStreak()
+        // self.streakWeeks = activityStore.calculateCurrentStreak() // DEPRECATED: Rely on server stats from user object
         
         // Activities (Total Historical)
         self.activitiesCount = activityStore.activities.count
         
-        // Territories conquered (Total Historical Ownership)
-        // Note: 'conqueredCells' contains current ownership.
-        self.territoriesCount = territoryStore.conqueredCells.count
+        // self.territoriesCount = territoryStore.conqueredCells.count // DEPRECATED: Rely on server stats from user object
         
-        // Total Cells Owned (Historical/Current Total) - Keep as is for now
-        self.totalCellsConquered = territoryStore.conqueredCells.count
+        // Total Cells Owned (Historical/Current Total) - DEPRECATED: Rely on server stats from user object
+        // self.totalCellsConquered = territoryStore.conqueredCells.count
         
         // territoryInventory: Group by activityId
         let cells = territoryStore.conqueredCells.values
@@ -394,11 +410,72 @@ class ProfileViewModel: ObservableObject {
         self.territoryInventory = inventory.sorted { $0.expiresAt < $1.expiresAt }
         
         // NO WRITES TO FIRESTORE HERE.
-        // The backend now computes all stats during activity processing.
-        // This breaks the infinite update loop and improves performance.
+        // The backend computes stats during activity processing.
+        // The app now relies on pre-aggregated stats in the User object.
         
         // Calculate Active Rivalries
         self.activeRivalries = calculateActiveRivalries()
+        
+        // Calculate High Value Targets
+        self.highValueTargets = calculateHighValueTargets()
+    }
+    
+    private func calculateHighValueTargets() -> [HighValueTargetItem] {
+        let repo = TerritoryRepository.shared
+        let now = Date()
+        let currentUserId = authService.userId ?? ""
+        
+        // Filter: Rivals from PROACTIVE pool (stable)
+        let ancientRivals = repo.proactiveTerritories.filter { territory in
+            // Use firstConqueredAt if available, fallback to activityEndAt
+            let referenceDate = territory.firstConqueredAt ?? territory.activityEndAt
+            
+            guard territory.userId != currentUserId else { return false }
+            
+            let ageInSeconds = now.timeIntervalSince(referenceDate)
+            return ageInSeconds > 15 * 24 * 3600 // Threshold: 15 days
+        }
+        
+        // Map to HighValueTargetItem
+        var items: [HighValueTargetItem] = ancientRivals.compactMap { territory in
+            guard let id = territory.id else { return nil }
+            
+            let referenceDate = territory.firstConqueredAt ?? territory.activityEndAt
+            let ageInDays = Int(now.timeIntervalSince(referenceDate) / (24 * 3600))
+            let lootXP = ageInDays * 2 // Default factor
+            
+            return HighValueTargetItem(
+                id: id,
+                ownerId: territory.userId,
+                ownerName: "Rival", // Names are fetched asynchronously on map, using Rival as fallback
+                ownerIcon: MapIconCacheManager.shared.getIcon(for: territory.userId),
+                ownerAvatarURL: nil, // Will be loaded by the card itself
+                locationLabel: territory.locationLabel ?? "Territorio Desconocido",
+                lootXP: lootXP,
+                ageInDays: ageInDays,
+                territories: [TerritoryCell(
+                    id: id,
+                    centerLatitude: territory.centerLatitude,
+                    centerLongitude: territory.centerLongitude,
+                    boundary: territory.boundary,
+                    lastConqueredAt: territory.activityEndAt,
+                    expiresAt: territory.expiresAt,
+                    ownerUserId: territory.userId,
+                    ownerDisplayName: nil,
+                    ownerUploadedAt: territory.uploadedAt?.dateValue(),
+                    activityId: territory.activityId,
+                    firstConqueredAt: territory.firstConqueredAt,
+                    defenseCount: territory.defenseCount,
+                    isHotSpot: territory.isHotSpot,
+                    locationLabel: territory.locationLabel
+                )]
+            )
+        }
+        
+        // Sort by loot value (descending)
+        items.sort { $0.lootXP > $1.lootXP }
+        
+        return Array(items.prefix(10)) // Show top 10
     }
     
     private func calculateActiveRivalries() -> [RivalryRelationship] {

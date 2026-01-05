@@ -30,6 +30,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     let locationLabel: String? // NEW: Store location label
     let firstConqueredAt: Date?
     let defenseCount: Int?
+    let geohash: String? // NEW: Added for efficient spatial queries
     // Legacy field; kept for backward compatibility
     let timestamp: Date
     @ServerTimestamp var uploadedAt: Timestamp?
@@ -41,7 +42,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     
     enum CodingKeys: String, CodingKey {
         case userId, centerLatitude, centerLongitude, boundary, isHotSpot, expiresAt, activityEndAt, activityId, locationLabel, timestamp, uploadedAt
-        case lastConqueredAt, firstConqueredAt, defenseCount
+        case lastConqueredAt, firstConqueredAt, defenseCount, geohash
     }
     
     init(from decoder: Decoder) throws {
@@ -65,6 +66,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         locationLabel = try container.decodeIfPresent(String.self, forKey: .locationLabel)
         firstConqueredAt = try container.decodeIfPresent(Date.self, forKey: .firstConqueredAt)
         defenseCount = try container.decodeIfPresent(Int.self, forKey: .defenseCount)
+        geohash = try container.decodeIfPresent(String.self, forKey: .geohash)
         timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? activityEndAt
         uploadedAt = try container.decodeIfPresent(Timestamp.self, forKey: .uploadedAt)
         
@@ -83,7 +85,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
     }
     
     // Default init
-    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date, activityId: String? = nil, isHotSpot: Bool = false, locationLabel: String? = nil, firstConqueredAt: Date? = nil, defenseCount: Int? = nil) {
+    init(id: String?, userId: String, centerLatitude: Double, centerLongitude: Double, boundary: [TerritoryPoint], expiresAt: Date, activityEndAt: Date, activityId: String? = nil, isHotSpot: Bool = false, locationLabel: String? = nil, firstConqueredAt: Date? = nil, defenseCount: Int? = nil, geohash: String? = nil) {
         self._id = DocumentID(wrappedValue: id)
         self.userId = userId
         self.centerLatitude = centerLatitude
@@ -96,6 +98,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         self.locationLabel = locationLabel
         self.firstConqueredAt = firstConqueredAt
         self.defenseCount = defenseCount
+        self.geohash = geohash
         self.timestamp = activityEndAt
         self.uploadedAt = nil
     }
@@ -115,6 +118,7 @@ struct RemoteTerritory: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(locationLabel, forKey: .locationLabel)
         try container.encodeIfPresent(firstConqueredAt, forKey: .firstConqueredAt)
         try container.encodeIfPresent(defenseCount, forKey: .defenseCount)
+        try container.encodeIfPresent(geohash, forKey: .geohash)
         try container.encodeIfPresent(uploadedAt, forKey: .uploadedAt)
     }
 }

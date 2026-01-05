@@ -3,6 +3,7 @@ import MapKit
 
 struct TerritoryMinimapView: View {
     let territories: [TerritoryCell]
+    var tintColor: Color = .green
     
     @State private var snapshotImage: UIImage? = nil
     @State private var lastSnapshotHash: Int = 0
@@ -99,8 +100,9 @@ struct TerritoryMinimapView: View {
         guard let context = UIGraphicsGetCurrentContext() else { return snapshot.image }
         
         context.setLineWidth(1.5)
-        context.setStrokeColor(UIColor.green.cgColor)
-        context.setFillColor(UIColor.green.withAlphaComponent(0.4).cgColor)
+        let uiColor = UIColor(tintColor)
+        context.setStrokeColor(uiColor.cgColor)
+        context.setFillColor(uiColor.withAlphaComponent(0.4).cgColor)
         
         for cell in territories {
             let points = cell.boundary.map { snapshot.point(for: $0.coordinate) }
