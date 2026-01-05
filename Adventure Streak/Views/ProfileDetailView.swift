@@ -90,20 +90,110 @@ struct ProfileDetailView: View {
                                 .padding(.vertical, 4)
                                 .background(Color.white.opacity(0.05))
                                 .cornerRadius(8)
+                            
+                            if let joinedAt = profileViewModel.joinedAt {
+                                Text("Aventurero desde \(joinedAt, style: .date)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.gray.opacity(0.8))
+                                    .padding(.top, 4)
+                            }
                         }
                     }
                     .padding(.top, 20)
                     
-                    // Stats Grid
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                        StatCard(title: "XP Total", value: "\(profileViewModel.totalXP)", icon: "sparkles", color: .purple)
-                        StatCard(title: "Zonas Totales", value: "\(profileViewModel.totalCellsConquered)", icon: "map.fill", color: .blue)
-                        StatCard(title: "Esta Semana", value: "+\(profileViewModel.territoriesCount)", icon: "figure.run", color: .green)
-                        StatCard(title: "Actividades", value: "\(profileViewModel.activitiesCount)", icon: "bolt.horizontal.fill", color: .yellow)
+                    // XP Progress Bar
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text("Progreso de Nivel")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.gray)
+                            Spacer()
+                            Text("\(profileViewModel.totalXP) XP")
+                                .font(.caption2)
+                                .fontWeight(.black)
+                                .foregroundColor(.white)
+                        }
+                        
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.05))
+                                Capsule()
+                                    .fill(LinearGradient(colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")], startPoint: .leading, endPoint: .trailing))
+                                    .frame(width: geo.size.width * CGFloat(min(Double(profileViewModel.totalXP % 1000) / 1000.0, 1.0)))
+                            }
+                        }
+                        .frame(height: 6)
                     }
                     .padding(.horizontal)
                     
-                    // Extra Actions: Map Icon
+                    // Stats Grid
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Estadísticas")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal)
+                        
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                            StatCard(title: "XP Total", value: "\(profileViewModel.totalXP)", icon: "sparkles", color: .purple)
+                            StatCard(title: "Zonas Totales", value: "\(profileViewModel.totalCellsConquered)", icon: "map.fill", color: .blue)
+                            StatCard(title: "Esta Semana", value: "+\(profileViewModel.territoriesCount)", icon: "figure.run", color: .green)
+                            StatCard(title: "Actividades", value: "\(profileViewModel.activitiesCount)", icon: "bolt.horizontal.fill", color: .yellow)
+                        }
+                        .padding(.horizontal)
+                        
+                        // Personal Records
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Récords Personales")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white.opacity(0.8))
+                            
+                            HStack(spacing: 12) {
+                                recordItem(title: "Semana Histórica", value: String(format: "%.1f km", profileViewModel.bestWeeklyDistanceKm), icon: "trophy.fill", color: .orange)
+                                recordItem(title: "Esta Semana", value: String(format: "%.1f km", profileViewModel.currentWeekDistanceKm), icon: "figure.walk", color: .blue)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    // Next Goal / Rival Card
+                    if let goal = profileViewModel.nextGoal, let xpNeeded = profileViewModel.xpToNextGoal {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Próximo Objetivo")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            
+                            HStack(spacing: 16) {
+                                rivalAvatar(entry: goal)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Supera a \(goal.displayName)")
+                                        .font(.subheadline)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                    
+                                    Text("Te faltan \(xpNeeded) XP esta semana para subir al puesto #\(goal.position)")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding()
+                            .background(Color(hex: "1C1C1E"))
+                            .cornerRadius(16)
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(hex: "FFD60A").opacity(0.3), lineWidth: 1))
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    // Map Icon Action
                     VStack(spacing: 12) {
                         Button {
                             showIconPicker = true
@@ -397,6 +487,60 @@ struct ProfileDetailView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(0.05), lineWidth: 1)
         )
+    }
+    
+    @ViewBuilder
+    private func recordItem(title: String, value: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(color.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(color)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.gray)
+                Text(value)
+                    .font(.system(size: 14, weight: .black))
+                    .foregroundColor(.white)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.03))
+        .cornerRadius(12)
+    }
+    
+    @ViewBuilder
+    private func rivalAvatar(entry: RankingEntry) -> some View {
+        Group {
+            if let data = entry.avatarData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else if let url = entry.avatarURL {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Circle().fill(Color.white.opacity(0.1))
+                }
+            } else {
+                Circle()
+                    .fill(Color.white.opacity(0.1))
+                    .overlay(
+                        Text(entry.displayName.prefix(1).uppercased())
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    )
+            }
+        }
+        .frame(width: 40, height: 40)
+        .clipShape(Circle())
     }
 }
 

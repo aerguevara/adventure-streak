@@ -138,6 +138,10 @@ class SocialService: ObservableObject {
             
             let avatarURL: URL? = {
                 if let provided = event.userAvatarURL {
+                    if let existing = avatarCache[userId], existing.absoluteString != provided.absoluteString {
+                        // URL changed, clear cache
+                        AvatarCacheManager.shared.clear(for: userId)
+                    }
                     avatarCache[userId] = provided
                     return provided
                 }

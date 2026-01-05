@@ -30,4 +30,10 @@ final class AvatarCacheManager {
         let path = directory.appendingPathComponent("\(userId).jpg")
         try? data.write(to: path, options: .atomic)
     }
+    
+    func clear(for userId: String) {
+        cache.removeObject(forKey: userId as NSString)
+        let path = directory.appendingPathComponent("\(userId).jpg")
+        try? fileManager.removeItem(at: path)
+    }
 }

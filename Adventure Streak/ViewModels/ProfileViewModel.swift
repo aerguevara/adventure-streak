@@ -60,6 +60,13 @@ class ProfileViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     
+    // NEW: Competitive Stats
+    @Published var joinedAt: Date? = nil
+    @Published var bestWeeklyDistanceKm: Double = 0
+    @Published var currentWeekDistanceKm: Double = 0
+    @Published var nextGoal: RankingEntry? = nil
+    @Published var xpToNextGoal: Int? = nil
+    
     // NEW: Separated Inventory Lists (Owned vs Vengeance)
     @Published var vengeanceItems: [TerritoryInventoryItem] = []
     
@@ -552,6 +559,11 @@ class ProfileViewModel: ObservableObject {
         
         self.recentTheftVictims = user.recentTheftVictims ?? []
         self.recentThieves = user.recentThieves ?? []
+        
+        self.joinedAt = user.joinedAt
+        self.bestWeeklyDistanceKm = user.bestWeeklyDistanceKm ?? 0
+        self.currentWeekDistanceKm = user.currentWeekDistanceKm ?? 0
+        
         self.mapIcon = user.mapIcon
         if let icon = user.mapIcon, let userId = user.id {
             MapIconCacheManager.shared.setIcon(icon, for: userId)
@@ -561,6 +573,11 @@ class ProfileViewModel: ObservableObject {
         if let userId = user.id {
             print("DEBUG: [ProfileViewModel] updateWithUser calling observeVengeanceTargets for \(userId)")
             TerritoryRepository.shared.observeVengeanceTargets(userId: userId)
+            
+            // Determine next goal
+            Task {
+                await self.calculateNextGoal(for: userId)
+            }
         } else {
             print("ERROR: [ProfileViewModel] updateWithUser user.id is NIL. Cannot observe vengeance.")
         }
@@ -585,16 +602,22 @@ class ProfileViewModel: ObservableObject {
         let metadata = StorageMetadata()
         metadata.contentType = "image/jpeg"
         
-        do {
             _ = try await storageRef.putDataAsync(imageData, metadata: metadata)
             let url = try await storageRef.downloadURL()
             
+            // Versioning: Append timestamp to bypass caches
+            let versionedURLString = "\(url.absoluteString)?v=\(Int(Date().timeIntervalSince1970))"
+            
             // Update Firestore user document
             let userRef = Firestore.shared.collection("users").document(userId)
-            try await userRef.setData(["avatarURL": url.absoluteString], merge: true)
+            try await userRef.setData(["avatarURL": versionedURLString], merge: true)
             
             await MainActor.run {
-                self.avatarURL = url
+                if let versionedURL = URL(string: versionedURLString) {
+                    self.avatarURL = versionedURL
+                    AuthenticationService.shared.userAvatarURL = versionedURLString
+                }
+                AvatarCacheManager.shared.clear(for: userId)
                 AvatarCacheManager.shared.save(data: imageData, for: userId)
                 SocialService.shared.updateAvatar(for: userId, url: url, data: imageData)
             }
@@ -669,4 +692,24 @@ class ProfileViewModel: ObservableObject {
     
     // Procesamiento delegado al cropper; no reprocesar aquí
     private func processImageData(_ data: Data) -> Data? { nil }
+    
+    // MARK: - Competitive Logic
+    private func calculateNextGoal(for userId: String) async {
+        GamificationRepository.shared.fetchWeeklyRanking(limit: 50) { [weak self] entries in
+            guard let self = self else { return }
+            Task { @MainActor in
+                // Find user's position
+                if let userIndex = entries.firstIndex(where: { $0.userId == userId }) {
+                    if userIndex > 0 {
+                        let target = entries[userIndex - 1]
+                        self.nextGoal = target
+                        self.xpToNextGoal = max(target.weeklyXP - entries[userIndex].weeklyXP, 0)
+                    } else {
+                        self.nextGoal = nil // User is #1
+                        self.xpToNextGoal = nil
+                    }
+                }
+            }
+        }
+    }
 }
