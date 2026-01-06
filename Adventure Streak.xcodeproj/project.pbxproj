@@ -13,6 +13,7 @@
 		DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = DA4508392ED2495300D3C493 /* FirebaseCore */; };
 		DA450A482EE5DC1200D3C493 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = DA450A472EE5DC1200D3C493 /* FirebaseStorage */; };
 		DA450CC12EEB674E00D3C493 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = DA450CC02EEB674E00D3C493 /* FirebaseMessaging */; };
+		DA8F804C2F0C47B9008C1952 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = DA8F804B2F0C47B9008C1952 /* FirebaseFunctions */; };
 		DADE8ACA2EF88E22002ABB1F /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = DADE8AC92EF88E22002ABB1F /* GoogleSignIn */; };
 		DADE8ACC2EF88E22002ABB1F /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DADE8ACB2EF88E22002ABB1F /* GoogleSignInSwift */; };
 		DAF00C002F00000100000001 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = DAF00BFF2F00000100000001 /* FirebaseCrashlytics */; };
@@ -71,6 +72,7 @@
 				DA4508382ED2467600D3C493 /* FirebaseAuth in Frameworks */,
 				DA45083A2ED2495300D3C493 /* FirebaseCore in Frameworks */,
 				DA450A482EE5DC1200D3C493 /* FirebaseStorage in Frameworks */,
+				DA8F804C2F0C47B9008C1952 /* FirebaseFunctions in Frameworks */,
 				DAF00C002F00000100000001 /* FirebaseCrashlytics in Frameworks */,
 				DA45082A2ED242EE00D3C493 /* FirebaseFirestore in Frameworks */,
 			);
@@ -151,6 +153,7 @@
 				DAF00BFF2F00000100000001 /* FirebaseCrashlytics */,
 				DADE8AC92EF88E22002ABB1F /* GoogleSignIn */,
 				DADE8ACB2EF88E22002ABB1F /* GoogleSignInSwift */,
+				DA8F804B2F0C47B9008C1952 /* FirebaseFunctions */,
 			);
 			productName = "Adventure Streak";
 			productReference = DA4507A82ED21A0B00D3C493 /* Adventure Streak.app */;
@@ -711,6 +714,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		DA8F804B2F0C47B9008C1952 /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA4508272ED237DA00D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
 		};
 		DADE8AC92EF88E22002ABB1F /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;

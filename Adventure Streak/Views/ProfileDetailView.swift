@@ -150,9 +150,15 @@ struct ProfileDetailView: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(.white.opacity(0.8))
                             
-                            HStack(spacing: 12) {
-                                recordItem(title: "Semana Histórica", value: String(format: "%.1f km", profileViewModel.bestWeeklyDistanceKm), icon: "trophy.fill", color: .orange)
-                                recordItem(title: "Esta Semana", value: String(format: "%.1f km", profileViewModel.currentWeekDistanceKm), icon: "figure.walk", color: .blue)
+                            VStack(spacing: 8) {
+                                HStack(spacing: 8) {
+                                    recordItem(title: "Semana (GPS)", value: String(format: "%.1f km", profileViewModel.currentWeekDistanceKm), icon: "figure.walk", color: .blue)
+                                    recordItem(title: "Total (GPS)", value: String(format: "%.1f km", profileViewModel.totalDistanceKm), icon: "map.fill", color: .cyan)
+                                }
+                                HStack(spacing: 8) {
+                                    recordItem(title: "Histórica (GPS)", value: String(format: "%.1f km", profileViewModel.bestWeeklyDistanceKm), icon: "trophy.fill", color: .orange)
+                                    recordItem(title: "Distancia (Sin GPS)", value: String(format: "%.1f km", profileViewModel.totalDistanceNoGpsKm), icon: "gauge.with.needle", color: .gray)
+                                }
                             }
                         }
                         .padding(.horizontal)
@@ -258,6 +264,51 @@ struct ProfileDetailView: View {
                                     .foregroundColor(.white)
                                 
                                 Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding()
+                            .background(Color(hex: "18181C"))
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                            )
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    // Invitation & Community
+                    VStack(spacing: 12) {
+                        NavigationLink(destination: ReferralTreeView()) {
+                            HStack {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color.orange.opacity(0.15))
+                                        .frame(width: 36, height: 36)
+                                    
+                                    Image(systemName: "person.2.badge.gearshape.fill")
+                                        .foregroundColor(.orange)
+                                }
+                                
+                                Text("Comunidad y Referidos")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.white)
+                                
+                                Spacer()
+                                
+                                if AuthenticationService.shared.invitationCount < AuthenticationService.shared.invitationQuota {
+                                    Text("\(AuthenticationService.shared.invitationQuota - AuthenticationService.shared.invitationCount) disponibles")
+                                        .font(.caption2)
+                                        .foregroundColor(.orange)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(Color.orange.opacity(0.1))
+                                        .cornerRadius(4)
+                                }
                                 
                                 Image(systemName: "chevron.right")
                                     .font(.caption2)

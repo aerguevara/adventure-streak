@@ -37,6 +37,9 @@ struct User: Identifiable, Codable {
     var currentStreakWeeks: Int?
     var bestWeeklyDistanceKm: Double?
     var currentWeekDistanceKm: Double?
+    var totalDistanceKm: Double?
+    var currentWeekDistanceNoGpsKm: Double?
+    var totalDistanceNoGpsKm: Double?
     
     // Remote logout control
     var forceLogoutVersion: Int?
@@ -50,6 +53,13 @@ struct User: Identifiable, Codable {
     
     // Badges
     var badges: [String]?
+    
+    // Invitation & Hierarchy
+    var invitationVerified: Bool?
+    var invitedBy: String?
+    var invitationPath: [String]?
+    var invitationQuota: Int?
+    var invitationCount: Int?
 
     init(id: String? = nil,
          email: String? = nil,
@@ -74,7 +84,12 @@ struct User: Identifiable, Codable {
          recentTheftVictims: [Rival]? = nil,
          recentThieves: [Rival]? = nil,
          hasAcknowledgedDecReset: Bool? = nil,
-         badges: [String]? = nil) {
+         badges: [String]? = nil,
+         invitationVerified: Bool? = nil,
+         invitedBy: String? = nil,
+         invitationPath: [String]? = nil,
+         invitationQuota: Int? = nil,
+         invitationCount: Int? = nil) {
         self.id = id
         self.email = email
         self.displayName = displayName
@@ -99,6 +114,11 @@ struct User: Identifiable, Codable {
         self.recentThieves = recentThieves
         self.hasAcknowledgedDecReset = hasAcknowledgedDecReset
         self.badges = badges
+        self.invitationVerified = invitationVerified
+        self.invitedBy = invitedBy
+        self.invitationPath = invitationPath
+        self.invitationQuota = invitationQuota
+        self.invitationCount = invitationCount
     }
 
     enum CodingKeys: String, CodingKey {
@@ -125,6 +145,11 @@ struct User: Identifiable, Codable {
         case recentThieves
         case hasAcknowledgedDecReset
         case badges
+        case invitationVerified
+        case invitedBy
+        case invitationPath
+        case invitationQuota
+        case invitationCount
     }
 
     init(from decoder: Decoder) throws {
@@ -161,6 +186,11 @@ struct User: Identifiable, Codable {
         recentThieves = try container.decodeIfPresent([Rival].self, forKey: .recentThieves)
         hasAcknowledgedDecReset = try container.decodeIfPresent(Bool.self, forKey: .hasAcknowledgedDecReset)
         badges = try container.decodeIfPresent([String].self, forKey: .badges)
+        invitationVerified = try container.decodeIfPresent(Bool.self, forKey: .invitationVerified)
+        invitedBy = try container.decodeIfPresent(String.self, forKey: .invitedBy)
+        invitationPath = try container.decodeIfPresent([String].self, forKey: .invitationPath)
+        invitationQuota = try container.decodeIfPresent(Int.self, forKey: .invitationQuota)
+        invitationCount = try container.decodeIfPresent(Int.self, forKey: .invitationCount)
     }
 }
 

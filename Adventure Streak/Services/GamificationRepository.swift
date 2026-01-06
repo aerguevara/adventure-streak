@@ -196,6 +196,7 @@ class GamificationRepository: ObservableObject {
                 position: currentRank,
                 isCurrentUser: false
             )
+            entry.weeklyDistance = data["currentWeekDistanceKm"] as? Double ?? 0.0
             entry.trend = trend
             entries.append(entry)
         }
@@ -265,7 +266,7 @@ class GamificationRepository: ObservableObject {
                 if let documents = snapshot?.documents {
                     let entries = documents.map { doc -> RankingEntry in
                         let data = doc.data()
-                        return RankingEntry(
+                        var entry = RankingEntry(
                             userId: doc.documentID,
                             displayName: data["displayName"] as? String ?? "Unknown",
                             level: data["level"] as? Int ?? 1,
@@ -273,6 +274,10 @@ class GamificationRepository: ObservableObject {
                             position: 0, // Not applicable for search
                             isCurrentUser: false
                         )
+                        entry.weeklyDistance = data["currentWeekDistanceKm"] as? Double ?? 0.0
+                        entry.totalDistance = data["totalDistanceKm"] as? Double ?? 0.0
+                        entry.totalDistanceNoGps = data["totalDistanceNoGpsKm"] as? Double ?? 0.0
+                        return entry
                     }
                     completion(entries)
                 } else {

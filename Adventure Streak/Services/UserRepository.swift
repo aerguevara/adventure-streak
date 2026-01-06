@@ -228,14 +228,14 @@ class UserRepository: ObservableObject {
         #endif
     }
 
-    func fetchUser(userId: String, completion: @escaping (User?) -> Void) {
+    func fetchUser(userId: String, source: FirestoreSource = .default, completion: @escaping (User?) -> Void) {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else {
             completion(nil)
             return
         }
         
-        db.collection("users").document(userId).getDocument(source: .default) { (document, error) in
+        db.collection("users").document(userId).getDocument(source: source) { (document, error) in
             if let document = document, document.exists {
                 do {
                     var user = try document.data(as: User.self)
@@ -252,6 +252,14 @@ class UserRepository: ObservableObject {
         #else
         completion(nil)
         #endif
+    }
+    
+    func getUser(userId: String) async -> User? {
+        await withCheckedContinuation { continuation in
+            fetchUser(userId: userId) { user in
+                continuation.resume(returning: user)
+            }
+        }
     }
     
     private var lastObservedResetState: Bool?
@@ -296,6 +304,58 @@ class UserRepository: ObservableObject {
         }
         #else
         return nil
+        #endif
+    }
+    
+    func fetchReferrals(for userId: String, completion: @escaping ([User]) -> Void) {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else {
+            completion([])
+            return
+        }
+        
+        db.collection("users")
+            .whereField("invitedBy", isEqualTo: userId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching referrals: \(error)")
+                    completion([])
+                    return
+                }
+                
+                let users = snapshot?.documents.compactMap { doc -> User? in
+                    try? doc.data(as: User.self)
+                } ?? []
+                completion(users)
+            }
+        #else
+        completion([])
+        #endif
+    }
+
+    func fetchAllDescendants(for userId: String, completion: @escaping ([User]) -> Void) {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else {
+            completion([])
+            return
+        }
+        
+        db.collection("users")
+            .whereField("invitationPath", arrayContains: userId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching descendants: \(error)")
+                    completion([])
+                    return
+                }
+                
+                let users = snapshot?.documents.compactMap { doc -> User? in
+                    try? doc.data(as: User.self)
+                } ?? []
+                completion(users)
+            }
+        #else
+        completion([])
         #endif
     }
     #else

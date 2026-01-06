@@ -49,6 +49,8 @@ struct ContentView: View {
                     .background(Color(.systemBackground))
                 } else if !authService.isAuthenticated {
                     PremiumLoginView()
+                } else if !authService.isInvitationVerified {
+                    InvitationView()
                 } else if !onboardingViewModel.hasCompletedOnboarding {
                     OnboardingView(viewModel: onboardingViewModel)
                 } else {
@@ -65,6 +67,7 @@ struct ContentView: View {
             // Modal detallado para primera carga cuando no hay datos locales
             if configService.isLoaded,
                authService.isAuthenticated,
+               authService.isInvitationVerified,
                onboardingViewModel.hasCompletedOnboarding,
                activityStore.activities.isEmpty,
                (workoutsViewModel.isLoading || authService.isSyncingData) {

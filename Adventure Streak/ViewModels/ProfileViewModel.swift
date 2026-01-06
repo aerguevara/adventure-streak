@@ -64,6 +64,8 @@ class ProfileViewModel: ObservableObject {
     @Published var joinedAt: Date? = nil
     @Published var bestWeeklyDistanceKm: Double = 0
     @Published var currentWeekDistanceKm: Double = 0
+    @Published var totalDistanceKm: Double = 0
+    @Published var totalDistanceNoGpsKm: Double = 0
     @Published var nextGoal: RankingEntry? = nil
     @Published var xpToNextGoal: Int? = nil
     
@@ -563,6 +565,8 @@ class ProfileViewModel: ObservableObject {
         self.joinedAt = user.joinedAt
         self.bestWeeklyDistanceKm = user.bestWeeklyDistanceKm ?? 0
         self.currentWeekDistanceKm = user.currentWeekDistanceKm ?? 0
+        self.totalDistanceKm = user.totalDistanceKm ?? 0
+        self.totalDistanceNoGpsKm = user.totalDistanceNoGpsKm ?? 0
         
         self.mapIcon = user.mapIcon
         if let icon = user.mapIcon, let userId = user.id {
@@ -597,11 +601,13 @@ class ProfileViewModel: ObservableObject {
     // MARK: - Avatar Upload
     func uploadAvatar(imageData: Data) async {
         guard let userId = authService.userId else { return }
+        
         #if canImport(FirebaseStorage)
         let storageRef = storage.reference().child("users/\(userId)/avatar.jpg")
         let metadata = StorageMetadata()
         metadata.contentType = "image/jpeg"
         
+        do {
             _ = try await storageRef.putDataAsync(imageData, metadata: metadata)
             let url = try await storageRef.downloadURL()
             

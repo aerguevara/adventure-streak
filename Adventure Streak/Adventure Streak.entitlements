@@ -12,5 +12,11 @@
 	<true/>
 	<key>aps-environment</key>
 	<string>development</string>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:adventurestreak.web.app</string>
+		<string>applinks:adventure-streak.web.app</string>
+		<string>applinks:adventurestreak.firebaseapp.com</string>
+	</array>
 </dict>
 </plist>

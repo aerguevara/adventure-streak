@@ -6,8 +6,11 @@ struct RankingEntry: Identifiable, Codable {
     let displayName: String
     let level: Int
     let weeklyXP: Int
+    var weeklyDistance: Double = 0.0
     var position: Int
     var isCurrentUser: Bool
+    var totalDistance: Double = 0.0
+    var totalDistanceNoGps: Double = 0.0
     
     // New properties for redesign
     var trend: RankingTrend = .neutral
@@ -28,6 +31,8 @@ struct RankingEntry: Identifiable, Codable {
         case avatarURL
         case avatarData
         case isFollowing
+        case totalDistance
+        case totalDistanceNoGps
     }
 }
 

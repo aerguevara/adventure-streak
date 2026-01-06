@@ -4,9 +4,8 @@ import CryptoKit
 import FirebaseCore
 import FirebaseAuth
 import GoogleSignIn
-#if canImport(FirebaseFirestore)
 import FirebaseFirestore
-#endif
+import FirebaseFunctions
 
 @MainActor
 class AuthenticationService: NSObject, ObservableObject {
@@ -19,6 +18,17 @@ class AuthenticationService: NSObject, ObservableObject {
     @Published var userAvatarURL: String?
     @Published var userMapIcon: String?
     @Published var isSyncingData = false
+    @Published var isInvitationVerified = false
+    @Published var invitationQuota = 0
+    @Published var invitationCount = 0
+    
+    var userInvitationPathCount: Int {
+        // We'll need to fetch the current user's path to calculate relative depth
+        // For now, let's assume we can get it from UserRepository or a cached value.
+        // I'll add a property to track it.
+        return currentUserPathCount
+    }
+    private var currentUserPathCount = 0
     
     private let userDefaults = UserDefaults.standard
     private var userListener: ListenerRegistration?
@@ -39,6 +49,7 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userId = user.uid
             self.userEmail = user.email
             self.userName = AuthenticationService.resolveDisplayName(for: user)
+            self.syncInvitationStatus(userId: user.uid)
             loadDisplayNameFromRemoteIfNeeded(userId: user.uid)
             Task {
                 NotificationService.shared.syncCachedFCMToken(for: user.uid)
@@ -204,7 +215,6 @@ class AuthenticationService: NSObject, ObservableObject {
                 guard let firebaseUser = authResult?.user else { return }
                 
                 Task { @MainActor in
-                    self.isAuthenticated = true
                     self.userId = firebaseUser.uid
                     self.userEmail = firebaseUser.email
                     
@@ -222,14 +232,19 @@ class AuthenticationService: NSObject, ObservableObject {
                     NotificationService.shared.refreshFCMTokenIfNeeded(for: firebaseUser.uid)
                     self.observeForceLogout(for: firebaseUser.uid)
                     
-                    // Sync User Data
-                    UserRepository.shared.fetchUser(userId: firebaseUser.uid) { [weak self] remoteUser in
+                    // Sync User Data - FORCE SERVER to avoid stale unverified state
+                    UserRepository.shared.fetchUser(userId: firebaseUser.uid, source: .server) { [weak self] remoteUser in
                         guard let self = self else { return }
                         
                         // Use remote name if it exists and is not empty, otherwise use Google name
                         let finalName = (remoteUser?.displayName?.isEmpty == false) ? remoteUser!.displayName! : resolvedName
                         self.userName = finalName
                         self.userMapIcon = remoteUser?.mapIcon
+                        
+                        // Update Invitation Status immediately from remote
+                        self.isInvitationVerified = remoteUser?.invitationVerified ?? false
+                        self.invitationQuota = remoteUser?.invitationQuota ?? 0
+                        self.invitationCount = remoteUser?.invitationCount ?? 0
 
                         // RECOVERY LOGIC: Use custom claims if provided in the token (preserved after reinstall)
                         Task {
@@ -257,12 +272,18 @@ class AuthenticationService: NSObject, ObservableObject {
                                 GamificationService.shared.syncState(xp: remoteUser.xp, level: remoteUser.level)
                             }
                             
-                            // Sync Activities
-                            await self.fullSync(userId: firebaseUser.uid)
-                            
-                            ActivityStore.shared.startObserving(userId: firebaseUser.uid)
-                            
+                            // ✅ UNBLOCK UI: Set authenticated immediately after verifying identity and invitation status
+                            // We don't need to wait for full history sync to show the home screen
+                            self.isAuthenticated = true
                             completion(true, nil)
+                            
+                            // Sync Activities in BACKGROUND
+                            Task {
+                                await self.fullSync(userId: firebaseUser.uid)
+                                await MainActor.run {
+                                    ActivityStore.shared.startObserving(userId: firebaseUser.uid)
+                                }
+                            }
                         }
                     }
                 }
@@ -285,6 +306,9 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userAvatarURL = nil
             self.userMapIcon = nil
             self.userEmail = nil
+            self.isInvitationVerified = false
+            self.invitationQuota = 0
+            self.invitationCount = 0
             userListener?.remove()
             userListener = nil
             MapIconCacheManager.shared.clear()
@@ -416,6 +440,11 @@ class AuthenticationService: NSObject, ObservableObject {
                 self.userAvatarURL = user.avatarURL
                 self.userMapIcon = user.mapIcon
                 
+                // Invitation state
+                self.isInvitationVerified = user.invitationVerified ?? false
+                self.invitationQuota = user.invitationQuota ?? 0
+                self.invitationCount = user.invitationCount ?? 0
+                
                 // Sincronizar estado de gamificación
                 GamificationService.shared.syncState(xp: user.xp, level: user.level)
                 
@@ -481,6 +510,172 @@ class AuthenticationService: NSObject, ObservableObject {
     private func forceLogoutKey(for userId: String) -> String {
         "forceLogoutVersion_seen_\(userId)"
     }
+    
+    // MARK: - Invitation Management
+    
+    private func syncInvitationStatus(userId: String) {
+        // Enforce fetching from SERVER to ensure we get the latest verification status
+        // bypassing any stale cache that says verified=false.
+        UserRepository.shared.fetchUser(userId: userId, source: .server) { [weak self] user in
+            guard let self = self, let user = user else { return }
+            DispatchQueue.main.async {
+                self.isInvitationVerified = user.invitationVerified ?? false
+                self.invitationQuota = user.invitationQuota ?? 0
+                self.invitationCount = user.invitationCount ?? 0
+                print("🔒 [AuthenticationService] Invitation Status Sync: Verified=\(self.isInvitationVerified)")
+            }
+        }
+    }
+    
+    private var isRedeeming = false
+    
+    func redeemInvitation(token: String) async throws {
+        let callId = Int.random(in: 1000...9999)
+        let now = Date().timeIntervalSince1970
+        print("🚀 [Auth][\(callId)] redeemInvitation START at \(now)")
+        
+        guard !isRedeeming else { 
+            print("⚠️ [Auth][\(callId)] ABORT: Redención ya en curso.")
+            return 
+        }
+        
+        isRedeeming = true
+        defer { 
+            isRedeeming = false 
+            print("🏁 [Auth][\(callId)] isRedeeming reset to false")
+        }
+        
+        // SOLUCIÓN FINAL: Bypass del SDK de Functions.
+        // Usamos URLSession directo para evitar "GTMSessionFetcher already running" y otros errores opacos.
+        guard let user = Auth.auth().currentUser else {
+            print("❌ [Auth][\(callId)] No user logged in")
+            return
+        }
+        
+        do {
+            print("📡 [Auth][\(callId)] Fetching ID Token...")
+            let idToken = try await user.getIDToken()
+            
+            #if DEBUG
+            let endpoint = "https://us-central1-adventure-streak.cloudfunctions.net/redeemInvitationCallPRE"
+            print("🔧 [Auth] Using PRE environment: \(endpoint)")
+            #else
+            let endpoint = "https://us-central1-adventure-streak.cloudfunctions.net/redeemInvitationCall"
+            print("🌍 [Auth] Using PRO environment: \(endpoint)")
+            #endif
+            
+            guard let url = URL(string: endpoint) else {
+                throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+            }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+            
+            let body: [String: Any] = ["data": ["token": token]]
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            print("📡 [Auth][\(callId)] Sending HTTP Request...")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response type"])
+            }
+            
+            print("✅ [Auth][\(callId)] HTTP Status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode == 200 {
+                // Parse response: Result is in {"result": { ... }} for onCall
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let resultData = json?["result"] as? [String: Any]
+                
+                if let success = resultData?["success"] as? Bool, success {
+                    print("✅ [Auth][\(callId)] Redemption successful!")
+                    if let uid = userId {
+                        self.syncInvitationStatus(userId: uid)
+                    }
+                } else {
+                    print("⚠️ [Auth][\(callId)] Server returned 200 but success flag missing: \(json ?? [:])")
+                }
+            } else {
+                let errorBody = String(data: data, encoding: .utf8) ?? "No body"
+                print("❌ [Auth][\(callId)] Server Error (\(httpResponse.statusCode)): \(errorBody)")
+                throw NSError(domain: "Auth", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Server error: \(errorBody)"])
+            }
+            
+        } catch {
+            print("❌ [Auth][\(callId)] HTTP Error: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    func generateInvitation() async throws -> String? {
+        let callId = Int.random(in: 1000...9999)
+        guard let user = Auth.auth().currentUser else {
+            print("❌ [Auth][\(callId)] No user logged in")
+            return nil
+        }
+        
+        do {
+            print("📡 [Auth][\(callId)] Fetching ID Token for generation...")
+            let idToken = try await user.getIDToken()
+            
+            #if DEBUG
+            let endpoint = "https://us-central1-adventure-streak.cloudfunctions.net/generateInvitationCallPRE"
+            print("🔧 [Auth] Using PRE environment for generation: \(endpoint)")
+            #else
+            let endpoint = "https://us-central1-adventure-streak.cloudfunctions.net/generateInvitationCall"
+            print("🌍 [Auth] Using PRO environment for generation: \(endpoint)")
+            #endif
+            
+            guard let url = URL(string: endpoint) else {
+                throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+            }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+            
+            // Empty body for onCall with no args
+            let body: [String: Any] = ["data": [:]]
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            print("📡 [Auth][\(callId)] Sending HTTP Request (Generation)...")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response type"])
+            }
+            
+            print("✅ [Auth][\(callId)] HTTP Status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode == 200 {
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let resultData = json?["result"] as? [String: Any]
+                
+                if let token = resultData?["token"] as? String {
+                    // Re-sync to update count
+                    if let uid = userId {
+                        self.syncInvitationStatus(userId: uid)
+                    }
+                    return token
+                } else {
+                    print("⚠️ [Auth][\(callId)] Token missing in response: \(json ?? [:])")
+                    return nil
+                }
+            } else {
+                let errorBody = String(data: data, encoding: .utf8) ?? "No body"
+                print("❌ [Auth][\(callId)] Server Error (\(httpResponse.statusCode)): \(errorBody)")
+                throw NSError(domain: "Auth", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Server error: \(errorBody)"])
+            }
+            
+        } catch {
+            print("❌ [Auth][\(callId)] Generation Error: \(error.localizedDescription)")
+            throw error
+        }
+    }
 }
 
 extension AuthenticationService: ASAuthorizationControllerDelegate {
@@ -514,7 +709,6 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                 guard let user = authResult?.user else { return }
                 
                 Task { @MainActor in
-                    self.isAuthenticated = true
                     self.userId = user.uid
                     self.userEmail = user.email
                     
@@ -535,7 +729,8 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                     self.observeForceLogout(for: user.uid)
                     
                     // Prefetch remote user to avoid clobbering existing name if it's a return login
-                    UserRepository.shared.fetchUser(userId: user.uid) { [weak self] remoteUser in
+                    // FORCE SERVER fetch to ensure invitation status is fresh
+                    UserRepository.shared.fetchUser(userId: user.uid, source: .server) { [weak self] remoteUser in
                         guard let self = self else { return }
                         let remoteName = remoteUser?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
                         let chosenName = (remoteName?.isEmpty == false) ? remoteName! : (appleName ?? resolvedFallback)
@@ -543,6 +738,11 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                         self.userName = chosenName
                         self.userAvatarURL = remoteUser?.avatarURL
                         self.userMapIcon = remoteUser?.mapIcon
+                        
+                        // Update Invitation Status
+                        self.isInvitationVerified = remoteUser?.invitationVerified ?? false
+                        self.invitationQuota = remoteUser?.invitationQuota ?? 0
+                        self.invitationCount = remoteUser?.invitationCount ?? 0
                         
                         // RECOVERY LOGIC: Use custom claims if provided in the token (preserved after reinstall)
                         Task {
@@ -572,9 +772,16 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                                 GamificationService.shared.syncState(xp: remoteUser.xp, level: remoteUser.level)
                             }
                             
-                            await self.fullSync(userId: user.uid)
+                            // ✅ UNBLOCK UI: Set authenticated immediately after verifying identity and invitation status
+                            self.isAuthenticated = true
                             
-                            ActivityStore.shared.startObserving(userId: user.uid)
+                            // Sync Activities in BACKGROUND
+                            Task {
+                                await self.fullSync(userId: user.uid)
+                                await MainActor.run {
+                                    ActivityStore.shared.startObserving(userId: user.uid)
+                                }
+                            }
                         }
                     }
                 }

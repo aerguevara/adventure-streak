@@ -99,6 +99,40 @@ struct Adventure_StreakApp: App {
                 .task {
                     await configService.loadConfigIfNeeded()
                 }
+                .onOpenURL { url in
+                    print("🔗 [App] Opened URL: \(url)")
+                    handleDeepLink(url)
+                }
+        }
+    }
+    
+    private func handleDeepLink(_ url: URL) {
+        print("🔗 [App] Manejando Link: \(url.absoluteString)")
+        
+        var token: String? = nil
+        
+        // 1. Soporte para esquema personalizado (adventurestreak://invite?token=XYZ)
+        if url.scheme == "adventurestreak" {
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+               let tokenItem = components.queryItems?.first(where: { $0.name == "token" }) {
+                token = tokenItem.value
+            }
+        }
+        // 2. Soporte para Universal Links (https://adventurestreak.web.app/invite?token=XYZ)
+        else if url.scheme == "https" || url.scheme == "http" {
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+               url.path.contains("/invite") {
+                token = components.queryItems?.first(where: { $0.name == "token" })?.value
+            }
+        }
+        
+        if let foundToken = token {
+            print("🎟️ [App] Token extraído: \(foundToken)")
+            UserDefaults.standard.set(foundToken, forKey: "pendingInvitationToken")
+            
+            // Unificamos la lógica: No redimimos aquí. 
+            // La InvitationView se encargará de pickupear el token de UserDefaults en su onAppear.
+            // Esto evita problemas de doble petición/Fetcher already running.
         }
     }
 }

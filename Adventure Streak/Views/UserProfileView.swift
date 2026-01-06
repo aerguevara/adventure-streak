@@ -4,6 +4,12 @@ struct UserProfileView: View {
     let user: User
     @Environment(\.dismiss) var dismiss
     @StateObject private var socialService = SocialService.shared
+    @StateObject private var comparisonViewModel: RivalryViewModel
+    
+    init(user: User) {
+        self.user = user
+        _comparisonViewModel = StateObject(wrappedValue: RivalryViewModel(targetUserId: user.id ?? ""))
+    }
     
     var body: some View {
         NavigationView {
@@ -62,11 +68,32 @@ struct UserProfileView: View {
                                         .foregroundColor(Color(hex: "A259FF"))
                                     
                                     if let streak = user.currentStreakWeeks, streak > 0 {
-                                        Label("\(streak) week streak", systemImage: "flame.fill")
+                                        Label("\(streak) sem racha", systemImage: "flame.fill")
                                             .font(.subheadline)
                                             .fontWeight(.semibold)
                                             .foregroundColor(.orange)
                                     }
+                                    
+                                    if let totalDist = user.totalDistanceKm, totalDist > 0 {
+                                        Label("\(String(format: "%.1f", totalDist)) GPS", systemImage: "map.fill")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.cyan)
+                                    }
+                                    
+                                    if let manualDist = user.totalDistanceNoGpsKm, manualDist > 0 {
+                                        Label("\(String(format: "%.1f", manualDist)) Manual", systemImage: "gauge.with.needle")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+                                
+                                if let joinedAt = user.joinedAt {
+                                    Text("Aventurero desde \(joinedAt, style: .date)")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.gray.opacity(0.8))
+                                        .padding(.top, 4)
                                 }
                             }
                         }
@@ -76,6 +103,18 @@ struct UserProfileView: View {
                         if let currentUserId = AuthenticationService.shared.userId, user.id != currentUserId {
                             followButton
                         }
+                        
+                        // Competitive Duel / Ranking Snapshot
+                        VStack(spacing: 16) {
+                            if let rivalry = comparisonViewModel.rivalry {
+                                duelCard(rivalry: rivalry)
+                            }
+                            
+                            if let rank = comparisonViewModel.targetRanking {
+                                rankSnapshot(entry: rank)
+                            }
+                        }
+                        .padding(.horizontal)
                         
                         // Stats Grid
                         LazyVGrid(columns: [
@@ -102,6 +141,12 @@ struct UserProfileView: View {
                                 Spacer()
                             }
                             .padding(.horizontal)
+                        }
+                        
+                        // NEW: Intensity Comparison
+                        if let viewerRank = comparisonViewModel.viewerRanking, let targetRank = comparisonViewModel.targetRanking {
+                            intensityComparison(viewer: viewerRank, target: targetRank)
+                                .padding(.horizontal)
                         }
                         
                         // Badges Section
@@ -203,6 +248,165 @@ struct UserProfileView: View {
             .cornerRadius(12)
         }
         .padding(.horizontal)
+    }
+    
+    @ViewBuilder
+    private func duelCard(rivalry: RivalryRelationship) -> some View {
+        VStack(spacing: 12) {
+            HStack {
+                Label("DUELO PERSONAL", systemImage: "bolt.shield.fill")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundColor(.orange)
+                Spacer()
+                Text("HISTORIAL")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.gray)
+            }
+            
+            HStack(spacing: 20) {
+                VStack(spacing: 4) {
+                    Text("\(rivalry.userScore)")
+                        .font(.title2)
+                        .fontWeight(.black)
+                        .foregroundColor(.white)
+                    Text("Tú")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                
+                VStack(spacing: 8) {
+                    Image(systemName: "swords")
+                        .font(.title3)
+                        .foregroundColor(.orange.opacity(0.8))
+                    
+                    Capsule()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(height: 4)
+                        .overlay(
+                            GeometryReader { geo in
+                                let total = Double(rivalry.userScore + rivalry.rivalScore)
+                                let progress = total > 0 ? Double(rivalry.userScore) / total : 0.5
+                                Capsule()
+                                    .fill(LinearGradient(colors: [.blue, .red], startPoint: .leading, endPoint: .trailing))
+                                    .frame(width: geo.size.width * CGFloat(progress))
+                            }
+                        )
+                }
+                .frame(width: 80)
+                
+                VStack(spacing: 4) {
+                    Text("\(rivalry.rivalScore)")
+                        .font(.title2)
+                        .fontWeight(.black)
+                        .foregroundColor(.white)
+                    Text(user.displayName?.prefix(8) ?? "Él")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding()
+        .background(Color(hex: "1C1C1E"))
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.orange.opacity(0.2), lineWidth: 1))
+    }
+    
+    @ViewBuilder
+    private func rankSnapshot(entry: RankingEntry) -> some View {
+        HStack {
+            ZStack {
+                Circle()
+                    .fill(Color.purple.opacity(0.15))
+                    .frame(width: 40, height: 40)
+                Text("#\(entry.position)")
+                    .font(.system(size: 16, weight: .black))
+                    .foregroundColor(.purple)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Ranking Semanal")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.gray)
+                Text("\(entry.weeklyXP) XP acumulados")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chart.bar.fill")
+                .foregroundColor(.purple.opacity(0.5))
+        }
+        .padding()
+        .background(Color(hex: "18181C"))
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
+    }
+    
+    @ViewBuilder
+    private func intensityComparison(viewer: RankingEntry, target: RankingEntry) -> some View {
+        let maxXP = Double(max(viewer.weeklyXP, target.weeklyXP, 1000))
+        let maxDist = max(viewer.weeklyDistance, target.weeklyDistance, 10.0)
+        
+        VStack(alignment: .leading, spacing: 20) {
+            // Section 1: Total Experience Trajectory
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Trayectoria de Experiencia")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                intensityRow(label: "Tú", value: "\(viewer.weeklyXP) XP", ratio: Double(viewer.weeklyXP) / maxXP, color: .blue)
+                intensityRow(label: target.displayName, value: "\(target.weeklyXP) XP", ratio: Double(target.weeklyXP) / maxXP, color: .purple)
+            }
+            
+            Divider().background(Color.white.opacity(0.1))
+            
+            // Section 2: Actual Weekly Intensity (Distance)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Intensidad Semanal")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                intensityRow(label: "Tú", value: String(format: "%.1f km", viewer.weeklyDistance), ratio: viewer.weeklyDistance / maxDist, color: .cyan)
+                intensityRow(label: target.displayName, value: String(format: "%.1f km", target.weeklyDistance), ratio: target.weeklyDistance / maxDist, color: .green)
+            }
+        }
+        .padding()
+        .background(Color(hex: "18181C"))
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
+    }
+
+    private func intensityRow(label: String, value: String, ratio: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.7))
+                Spacer()
+                Text(value)
+                    .font(.caption)
+                    .bold()
+                    .foregroundColor(.white)
+            }
+            
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.1))
+                        .frame(height: 8)
+                    
+                    Capsule()
+                        .fill(color.gradient)
+                        .frame(width: geo.size.width * CGFloat(min(ratio, 1.0)), height: 8)
+                }
+            }
+            .frame(height: 8)
+        }
     }
 }
 
