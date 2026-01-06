@@ -56,7 +56,7 @@ class UserRepository: ObservableObject {
     }
     
     #if canImport(FirebaseAuth)
-    func syncUser(user: FirebaseAuth.User, name: String?, initialXP: Int? = nil, initialLevel: Int? = nil) {
+    func syncUser(user: FirebaseAuth.User, name: String?, initialXP: Int? = nil, initialLevel: Int? = nil, invitationVerified: Bool? = nil) {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         
@@ -67,6 +67,11 @@ class UserRepository: ObservableObject {
             var data: [String: Any] = [
                 "lastLogin": FieldValue.serverTimestamp()
             ]
+            
+            // Persist invitation verification if provided
+            if let invitationVerified = invitationVerified {
+                data["invitationVerified"] = invitationVerified
+            }
             
             let hasXP = document?.get("xp") != nil
             let hasLevel = document?.get("level") != nil

@@ -91,30 +91,12 @@ class AuthenticationService: NSObject, ObservableObject {
     }
     
     func signInAnonymously(completion: @escaping (Bool, Error?) -> Void) {
-        #if DEBUG
-        print("🛠️ [AuthenticationService] DEBUG MODE: Using fixed simulator user ID: DQN1tyypsEZouksWzmFeSIYip7b2")
-        let debugUID = "DQN1tyypsEZouksWzmFeSIYip7b2"
-        
-        Task { @MainActor in
-            self.isAuthenticated = true
-            self.userId = debugUID
-            self.userEmail = nil
-            
-            // Sync/Fetch profile info
-            self.refreshUserProfile(userId: debugUID)
-            
-            NotificationService.shared.syncCachedFCMToken(for: debugUID)
-            NotificationService.shared.refreshFCMTokenIfNeeded(for: debugUID)
-            
-            self.observeForceLogout(for: debugUID)
-            
-            await self.fullSync(userId: debugUID)
-            
-            ActivityStore.shared.startObserving(userId: debugUID)
-            
-            completion(true, nil)
+        // Force logout to ensure we get a NEW anonymous UID every time
+        if Auth.auth().currentUser != nil {
+            print("👤 [AuthenticationService] Force logout before guest login to ensure new UID")
+            self.signOut()
         }
-        #else
+        
         Auth.auth().signInAnonymously { authResult, error in
             if let error = error {
                 print("Error signing in anonymously: \(error.localizedDescription)")
@@ -126,14 +108,14 @@ class AuthenticationService: NSObject, ObservableObject {
             
             if let user = authResult?.user {
                 Task { @MainActor in
-                    self.isAuthenticated = true
                     self.userId = user.uid
                     self.userEmail = nil
                     
-                    // Realistic Name Generation
-                    let adjectives = ["Veloz", "Intrépido", "Legendario", "Silencioso", "Audaz", "Infatigable", "Nómada"]
-                    let nouns = ["Explorador", "Caminante", "Rastreador", "Senda", "Halcón", "Lobo", "Jaguar"]
-                    let guestName = "\(nouns.randomElement() ?? "Explorador") \(adjectives.randomElement() ?? "Veloz")"
+                    // Realistic and unique Name Generation
+                    let adjectives = ["Veloz", "Intrépido", "Legendario", "Silencioso", "Audaz", "Infatigable", "Nómada", "Curioso", "Fiero", "Ágil"]
+                    let nouns = ["Explorador", "Caminante", "Rastreador", "Halcón", "Lobo", "Jaguar", "Puma", "Lince", "Zorro", "Águila"]
+                    let randomNumber = Int.random(in: 100...999)
+                    let guestName = "\(nouns.randomElement() ?? "Explorador") \(adjectives.randomElement() ?? "Veloz") \(randomNumber)"
                     
                     self.userName = guestName
                     
@@ -146,11 +128,24 @@ class AuthenticationService: NSObject, ObservableObject {
                     let initialXP = 1200
                     let initialLevel = 2
                     
-                    // Sync Guest User to Firestore
-                    UserRepository.shared.syncUser(user: user, name: guestName, initialXP: initialXP, initialLevel: initialLevel)
+                    // 🚨 CRITICAL: Set invitationVerified to TRUE for Guest users (Apple Reviewers)
+                    // This bypasses the InvitationView in ContentView
+                    self.isInvitationVerified = true
+                    
+                    // Sync Guest User to Firestore with invitationVerified: true
+                    UserRepository.shared.syncUser(
+                        user: user,
+                        name: guestName,
+                        initialXP: initialXP,
+                        initialLevel: initialLevel,
+                        invitationVerified: true
+                    )
                     
                     // Update local gamification state immediately
                     GamificationService.shared.syncState(xp: initialXP, level: initialLevel)
+                    
+                    // ✅ UNBLOCK UI: Set authenticated immediately
+                    self.isAuthenticated = true
                     
                     await self.fullSync(userId: user.uid)
                     
@@ -164,7 +159,6 @@ class AuthenticationService: NSObject, ObservableObject {
                 }
             }
         }
-        #endif
     }
     
     func signInWithGoogle(completion: @escaping (Bool, Error?) -> Void) {

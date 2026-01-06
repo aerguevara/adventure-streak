@@ -297,6 +297,30 @@ class MapViewModel: ObservableObject {
                 self?.calculateDistance(points: points)
             }
             .store(in: &cancellables)
+            
+        // NEW: React to logout
+        AuthenticationService.shared.$userId
+            .receive(on: RunLoop.main)
+            .sink { [weak self] userId in
+                if userId == nil {
+                    self?.resetState()
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func resetState() {
+        self.selectedTerritoryId = nil
+        self.selectedTerritoryOwner = nil
+        self.selectedTerritoryOwnerId = nil
+        self.selectedTerritoryOwnerXP = nil
+        self.selectedTerritoryOwnerTerritories = nil
+        self.selectedTerritoryOwnerAvatarData = nil
+        self.selectedTerritoryOwnerIcon = nil
+        self.selectedTerritoryFirstConqueredAt = nil
+        self.selectedTerritoryDefenseCount = nil
+        self.userIcons = [:]
+        self.lastQueryRegion = nil
     }
     
     private func cutoffDate(for config: GameConfig) -> Date {

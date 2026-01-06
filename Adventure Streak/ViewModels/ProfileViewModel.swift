@@ -210,9 +210,12 @@ class ProfileViewModel: ObservableObject {
         authService.$userId
             .receive(on: RunLoop.main)
             .sink { [weak self] userId in
-                if userId != nil {
+                if let _ = userId {
                     print("ProfileViewModel: userId found, fetching profile data...")
                     self?.fetchProfileData()
+                } else {
+                    print("ProfileViewModel: userId is nil, resetting state...")
+                    self?.resetState()
                 }
             }
             .store(in: &cancellables)
@@ -294,7 +297,33 @@ class ProfileViewModel: ObservableObject {
         FeedRepository.shared.clear()
         SocialService.shared.clear()
         
+        // Reset local UI state immediately to prevent flicker
+        resetState()
+        
         authService.signOut()
+    }
+    
+    private func resetState() {
+        self.userDisplayName = "Aventurero"
+        self.avatarURL = nil
+        self.level = 1
+        self.totalXP = 0
+        self.nextLevelXP = 1000
+        self.xpProgress = 0.0
+        self.territoriesCount = 0
+        self.activitiesCount = 0
+        self.totalCellsConquered = 0
+        self.streakWeeks = 0
+        self.mapIcon = nil
+        self.recentTheftVictims = []
+        self.recentThieves = []
+        self.vengeanceItems = []
+        self.territoryInventory = []
+        self.activeRivalries = []
+        self.highValueTargets = []
+        self.lastUserUID = ""
+        self.lastUserXP = -1
+        self.lastUserLevel = -1
     }
     
     func refreshGamification() {
@@ -546,6 +575,8 @@ class ProfileViewModel: ObservableObject {
         self.userDisplayName = user.displayName ?? "Adventurer"
         if let urlString = user.avatarURL, let url = URL(string: urlString) {
             self.avatarURL = url
+        } else {
+            self.avatarURL = nil
         }
         
         self.totalHistoricalConquered = user.totalConqueredTerritories ?? 0

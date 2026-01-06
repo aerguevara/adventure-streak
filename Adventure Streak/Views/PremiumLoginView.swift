@@ -95,23 +95,29 @@ struct PremiumLoginView: View {
                         .clipShape(Capsule())
                     }
                     
-                    // Guest Sign In (Debug Only)
-                    #if DEBUG
+                    // Guest Sign In (Reviewer Mode)
                     Button(action: {
                         viewModel.signInAnonymously()
                     }) {
-                        Text("Entrar como invitado")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundColor(.white)
-                            .frame(width: 330, height: 50) // Fixed Width
-                            .background(Color.white.opacity(0.2))
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(.white.opacity(0.2), lineWidth: 1)
-                            )
+                        HStack(spacing: 12) {
+                            Image(systemName: "person.badge.key.fill")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 20, height: 20)
+                                .foregroundColor(.white)
+                            
+                            Text("Entrar como invitado")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .frame(width: 330, height: 50) // Fixed Width
+                        .background(Color.white.opacity(0.15))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(.white.opacity(0.3), lineWidth: 1)
+                        )
                     }
-                    #endif
                 }
                 .padding(.bottom, 40) // No horizontal padding needed with fixed width buttons
                 
