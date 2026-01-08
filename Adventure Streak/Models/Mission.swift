@@ -15,7 +15,7 @@ enum MissionRarity: String, Codable {
     case legendary
 }
 
-struct Mission: Identifiable, Codable {
+struct Mission: Identifiable, Codable, Equatable {
     let id: String
     let userId: String
     let category: MissionCategory

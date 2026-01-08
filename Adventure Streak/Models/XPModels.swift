@@ -60,7 +60,7 @@ struct XPContext {
 // Alias for clarity in Game Engine context, but mapping to TerritoryStats for now
 typealias TerritorialDelta = TerritoryStats
 
-struct TerritoryStats: Codable {
+struct TerritoryStats: Codable, Equatable {
     let newCellsCount: Int?
     let defendedCellsCount: Int?
     let recapturedCellsCount: Int?

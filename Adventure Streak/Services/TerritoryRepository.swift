@@ -27,6 +27,10 @@ class TerritoryRepository: ObservableObject {
     // NEW: Geohash range listeners for better spatial queries
     private var geohashListeners: [String: Any] = [:] 
     
+    // NEW: Thread-safe storage for territories by geohash to prevent race conditions
+    private var territoriesByGeohash: [String: [RemoteTerritory]] = [:]
+    private let storageQueue = DispatchQueue(label: "com.aerguevara.AdventureStreak.TerritoryStore", qos: .userInitiated)
+    
     init() {
         #if canImport(FirebaseFirestore)
         db = Firestore.shared
@@ -41,7 +45,7 @@ class TerritoryRepository: ObservableObject {
         guard !isObserving else { return }
         isObserving = true
         
-        listener = setupRelativeListener(query: db.collection("remote_territories").limit(to: 1000))
+        listener = setupRelativeListener(query: db.collection("remote_territories").limit(to: 1000), geohash: "global")
         #endif
     }
     
@@ -156,7 +160,7 @@ class TerritoryRepository: ObservableObject {
                     .whereField("geohash", isLessThanOrEqualTo: hash + "~")
                     .limit(to: 500)
                 
-                let listener = setupRelativeListener(query: query)
+                let listener = setupRelativeListener(query: query, geohash: hash)
                 geohashListeners[hash] = listener
             }
         }
@@ -205,19 +209,19 @@ class TerritoryRepository: ObservableObject {
                 DispatchQueue.main.async {
                     self?.proactiveTerritories = territories
                     self?.hasInitialSnapshot = true
-                    print("[Territories] Proactive pool updated: \(territories.count) targets found.")
+                    // print("[Territories] Proactive pool updated: \(territories.count) targets found.")
                 }
             }
         }
         #endif
     }
     
-    private func setupRelativeListener(query: Query) -> ListenerRegistration? {
+    private func setupRelativeListener(query: Query, geohash: String) -> ListenerRegistration? {
         #if canImport(FirebaseFirestore)
         return query.addSnapshotListener { [weak self] snapshot, error in
             guard let changes = snapshot?.documentChanges else {
                 if let error = error {
-                    print("Error fetching territories: \(error.localizedDescription)")
+                    print("Error fetching territories for \(geohash): \(error.localizedDescription)")
                 }
                 return
             }
@@ -225,35 +229,44 @@ class TerritoryRepository: ObservableObject {
             DispatchQueue.global(qos: .userInitiated).async {
                 guard let self = self else { return }
                 
-                var currentTerritories = self.otherTerritories
-                var hasChanges = false
-                
-                for change in changes {
-                    let doc = change.document
-                    switch change.type {
-                    case .added, .modified:
-                        if var territory = try? doc.data(as: RemoteTerritory.self) {
-                            territory.id = doc.documentID
-                            if let index = currentTerritories.firstIndex(where: { $0.id == territory.id }) {
-                                currentTerritories[index] = territory
-                            } else {
-                                currentTerritories.append(territory)
+                self.storageQueue.async {
+                    var currentBatch = self.territoriesByGeohash[geohash] ?? []
+                    var hasChanges = false
+                    
+                    for change in changes {
+                        let doc = change.document
+                        switch change.type {
+                        case .added, .modified:
+                            if var territory = try? doc.data(as: RemoteTerritory.self) {
+                                territory.id = doc.documentID
+                                if let index = currentBatch.firstIndex(where: { $0.id == territory.id }) {
+                                    currentBatch[index] = territory
+                                } else {
+                                    currentBatch.append(territory)
+                                }
+                                hasChanges = true
                             }
-                            hasChanges = true
-                        }
-                    case .removed:
-                        let id = doc.documentID
-                        if let index = currentTerritories.firstIndex(where: { $0.id == id }) {
-                            currentTerritories.remove(at: index)
-                            hasChanges = true
+                        case .removed:
+                            let id = doc.documentID
+                            if let index = currentBatch.firstIndex(where: { $0.id == id }) {
+                                currentBatch.remove(at: index)
+                                hasChanges = true
+                            }
                         }
                     }
-                }
-                
-                if hasChanges {
-                    DispatchQueue.main.async {
-                        self.otherTerritories = currentTerritories
-                        self.hasInitialSnapshot = true
+                    
+                    if hasChanges {
+                        self.territoriesByGeohash[geohash] = currentBatch
+                        
+                        // Flatten and update public state
+                        let allTerritories = self.territoriesByGeohash.values.flatMap { $0 }
+                        // Unique by ID in case of geohash overlaps (though they shouldn't overlap in standard grid)
+                        let uniqueTerritories = Array(Dictionary(grouping: allTerritories, by: { $0.id }).compactMap { $0.value.first })
+
+                        DispatchQueue.main.async {
+                            self.otherTerritories = uniqueTerritories
+                            self.hasInitialSnapshot = true
+                        }
                     }
                 }
             }
@@ -271,6 +284,37 @@ class TerritoryRepository: ObservableObject {
         while !hasInitialSnapshot && Date().timeIntervalSince(start) < timeout {
             try? await Task.sleep(nanoseconds: 200_000_000) // 200 ms
         }
+    }
+    
+    // NEW: Stop proactive observation to save resources
+    func stopProactiveObservation() {
+        #if canImport(FirebaseFirestore)
+        if let currentListener = proactiveListener as? ListenerRegistration {
+            currentListener.remove()
+        }
+        proactiveListener = nil
+        #endif
+    }
+    
+    func stopObservation() {
+        #if canImport(FirebaseFirestore)
+        if let currentListener = listener as? ListenerRegistration {
+            currentListener.remove()
+        }
+        listener = nil
+        isObserving = false
+        
+        for (hash, listener) in geohashListeners {
+            if let reg = listener as? ListenerRegistration {
+                reg.remove()
+            }
+            // Clear data for this hash to avoid stale results
+            storageQueue.async {
+                self.territoriesByGeohash.removeValue(forKey: hash)
+            }
+        }
+        geohashListeners.removeAll()
+        #endif
     }
     
     // Fetch a set of territories by IDs (used for prefetch before calcular)

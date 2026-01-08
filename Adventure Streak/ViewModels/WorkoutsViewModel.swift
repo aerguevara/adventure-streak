@@ -81,6 +81,7 @@ class WorkoutsViewModel: ObservableObject {
     private let reloadSubject = PassthroughSubject<Void, Never>() // NEW: For debouncing
     private var isCheckingForWorkouts = false
     private var vengeanceTargetsBeforeImport: Set<String> = [] // NEW: For vengeance logic
+    private var lastRefreshDate: Date? // NEW: For refresh optimization
     
     @Published var isImporting = false
     
@@ -119,7 +120,10 @@ class WorkoutsViewModel: ObservableObject {
         
         configService.$config
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] newConfig in
+                if let resetDate = newConfig.globalResetDate {
+                    self?.activityStore.purgeBefore(date: resetDate)
+                }
                 self?.reloadSubject.send()
             }
             .store(in: &cancellables)
@@ -144,25 +148,27 @@ class WorkoutsViewModel: ObservableObject {
             .store(in: &cancellables)
             
     // NEW: Listen for immediate import triggers (e.g. from Reset)
-        NotificationCenter.default.publisher(for: NSNotification.Name("TriggerImmediateImport"))
+                NotificationCenter.default.publisher(for: NSNotification.Name("TriggerImmediateImport"))
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 print("🔄 Immediate Import Triggered! Reloading workouts from HK & Firestore...")
                 // Force sync check even if previously checked
                 self?.isCheckingForWorkouts = false 
-                self?.syncFromRemote() // NEW: Sync from Firestore
+                Task {
+                    await self?.syncFromRemote() // NEW: Sync from Firestore
+                }
                 self?.importFromHealthKit()
             }
             .store(in: &cancellables)
     }
     
     /// Trigger a manual sync from both HealthKit and Firestore
-    func syncFromRemote() {
+    func syncFromRemote() async {
         guard let userId = AuthenticationService.shared.userId else { return }
-        Task {
-            await AuthenticationService.shared.fullSync(userId: userId)
-            self.reloadSubject.send()
-        }
+        print("🔄 [WorkoutsViewModel] syncFromRemote starting...")
+        await AuthenticationService.shared.fullSync(userId: userId)
+        print("✅ [WorkoutsViewModel] syncFromRemote completed. Triggering reload...")
+        self.reloadSubject.send()
     }
     
     func loadWorkouts() {
@@ -198,10 +204,32 @@ class WorkoutsViewModel: ObservableObject {
             }
     }
     
-    func refresh() async {
-        print("Pull-to-refresh -> refresh()")
-        syncFromRemote() // NEW: Sync from Firestore
+    func refresh(force: Bool = false) async {
+        let isListEmpty = workouts.isEmpty
+        
+        if !force, !isListEmpty, let lastRefresh = lastRefreshDate {
+            let timeSinceLast = Date().timeIntervalSince(lastRefresh)
+            if timeSinceLast < 300 { // 5 minutes
+                print("⏭️ Skipping scheduled refresh (Last sync: \(Int(timeSinceLast))s ago)")
+                return
+            }
+        }
+        
+        print("🔄 Refresh triggered (force: \(force), listEmpty: \(isListEmpty))")
+        
+        // Ensure we await both syncs so the pull-to-refresh spinner stays active
+        await syncFromRemote()
+        await importFromHealthKitAsync() // Use an async version if available or wrap it
+        
+        self.lastRefreshDate = Date()
+    }
+    
+    // Helper to wrap the existing importFromHealthKit in an async task if needed, 
+    // or just ensure we wait if it has internal async logic.
+    private func importFromHealthKitAsync() async {
         importFromHealthKit()
+        // Small delay to allow the Task started in importFromHealthKit to at least begin
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s for HK to respond
     }
     
     func retryPendingImports() {
@@ -557,7 +585,9 @@ class WorkoutsViewModel: ObservableObject {
                                 self.importProcessed = 0
                                 
                                 // NEW: Trigger a official sync to pick up the server's truth in the main collection
-                                self.syncFromRemote()
+                                Task {
+                                    await self.syncFromRemote()
+                                }
                             }
                         }
                     }

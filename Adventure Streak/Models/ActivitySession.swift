@@ -1,6 +1,6 @@
 import Foundation
 
-struct ActivitySession: Identifiable, Codable {
+struct ActivitySession: Identifiable, Codable, Equatable {
     let id: UUID
     let startDate: Date
     let endDate: Date

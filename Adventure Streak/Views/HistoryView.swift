@@ -6,42 +6,60 @@ struct HistoryView: View {
     
     var body: some View {
         NavigationView {
-            List(viewModel.activities) { activity in
-                NavigationLink(destination: ActivityDetailView(activity: activity)) {
-                    HStack {
-                        Image(systemName: activity.activityType.iconName)
-                            .foregroundColor(.blue)
-                            .frame(width: 30)
-                        
-                        VStack(alignment: .leading) {
-                            let headline = activity.missions?.first?.name ?? activity.startDate.formatted(date: .abbreviated, time: .shortened)
-                            Text(headline)
-                                .font(.headline)
-                                .foregroundColor(activity.missions?.isEmpty == false ? missionColor(for: activity.missions?.first?.rarity ?? .common) : .primary)
+            List {
+                ForEach(viewModel.activities) { activity in
+                    NavigationLink(destination: ActivityDetailView(activity: activity)) {
+                        HStack {
+                            Image(systemName: activity.activityType.iconName)
+                                .foregroundColor(.blue)
+                                .frame(width: 30)
                             
-                            HStack(spacing: 8) {
-                                Text(String(format: "%.2f km", activity.distanceMeters / 1000))
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                            VStack(alignment: .leading) {
+                                let headline = activity.missions?.first?.name ?? activity.startDate.formatted(date: .abbreviated, time: .shortened)
+                                Text(headline)
+                                    .font(.headline)
+                                    .foregroundColor(activity.missions?.isEmpty == false ? missionColor(for: activity.missions?.first?.rarity ?? .common) : .primary)
                                 
-                                Text("·")
-                                    .foregroundColor(.secondary)
-                                
-                                let subheadline = activity.displayName
-                                Text(subheadline)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                HStack(spacing: 8) {
+                                    Text(String(format: "%.2f km", activity.distanceMeters / 1000))
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Text("·")
+                                        .foregroundColor(.secondary)
+                                    
+                                    let subheadline = activity.displayName
+                                    Text(subheadline)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            Text(formatDuration(activity.durationSeconds))
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.vertical, 4) // Add breathing room for the glow
+                        .glowPulse(isActive: isMostRecent(activity), color: .orange)
+                        .onAppear {
+                            if activity == viewModel.activities.last && viewModel.canLoadMore {
+                                Task {
+                                    await viewModel.fetchNextPage()
+                                }
                             }
                         }
-                        
-                        Spacer()
-                        
-                        Text(formatDuration(activity.durationSeconds))
-                            .font(.caption)
-                            .foregroundColor(.gray)
                     }
-                    .padding(.vertical, 4) // Add breathing room for the glow
-                    .glowPulse(isActive: isMostRecent(activity), color: .orange)
+                }
+                
+                if viewModel.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
                 }
             }
             .navigationTitle("Historial")

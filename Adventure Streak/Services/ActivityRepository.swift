@@ -215,6 +215,8 @@ final class ActivityRepository {
         #if canImport(FirebaseFirestore)
         return db.collection("activities")
             .whereField("userId", isEqualTo: userId)
+            .order(by: "startDate", descending: true)
+            .limit(to: 20)
             .addSnapshotListener { (snapshot, error) in
                 guard let documents = snapshot?.documents else {
                     if let error = error {
@@ -645,6 +647,47 @@ final class ActivityRepository {
             } catch { }
         }
         return results
+    }
+    
+    /// NEW: Fetch activities paginated for infinite scroll
+    func fetchActivities(userId: String, limit: Int, lastDoc: QueryDocumentSnapshot?) async throws -> (activities: [ActivitySession], lastDoc: QueryDocumentSnapshot?) {
+        var query = db.collection("activities")
+            .whereField("userId", isEqualTo: userId)
+            .order(by: "startDate", descending: true)
+            .limit(to: limit)
+        
+        if let lastDoc = lastDoc {
+            query = query.start(afterDocument: lastDoc)
+        }
+        
+        let snapshot = try await query.getDocuments()
+        let documents = snapshot.documents
+        
+        let activities = documents.compactMap { doc -> ActivitySession? in
+            guard let activityId = UUID(uuidString: doc.documentID) else { return nil }
+            do {
+                let remote = try doc.data(as: FirestoreActivity.self)
+                return ActivitySession(
+                    id: activityId,
+                    startDate: remote.startDate,
+                    endDate: remote.endDate,
+                    activityType: remote.activityType,
+                    distanceMeters: remote.distanceMeters,
+                    durationSeconds: remote.durationSeconds,
+                    workoutName: remote.workoutName,
+                    route: [], // Route on demand
+                    xpBreakdown: remote.xpBreakdown,
+                    territoryStats: remote.territoryStats,
+                    missions: remote.missions,
+                    locationLabel: remote.locationLabel,
+                    processingStatus: ActivitySession.ProcessingStatus(rawValue: remote.processingStatus ?? "") ?? .completed
+                )
+            } catch {
+                return nil
+            }
+        }
+        
+        return (activities, documents.last)
     }
     #endif
 }

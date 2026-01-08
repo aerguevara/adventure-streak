@@ -2,94 +2,123 @@ import SwiftUI
 
 struct ResetInfoView: View {
     @Environment(\.dismiss) var dismiss
-    var onDismiss: () -> Void
+    let seasonId: String
+    let seasonName: String
+    let seasonSubtitle: String
+    let startDate: Date
+    let endDate: Date
+    var onDismiss: (String) -> Void
+    
+    @State private var isAnimating = false
+    
+    private var formattedDateRange: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_ES")
+        formatter.dateFormat = "d MMM"
+        
+        let startString = formatter.string(from: startDate)
+        let endString = formatter.string(from: endDate)
+        
+        let yearFormatter = DateFormatter()
+        yearFormatter.dateFormat = "yyyy"
+        let yearString = yearFormatter.string(from: startDate)
+        
+        return "\(startString) - \(endString) \(yearString)"
+    }
     
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            // Background Glow
-            RadialGradient(
-                gradient: Gradient(colors: [Color.blue.opacity(0.15), Color.black]),
-                center: .center,
-                startRadius: 0,
-                endRadius: 500
-            )
+            // Emotive Background Glow
+            ZStack {
+                // Central deep glow
+                RadialGradient(
+                    gradient: Gradient(colors: [Color(hex: "5B2C6F").opacity(0.4), Color.black]), // Deep Purple/Blue center
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 600
+                )
+                
+                // Bottom subtle blue haze
+                RadialGradient(
+                    gradient: Gradient(colors: [Color.blue.opacity(0.2), Color.clear]),
+                    center: .bottom,
+                    startRadius: 0,
+                    endRadius: 400
+                )
+            }
             .ignoresSafeArea()
             
-            VStack(spacing: 30) {
+            VStack(spacing: 0) {
                 Spacer()
                 
-                // Animated Icon Header
-                ZStack {
-                    Circle()
-                        .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                        .frame(width: 120, height: 120)
+                // Main Content
+                VStack(spacing: 25) {
                     
-                    Circle()
-                        .stroke(Color.blue.opacity(0.1), lineWidth: 8)
-                        .frame(width: 100, height: 100)
+                    // Header
+                    VStack(spacing: 16) {
+                        Text("NUEVA ERA")
+                            .font(.system(size: 14, weight: .black, design: .monospaced))
+                            .foregroundColor(.cyan)
+                            .tracking(8)
+                            .opacity(isAnimating ? 1 : 0)
+                            .offset(y: isAnimating ? 0 : 20)
+                            .animation(.easeOut(duration: 0.8).delay(0.2), value: isAnimating)
+                        
+                        Text(seasonName.uppercased())
+                            .font(.system(size: 48, weight: .heavy, design: .rounded)) // Much larger
+                            .foregroundColor(.white)
+                            .shadow(color: .cyan.opacity(0.5), radius: 20, x: 0, y: 0) // Glow effect
+                            .scaleEffect(isAnimating ? 1 : 0.9)
+                            .opacity(isAnimating ? 1 : 0)
+                            .animation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.4), value: isAnimating)
+                        
+                        Text(formattedDateRange)
+                            .font(.title3)
+                            .fontWeight(.light)
+                            .foregroundColor(.white.opacity(0.7))
+                            .opacity(isAnimating ? 1 : 0)
+                            .animation(.easeOut(duration: 0.8).delay(0.6), value: isAnimating)
+                    }
                     
-                    Image(systemName: "arrow.counterclockwise.circle.fill")
-                        .font(.system(size: 60, weight: .light))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.blue)
+                    Text("El mundo se ha reiniciado. Tu legado perdura, pero el mapa es nuevo.\nReclama tu territorio.")
+                        .font(.body)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.white.opacity(0.8))
+                        .padding(.horizontal, 40)
+                        .padding(.top, 10)
+                        .opacity(isAnimating ? 1 : 0)
+                        .animation(.easeOut(duration: 0.8).delay(0.8), value: isAnimating)
+                    
+                    // Features - Conceptual/Minimalist
+                    HStack(spacing: 40) {
+                        VStack(spacing: 12) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(.yellow)
+                                .shadow(color: .yellow.opacity(0.6), radius: 10)
+                            Text("XP Reset")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        }
+                        
+                        VStack(spacing: 12) {
+                            Image(systemName: "map.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(.green)
+                                .shadow(color: .green.opacity(0.6), radius: 10)
+                            Text("Mapa Nuevo")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding(.top, 30)
+                    .opacity(isAnimating ? 1 : 0)
+                    .animation(.spring(response: 0.8, dampingFraction: 0.6).delay(1.0), value: isAnimating)
                 }
-                .padding(.top, 20)
-                
-                VStack(spacing: 12) {
-                    Text("NUEVA ERA")
-                        .font(.caption)
-                        .fontWeight(.black)
-                        .foregroundColor(.blue)
-                        .tracking(4)
-                    
-                    Text("Punto de Partida")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                    
-                    Text("Diciembre 2025")
-                        .font(.title3)
-                        .fontWeight(.medium)
-                        .foregroundColor(.gray)
-                }
-                
-                Text("Hemos optimizado el sistema de territorios y XP para una experiencia más justa y competitiva.")
-                    .font(.body)
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.white.opacity(0.8))
-                    .padding(.horizontal, 40)
-                
-                // Highlights
-                VStack(spacing: 20) {
-                    ResetFeatureRow(
-                        icon: "archivebox.fill",
-                        title: "Historial Preservado",
-                        description: "Tus datos anteriores al 1 de diciembre se han movido a tu archivo personal."
-                    )
-                    
-                    ResetFeatureRow(
-                        icon: "bolt.fill",
-                        title: "XP Recalculado",
-                        description: "Hemos procesado tus entrenos recientes para ajustar tu nivel actual."
-                    )
-                    
-                    ResetFeatureRow(
-                        icon: "map.fill",
-                        title: "Mapa Global Reset",
-                        description: "Los territorios están listos para ser reclamados de nuevo. ¡Sal ahí fuera!"
-                    )
-                }
-                .padding(25)
-                .background(
-                    RoundedRectangle(cornerRadius: 30)
-                        .fill(Color.white.opacity(0.03))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 30)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                        )
-                )
-                .padding(.horizontal, 20)
                 
                 Spacer()
                 
@@ -101,7 +130,7 @@ struct ResetInfoView: View {
                     FeedRepository.shared.clear()
                     SocialService.shared.clear()
                     
-                    onDismiss()
+                    onDismiss(seasonId)
                     dismiss()
                 }) {
                     Text("ENTENDIDO")
@@ -112,45 +141,38 @@ struct ResetInfoView: View {
                         .padding(.vertical, 18)
                         .background(
                             Capsule()
-                                .fill(Color.blue)
-                                .shadow(color: Color.blue.opacity(0.4), radius: 10, x: 0, y: 5)
+                                .fill(Color.white)
+                                .shadow(color: .white.opacity(0.3), radius: 20, x: 0, y: 0)
                         )
                 }
                 .padding(.horizontal, 40)
-                .padding(.bottom, 40)
+                .padding(.bottom, 50)
+                .opacity(isAnimating ? 1 : 0)
+                .offset(y: isAnimating ? 0 : 50)
+                .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(1.2), value: isAnimating)
             }
+        }
+        .onAppear {
+            isAnimating = true
         }
     }
 }
 
-struct ResetFeatureRow: View {
-    let icon: String
-    let title: String
-    let description: String
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 18) {
-            Image(systemName: icon)
-                .font(.system(size: 22))
-                .foregroundColor(.blue)
-                .frame(width: 30)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                
-                Text(description)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
+// ResetFeatureRow is no longer used but kept if needed for other places, 
+// or I can delete it if it was only used here. 
+// For now, I'll remove it since I replaced the layout.
+// If it's used elsewhere, I should check. 
+// "grep -r ResetFeatureRow" showed it was defined in this file. 
+// I'll check if it's used elsewhere. 
+// Actually, to be safe, I'll omit it since it was defined in this file and likely private to it.
 
 #Preview {
-    ResetInfoView(onDismiss: {})
+    ResetInfoView(
+        seasonId: "T1_2026",
+        seasonName: "Temporada 1",
+        seasonSubtitle: "Enero 2026",
+        startDate: Date(),
+        endDate: Date().addingTimeInterval(86400 * 90),
+        onDismiss: { _ in }
+    )
 }

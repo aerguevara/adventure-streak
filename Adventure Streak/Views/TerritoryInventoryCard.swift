@@ -161,22 +161,24 @@ struct TerritoryInventoryCard: View {
         return "Vence en \(hours)h"
     }
     
-    // Unified color logic
+    // Unified color logic (Agreed for 7-day cycle)
     private var statusColor: Color {
         let remaining = item.expiresAt.timeIntervalSinceNow
         
-        if remaining < 0 { return .gray } // Expired -> Gray
-        if remaining < 86400 * 3 { return .red } // < 3 days -> Red
-        if remaining < 86400 * 7 { return .yellow } // < 7 days -> Yellow
-        return .green // > 7 days -> Green
+        if remaining < 0 { return .gray }        // Expired
+        if remaining < 86400 * 1 { return .red } // < 1 day -> Red (Critical)
+        if remaining < 86400 * 3 { return .yellow } // < 3 days -> Yellow (Warning)
+        return .green                            // > 3 days -> Green (Safe)
     }
     
     private var isUrgent: Bool {
-        return item.expiresAt.timeIntervalSinceNow < 86400 * 3
+        // Urgent if less than 1 day remaining
+        return item.expiresAt.timeIntervalSinceNow < 86400 * 1
     }
     
     private var energyProgress: Double {
-        let maxDuration: TimeInterval = 30 * 86400
+        // Max duration is now 7 days
+        let maxDuration: TimeInterval = 7 * 86400
         let remaining = item.expiresAt.timeIntervalSinceNow
         return max(0, min(1.0, remaining / maxDuration))
     }

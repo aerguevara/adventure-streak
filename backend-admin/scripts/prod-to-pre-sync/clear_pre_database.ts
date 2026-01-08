@@ -8,7 +8,7 @@ const BATCH_SIZE = 500;
 async function clearPRE() {
     console.log("🧹 Starting OPTIMIZED TOTAL CLEAR of adventure-streak-pre...");
 
-    const serviceAccountPath = "/Users/aerguevara/Documents/develop/Adventure Streak/Docs/serviceAccount.json";
+    const serviceAccountPath = "/Users/aerguevara/Documents/develop/Adventure Streak/backend-admin/secrets/serviceAccount.json";
     const databaseId = "adventure-streak-pre";
 
     if (getApps().length === 0) {
@@ -30,40 +30,23 @@ async function clearPRE() {
 
     for (const colName of collections) {
         console.log(`   Cleaning collection: ${colName}...`);
-        const snapshot = await db.collection(colName).get();
-        if (snapshot.empty) continue;
+        const snapshot = await db.collection(colName).count().get();
+        if (snapshot.data().count === 0) continue;
 
-        console.log(`      Found ${snapshot.size} documents.`);
-        await runInParallel(snapshot.docs, async (doc) => {
-            await deleteDocRecursive(doc.ref);
-        });
+        console.log(`      Found ~${snapshot.data().count} documents (count approx).`);
+
+        // Use recursiveDelete for massive speedup
+        // Note: recursiveDelete requires a Query or CollectionReference.
+        const batchSize = 4000; // Large batch for recursive delete
+        await db.recursiveDelete(db.collection(colName));
     }
 
     console.log("✨ PRE Environment cleared successfully.");
 }
 
-async function deleteDocRecursive(docRef: DocumentReference) {
-    const subCols = await docRef.listCollections();
-    for (const subCol of subCols) {
-        const snapshot = await subCol.get();
-        if (snapshot.empty) continue;
-
-        const chunks = chunk(snapshot.docs, BATCH_SIZE);
-        for (const batchDocs of chunks) {
-            const batch = docRef.firestore.batch();
-            batchDocs.forEach(d => batch.delete(d.ref));
-            await batch.commit();
-        }
-    }
-    await docRef.delete();
-}
-
-async function runInParallel<T>(items: T[], fn: (item: T) => Promise<void>) {
-    const chunks = chunk(items, CONCURRENCY_LIMIT);
-    for (const c of chunks) {
-        await Promise.all(c.map(fn));
-    }
-}
+// Helper removed as recursiveDelete handles it internally
+// async function deleteDocRecursive(docRef: DocumentReference) { ... }
+// async function runInParallel<T>(items: T[], fn: (item: T) => Promise<void>) { ... }
 
 function chunk<T>(array: T[], size: number): T[][] {
     return Array.from({ length: Math.ceil(array.length / size) }, (_, i) => array.slice(i * size, i * size + size));

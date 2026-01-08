@@ -163,8 +163,6 @@ class MapViewModel: ObservableObject {
                            cell.centerLongitude >= minLon && cell.centerLongitude <= maxLon
                 }
                 
-                print("DEBUG: Found \(visible.count) visible territories in region (Filtered by config window).")
-                
                 // 2. Hard Cap: Never return more than 500 polygons to keep UI smooth
                 let result = Array(visible.prefix(500))
                 

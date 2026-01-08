@@ -1,7 +1,7 @@
 import Foundation
 // NEW: Added for multiplayer conquest feature
 #if canImport(FirebaseFirestore)
-import FirebaseFirestore
+@preconcurrency import FirebaseFirestore
 #endif
 
 @MainActor
@@ -134,8 +134,10 @@ class GamificationRepository: ObservableObject {
             .limit(to: limit)
             .getDocuments { (snapshot, error) in
                 if let documents = snapshot?.documents {
-                    let entries = self.processRankingDocuments(documents)
-                    completion(entries)
+                    Task { @MainActor in
+                        let entries = self.processRankingDocuments(documents)
+                        completion(entries)
+                    }
                 } else {
                     print("Error fetching ranking: \(String(describing: error))")
                     completion([])
@@ -159,8 +161,10 @@ class GamificationRepository: ObservableObject {
             .limit(to: limit)
             .addSnapshotListener { (snapshot, error) in
                 if let documents = snapshot?.documents {
-                    let entries = self.processRankingDocuments(documents)
-                    completion(entries)
+                    Task { @MainActor in
+                        let entries = self.processRankingDocuments(documents)
+                        completion(entries)
+                    }
                 } else if let error = error {
                     print("Error observing ranking: \(error.localizedDescription)")
                 }
@@ -308,6 +312,7 @@ class GamificationRepository: ObservableObject {
                     return
                 }
                 
+                guard let db = self.db as? Firestore else { return }
                 let batch = db.batch()
                 
                 for (index, doc) in documents.enumerated() {

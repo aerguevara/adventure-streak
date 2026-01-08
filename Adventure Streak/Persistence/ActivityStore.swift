@@ -58,23 +58,26 @@ class ActivityStore: ObservableObject {
             
             DispatchQueue.main.async {
                 let remoteIds = Set(updatedActivities.map { $0.id })
-                let previousCount = self.activities.count
-                
                 // 1. Reconcile: Purge local activities that are gone from the server
-                self.activities.removeAll { local in
-                    // Aggressive reconcile: if it's missing from server and NOT actively uploading, it's a ghost.
-                    // We also skip purging 'error' state if we want to allow retries, 
-                    // but for a reset we definitely want it gone if the server is empty.
-                    let isStale = !remoteIds.contains(local.id) && local.processingStatus != .uploading
-                    
-                    if isStale {
-                        print("🗑️ ActivityStore: REMOVING local activity (missing from server/reset): \(local.id) from \(local.startDate)")
+                // BUT ONLY if they are within the time range of the received snapshot
+                if let oldestRemoteDate = updatedActivities.map({ $0.startDate }).min() {
+                    self.activities.removeAll { local in
+                        // Only consider it stale if it's within the window we just received
+                        let isInWindow = local.startDate >= oldestRemoteDate
+                        let isMissing = !remoteIds.contains(local.id)
+                        let isUploading = local.processingStatus == .uploading
+                        
+                        let isStale = isInWindow && isMissing && !isUploading
+                        
+                        if isStale {
+                            print("🗑️ ActivityStore: REMOVING local activity (stale in recent window): \(local.id) from \(local.startDate)")
+                        }
+                        return isStale
                     }
-                    return isStale
-                }
-                
-                if self.activities.count != previousCount {
-                    print("🧹 ActivityStore: Local activities reconciled. Removed \(previousCount - self.activities.count) items.")
+                } else if updatedActivities.isEmpty && remoteIds.isEmpty {
+                    // If the server explicitly says "zero activities" (e.g. after a reset)
+                    print("🧹 ActivityStore: Server is empty. Clearing all local activities.")
+                    self.activities = []
                 }
                 
                 // 2. Save/Update from remote snapshot
@@ -105,9 +108,12 @@ class ActivityStore: ObservableObject {
     
     func purgeBefore(date: Date) {
         let previousCount = activities.count
-        activities.removeAll { $0.startDate < date }
+        activities.removeAll { local in
+            // Only purge if it's NOT currently uploading to avoid data loss
+            local.startDate < date && local.processingStatus != .uploading
+        }
         if activities.count != previousCount {
-            print("🧹 ActivityStore: Purged \(previousCount - activities.count) activities before \(date)")
+            print("🧹 ActivityStore: Purged \(previousCount - activities.count) activities before reset date \(date)")
             persist()
         }
     }

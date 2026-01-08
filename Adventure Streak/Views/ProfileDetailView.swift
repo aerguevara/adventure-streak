@@ -128,6 +128,10 @@ struct ProfileDetailView: View {
                     }
                     .padding(.horizontal)
                     
+                    // Season Status Card
+                    seasonStatusCard
+                        .padding(.horizontal)
+                    
                     // Stats Grid
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Estadísticas")
@@ -138,7 +142,7 @@ struct ProfileDetailView: View {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                             StatCard(title: "XP Total", value: "\(profileViewModel.totalXP)", icon: "sparkles", color: .purple)
                             StatCard(title: "Zonas Totales", value: "\(profileViewModel.totalCellsConquered)", icon: "map.fill", color: .blue)
-                            StatCard(title: "Esta Semana", value: "+\(profileViewModel.territoriesCount)", icon: "figure.run", color: .green)
+                            StatCard(title: "Zonas Activas", value: "+\(profileViewModel.territoriesCount)", icon: "figure.run", color: .green)
                             StatCard(title: "Actividades", value: "\(profileViewModel.activitiesCount)", icon: "bolt.horizontal.fill", color: .yellow)
                         }
                         .padding(.horizontal)
@@ -156,7 +160,7 @@ struct ProfileDetailView: View {
                                     recordItem(title: "Total (GPS)", value: String(format: "%.1f km", profileViewModel.totalDistanceKm), icon: "map.fill", color: .cyan)
                                 }
                                 HStack(spacing: 8) {
-                                    recordItem(title: "Histórica (GPS)", value: String(format: "%.1f km", profileViewModel.bestWeeklyDistanceKm), icon: "trophy.fill", color: .orange)
+                                    recordItem(title: "Récord Semanal (GPS)", value: String(format: "%.1f km", profileViewModel.bestWeeklyDistanceKm), icon: "trophy.fill", color: .orange)
                                     recordItem(title: "Distancia (Sin GPS)", value: String(format: "%.1f km", profileViewModel.totalDistanceNoGpsKm), icon: "gauge.with.needle", color: .gray)
                                 }
                             }
@@ -470,6 +474,58 @@ struct ProfileDetailView: View {
                     )
             }
         }
+    }
+    
+    @ViewBuilder
+    private var seasonStatusCard: some View {
+        let season = profileViewModel.currentSeason
+        VStack(spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(season.name.uppercased())
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundColor(.orange)
+                    Text(season.subtitle)
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                }
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("QUEDAN")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundColor(.gray)
+                    Text("\(season.daysRemaining) días")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                }
+            }
+            
+            // Progress bar for the season
+            GeometryReader { geo in
+                let totalDays = Calendar.current.dateComponents([.day], from: season.startDate, to: season.endDate).day ?? 90
+                let elapsed = totalDays - season.daysRemaining
+                let progress = Double(elapsed) / Double(totalDays)
+                
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.1))
+                    Capsule()
+                        .fill(Color.orange)
+                        .frame(width: geo.size.width * CGFloat(min(max(progress, 0.05), 1.0)))
+                }
+            }
+            .frame(height: 4)
+        }
+        .padding()
+        .background(Color(hex: "1C1C1E"))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+        )
     }
     
     @ViewBuilder

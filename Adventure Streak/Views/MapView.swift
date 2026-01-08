@@ -123,7 +123,13 @@ struct MapView: UIViewRepresentable {
             let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id) }
             let newOverlays = territoriesToAdd.compactMap { cell -> MKPolygon? in
                 guard cell.boundary.count >= 3 else { return nil }
-                let coords = cell.boundary.map { $0.coordinate }
+                var coords = cell.boundary.map { $0.coordinate }
+                
+                // Ensure closure fallback for legacy data
+                if let first = coords.first, let last = coords.last,
+                   (first.latitude != last.latitude || first.longitude != last.longitude) {
+                    coords.append(first)
+                }
                 
                 let polygon = MKPolygon(coordinates: coords, count: coords.count)
                 polygon.title = cell.id // ID stored in title
@@ -197,9 +203,13 @@ struct MapView: UIViewRepresentable {
             let rivalsToAdd = newRivals.filter { toAddIds.contains($0.id ?? "") }
             let newOverlays = rivalsToAdd.compactMap { territory -> MKPolygon? in
                 guard territory.boundary.count >= 3 else { return nil }
-                let coords = territory.boundary.map { $0.coordinate }
+                var coords = territory.boundary.map { $0.coordinate }
                 
-                // Ensure closure - REVERTED
+                // Ensure closure fallback
+                if let first = coords.first, let last = coords.last,
+                   (first.latitude != last.latitude || first.longitude != last.longitude) {
+                    coords.append(first)
+                }
                 
                 let polygon = MKPolygon(coordinates: coords, count: coords.count)
                 polygon.title = territory.id // ID stored in title

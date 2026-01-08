@@ -43,7 +43,7 @@ struct WorkoutsView: View {
                     scrollOffset = -value
                 }
                 .refreshable {
-                    await viewModel.refresh()
+                    await viewModel.refresh(force: true)
                     profileViewModel.fetchProfileData()
                     badgesViewModel.fetchBadges()
                 }
@@ -60,7 +60,9 @@ struct WorkoutsView: View {
                     }
                 }
                 .sheet(isPresented: $showNotifications) {
-                    NotificationsView()
+                    NavigationStack {
+                        NotificationsView()
+                    }
                 }
                 .sheet(isPresented: $viewModel.showProcessingSummary) {
                     if let summary = viewModel.processingSummaryData {
@@ -72,7 +74,7 @@ struct WorkoutsView: View {
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 Task {
                     print("App entered foreground -> auto-refreshing workouts health data...")
-                    await viewModel.refresh()
+                    await viewModel.refresh(force: false)
                 }
             }
 
@@ -83,7 +85,7 @@ struct WorkoutsView: View {
             }
                 .onAppear {
                     Task {
-                        await viewModel.refresh()
+                        await viewModel.refresh(force: false)
                         profileViewModel.fetchProfileData()
                         badgesViewModel.fetchBadges()
                         notificationService.startObserving()
@@ -116,8 +118,11 @@ struct WorkoutsView: View {
             // A) Header
             headerSection
             
-            // B) Main Progress Card
-            progressCard
+            // B) Season Progress & Main Card
+            VStack(spacing: 12) {
+                seasonProgressHeader
+                progressCard
+            }
             
             // C) Vulnerability Alerts
             if !profileViewModel.vulnerableTerritories.isEmpty {
@@ -197,13 +202,24 @@ struct WorkoutsView: View {
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                 
-                Text(profileViewModel.userTitle) // Dynamic Title
-                    .font(.system(size: 14, weight: .medium, design: .default))
-                    .foregroundColor(Color(hex: "A259FF")) // Purple accent
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color(hex: "A259FF").opacity(0.15))
-                    .cornerRadius(6)
+                HStack(spacing: 6) {
+                    Text(profileViewModel.userTitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(hex: "A259FF"))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color(hex: "A259FF").opacity(0.15))
+                        .cornerRadius(6)
+                    
+                    let season = profileViewModel.currentSeason
+                    Text(season.name)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.15))
+                        .cornerRadius(6)
+                }
             }
             
             Spacer()
@@ -324,6 +340,43 @@ struct WorkoutsView: View {
             RoundedRectangle(cornerRadius: 24)
                 .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
         )
+    }
+    
+    private var seasonProgressHeader: some View {
+        let season = profileViewModel.currentSeason
+        return VStack(spacing: 8) {
+            HStack {
+                Text(season.name.uppercased())
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundColor(.orange)
+                    .tracking(1)
+                
+                Spacer()
+                
+                Text("QUEDAN \(season.daysRemaining) DÍAS")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundColor(.gray)
+                    .tracking(0.5)
+            }
+            .padding(.horizontal, 28)
+            
+            // Minimalist Season Progress Bar
+            GeometryReader { geo in
+                let totalDays = Calendar.current.dateComponents([.day], from: season.startDate, to: season.endDate).day ?? 90
+                let elapsed = totalDays - season.daysRemaining
+                let progress = Double(elapsed) / Double(totalDays)
+                
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.1))
+                    Capsule()
+                        .fill(Color.orange.gradient)
+                        .frame(width: geo.size.width * CGFloat(min(max(progress, 0.05), 1.0)))
+                }
+            }
+            .frame(height: 4)
+            .padding(.horizontal, 24)
+        }
     }
     
     

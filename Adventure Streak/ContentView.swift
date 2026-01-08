@@ -113,10 +113,17 @@ struct ContentView: View {
                 break
             }
         }
-        .fullScreenCover(isPresented: .init(get: { authService.isAuthenticated && !profileViewModel.hasAcknowledgedDecReset }, set: { _ in })) {
-            ResetInfoView {
+        .fullScreenCover(isPresented: $profileViewModel.showSeasonResetModal) {
+            let currentSeason = SeasonManager.shared.currentSeason
+            ResetInfoView(
+                seasonId: currentSeason.id,
+                seasonName: currentSeason.name,
+                seasonSubtitle: currentSeason.subtitle,
+                startDate: currentSeason.startDate,
+                endDate: currentSeason.endDate
+            ) { seasonId in
                 Task {
-                    await profileViewModel.acknowledgeDecReset()
+                    await profileViewModel.acknowledgeSeason(seasonId)
                 }
             }
         }

@@ -57,6 +57,11 @@ class ProfileViewModel: ObservableObject {
     @Published var totalRecaptured: Int = 0
     @Published var territoryInventory: [TerritoryInventoryItem] = []
     @Published var mapIcon: String? = nil
+    @Published var isProfileLoaded: Bool = false
+    
+    var currentSeason: Season {
+        SeasonManager.shared.getCurrentSeason()
+    }
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     
@@ -79,7 +84,9 @@ class ProfileViewModel: ObservableObject {
     @Published var highValueTargets: [HighValueTargetItem] = []
     
     @Published var reservedIcons: Set<String> = []
-    @Published var hasAcknowledgedDecReset: Bool = true // Default to true to avoid modal flicker
+    @Published var hasAcknowledgedDecReset: Bool = true // Legacy
+    @Published var lastAcknowledgeSeasonId: String? = nil
+    @Published var showSeasonResetModal: Bool = false
     
     // Rivals
     @Published var recentTheftVictims: [Rival] = []
@@ -153,7 +160,6 @@ class ProfileViewModel: ObservableObject {
         // Initial load
         Task {
             await configService.loadConfigIfNeeded()
-            TerritoryRepository.shared.observeTerritories() // Ensure we have a pool of territories
             await MainActor.run {
                 self.fetchProfileData()
             }
@@ -230,7 +236,7 @@ class ProfileViewModel: ObservableObject {
                 TerritoryRepository.shared.observeProactiveZone(around: coordinate)
             }
             .store(in: &cancellables)
-            
+ 
         // NEW: Observe vengeance targets from repository
         TerritoryRepository.shared.$vengeanceTargets
             .receive(on: RunLoop.main)
@@ -244,6 +250,14 @@ class ProfileViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.refreshLocalStats()
+            }
+            .store(in: &cancellables)
+            
+        // NEW: Observe SeasonManager for season changes
+        SeasonManager.shared.$currentSeason
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateSeasonModalStatus()
             }
             .store(in: &cancellables)
     }
@@ -324,6 +338,7 @@ class ProfileViewModel: ObservableObject {
         self.lastUserUID = ""
         self.lastUserXP = -1
         self.lastUserLevel = -1
+        self.lastAcknowledgeSeasonId = nil
     }
     
     func refreshGamification() {
@@ -624,6 +639,9 @@ class ProfileViewModel: ObservableObject {
         let isResetAcknowledged = user.hasAcknowledgedDecReset ?? true
         print("DEBUG: ProfileViewModel: hasAcknowledgedDecReset is \(isResetAcknowledged). Show modal: \(!isResetAcknowledged)")
         self.hasAcknowledgedDecReset = isResetAcknowledged
+        self.lastAcknowledgeSeasonId = user.lastAcknowledgeSeasonId
+        self.isProfileLoaded = true
+        self.updateSeasonModalStatus()
         
         // No proactive purge needed here anymore; ActivityStore.reconcile is now aggressive
         // and will automatically remove local activities if they are missing from the server.
@@ -727,6 +745,39 @@ class ProfileViewModel: ObservableObject {
         }
     }
     
+    func acknowledgeSeason(_ seasonId: String) async {
+        guard let userId = authService.userId else { return }
+        do {
+            try await userRepository.acknowledgeSeason(userId: userId, seasonId: seasonId)
+            
+            // Set onboarding date to the global reset date (or now as fallback)
+            // to allow re-importing workouts that happened during this "new era".
+            let safetyFloor = GameConfigService.shared.config.globalResetDate ?? Date()
+            UserDefaults.standard.set(safetyFloor.timeIntervalSince1970, forKey: "onboardingCompletionDate")
+            
+            // Clear all local caches to ensure a completely clean state after reset
+            ActivityStore.shared.clear()
+            TerritoryStore.shared.clear()
+            FeedRepository.shared.clear()
+            SocialService.shared.clear()
+            PendingRouteStore.shared.clear()
+            
+            // Recargar perfil del usuario inmediatamente (para refrescar XP/Nivel)
+            authService.refreshUserProfile(userId: userId)
+            
+            await MainActor.run {
+                self.lastAcknowledgeSeasonId = seasonId
+                self.showSeasonResetModal = false
+                self.hasAcknowledgedDecReset = true
+                
+                // NOTIFICATION: Tell WorkoutsViewModel to re-import immediately (HK + Remote)
+                NotificationCenter.default.post(name: NSNotification.Name("TriggerImmediateImport"), object: nil)
+            }
+        } catch {
+            print("Error acknowledging season: \(error)")
+        }
+    }
+    
     // Procesamiento delegado al cropper; no reprocesar aquí
     private func processImageData(_ data: Data) -> Data? { nil }
     
@@ -748,5 +799,18 @@ class ProfileViewModel: ObservableObject {
                 }
             }
         }
+    }
+    
+    // MARK: - Season Modal Logic
+    private func updateSeasonModalStatus() {
+        let currentSeasonId = SeasonManager.shared.currentSeason.id
+        let isAauthenticated = AuthenticationService.shared.isAuthenticated
+        
+        self.showSeasonResetModal = isAauthenticated && 
+                                    isProfileLoaded && 
+                                    configService.isLoaded &&
+                                    lastAcknowledgeSeasonId != currentSeasonId
+        
+        print("DEBUG: ProfileViewModel: updateSeasonModalStatus. isAuthenticated: \(isAauthenticated), isLoaded: \(isProfileLoaded), configLoaded: \(configService.isLoaded), lastAck: \(lastAcknowledgeSeasonId ?? "nil"), current: \(currentSeasonId). Result: \(showSeasonResetModal)")
     }
 }

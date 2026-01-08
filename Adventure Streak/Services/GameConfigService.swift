@@ -14,6 +14,11 @@ struct GameConfig: Equatable {
     var initialImportDays: Int // NEW
     var globalResetDate: Date? // Managed from Firebase
     
+    // Season Metadata (NEW)
+    var currentSeasonId: String?
+    var currentSeasonName: String?
+    var currentSeasonSubtitle: String?
+    
     static let `default`: GameConfig = {
         let mainId = Bundle.main.bundleIdentifier ?? "com.adventurestreak"
         let watchId = "\(mainId).watchkitapp.watchkitextension"
@@ -25,7 +30,10 @@ struct GameConfig: Equatable {
             routeOptionalBundles: [],
             onboardingImportLimit: 10,
             initialImportDays: 0,
-            globalResetDate: nil
+            globalResetDate: nil,
+            currentSeasonId: nil,
+            currentSeasonName: nil,
+            currentSeasonSubtitle: nil
         )
     }()
     
@@ -46,7 +54,10 @@ struct GameConfig: Equatable {
             routeOptionalBundles: routeOptionalBundles,
             onboardingImportLimit: onboardingImportLimit,
             initialImportDays: initialImportDays,
-            globalResetDate: globalResetDate
+            globalResetDate: globalResetDate,
+            currentSeasonId: currentSeasonId,
+            currentSeasonName: currentSeasonName,
+            currentSeasonSubtitle: currentSeasonSubtitle
         )
     }
     
@@ -105,7 +116,10 @@ final class GameConfigService: ObservableObject {
     }
     
     func cutoffDate(from reference: Date = Date()) -> Date {
-        // 1. Global Window (e.g. 32 days lookback from today)
+        // 1. User Personal Anchor (Onboarding Completion)
+        let userAnchorTimestamp = UserDefaults.standard.double(forKey: "onboardingCompletionDate")
+        
+        // 2. Global Window (e.g. 32 days lookback from today)
         let days = config.clampedLookbackDays
         let globalLookback = Calendar.current.date(
             byAdding: .day,
@@ -113,17 +127,27 @@ final class GameConfigService: ObservableObject {
             to: reference
         ) ?? reference
         
-        // 2. User Personal Anchor (Onboarding Completion)
-        let userAnchorTimestamp = UserDefaults.standard.double(forKey: "onboardingCompletionDate")
+        // 3. Global Reset Floor (Force ignore everything before this date)
+        if let resetDate = config.globalResetDate {
+            let finalDate = resetDate > globalLookback ? resetDate : globalLookback
+            
+            // Still consider user anchor if it's even MORE recent
+            if userAnchorTimestamp > 0 {
+                let userAnchorDate = Date(timeIntervalSince1970: userAnchorTimestamp)
+                let ultraFinalDate = userAnchorDate > finalDate ? userAnchorDate : finalDate
+                print("⚙️ [Config] Reset Floor Applied: \(resetDate). Final Cutoff: \(ultraFinalDate)")
+                return ultraFinalDate
+            }
+            
+            print("⚙️ [Config] Reset Floor Applied: \(resetDate). Final Cutoff: \(finalDate)")
+            return finalDate
+        }
+        
+        // 2. User Personal Anchor (Onboarding Completion) - Fallback if no global reset
         if userAnchorTimestamp > 0 {
             let userAnchorDate = Date(timeIntervalSince1970: userAnchorTimestamp)
-            
-            // HYBRID STRATEGY: Return the most recent (restrictive) date
-            // If user joined today: max(32d ago, Today) = Today
-            // If user joined 1y ago: max(32d ago, 1y ago) = 32d ago
             let finalDate = userAnchorDate > globalLookback ? userAnchorDate : globalLookback
-            
-            print("⚙️ [Config] Hybrid Cutoff: Global \(globalLookback) vs User \(userAnchorDate) -> Final: \(finalDate)")
+            print("⚙️ [Config] Hybrid Cutoff (No Reset): Global \(globalLookback) vs User \(userAnchorDate) -> Final: \(finalDate)")
             return finalDate
         }
         
@@ -172,6 +196,10 @@ final class GameConfigService: ObservableObject {
                 
                 let initialImport = data["initialImportDays"] as? Int ?? loaded.initialImportDays
                 
+                let seasonId = data["currentSeasonId"] as? String
+                let seasonName = data["currentSeasonName"] as? String
+                let seasonSubtitle = data["currentSeasonSubtitle"] as? String
+                
                 loaded = GameConfig(
                     loadHistoricalWorkouts: loadHistorical,
                     workoutLookbackDays: lookback,
@@ -180,7 +208,10 @@ final class GameConfigService: ObservableObject {
                     routeOptionalBundles: optionalBundles,
                     onboardingImportLimit: importLimit,
                     initialImportDays: initialImport,
-                    globalResetDate: resetDate
+                    globalResetDate: resetDate,
+                    currentSeasonId: seasonId,
+                    currentSeasonName: seasonName,
+                    currentSeasonSubtitle: seasonSubtitle
                 )
             }
         } catch {

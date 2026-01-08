@@ -136,9 +136,12 @@ class NotificationService: ObservableObject {
         
         #if canImport(FirebaseMessaging)
         Messaging.messaging().token { [weak self] token, error in
-            guard let self = self, let token = token, error == nil else { return }
-            self.cacheFCMToken(token)
-            self.uploadActiveToken(token, for: userId)
+            guard let token = token, error == nil else { return }
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.cacheFCMToken(token)
+                self.uploadActiveToken(token, for: userId)
+            }
         }
         #endif
     }
@@ -168,13 +171,16 @@ class NotificationService: ObservableObject {
             #if canImport(FirebaseMessaging)
             Messaging.messaging().deleteToken { _ in
                 Messaging.messaging().token { [weak self] token, error in
-                    guard let self = self, let token = token, error == nil else { return }
-                    self.cacheFCMToken(token)
-                    self.uploadActiveToken(token, for: userId)
-                    userRef.setData([
-                        "needsTokenRefresh": false,
-                        "needsTokenRefreshAt": FieldValue.delete()
-                    ], merge: true)
+                    guard let token = token, error == nil else { return }
+                    Task { @MainActor in
+                        guard let self = self else { return }
+                        self.cacheFCMToken(token)
+                        self.uploadActiveToken(token, for: userId)
+                        userRef.setData([
+                            "needsTokenRefresh": false,
+                            "needsTokenRefreshAt": FieldValue.delete()
+                        ], merge: true)
+                    }
                 }
             }
             #endif

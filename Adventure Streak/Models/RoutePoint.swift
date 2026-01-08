@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-struct RoutePoint: Codable, Identifiable {
+struct RoutePoint: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     let latitude: Double
     let longitude: Double

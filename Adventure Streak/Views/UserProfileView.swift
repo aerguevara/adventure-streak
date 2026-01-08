@@ -18,86 +18,8 @@ struct UserProfileView: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Header: Avatar & Level
-                        VStack(spacing: 16) {
-                            ZStack(alignment: .bottomTrailing) {
-                                avatarView
-                                    .frame(width: 120, height: 120)
-                                    .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(LinearGradient(
-                                                colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ), lineWidth: 4)
-                                    )
-                                
-                                // Prestige Badge
-                                if let prestige = user.prestige, prestige > 0 {
-                                    Image(systemName: "star.circle.fill")
-                                        .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, .orange)
-                                        .font(.system(size: 32))
-                                        .offset(x: 4, y: 4)
-                                }
-                                
-                                // Map Icon Badge
-                                if let icon = user.mapIcon {
-                                    Text(icon)
-                                        .font(.system(size: 32))
-                                        .padding(8)
-                                        .background(.ultraThinMaterial)
-                                        .clipShape(Circle())
-                                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                                        .offset(x: 40, y: 40)
-                                        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-                                }
-                            }
-                            
-                            VStack(spacing: 4) {
-                                Text(user.displayName ?? "Adventurer")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                
-                                HStack(spacing: 8) {
-                                    Label("Level \(user.level)", systemImage: "bolt.fill")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(Color(hex: "A259FF"))
-                                    
-                                    if let streak = user.currentStreakWeeks, streak > 0 {
-                                        Label("\(streak) sem racha", systemImage: "flame.fill")
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.orange)
-                                    }
-                                    
-                                    if let totalDist = user.totalDistanceKm, totalDist > 0 {
-                                        Label("\(String(format: "%.1f", totalDist)) GPS", systemImage: "map.fill")
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.cyan)
-                                    }
-                                    
-                                    if let manualDist = user.totalDistanceNoGpsKm, manualDist > 0 {
-                                        Label("\(String(format: "%.1f", manualDist)) Manual", systemImage: "gauge.with.needle")
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.gray)
-                                    }
-                                }
-                                
-                                if let joinedAt = user.joinedAt {
-                                    Text("Aventurero desde \(joinedAt, style: .date)")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(.gray.opacity(0.8))
-                                        .padding(.top, 4)
-                                }
-                            }
-                        }
-                        .padding(.top, 20)
+                        headerSection
+                            .padding(.top, 20)
                         
                         // Action Buttons
                         if let currentUserId = AuthenticationService.shared.userId, user.id != currentUserId {
@@ -116,19 +38,8 @@ struct UserProfileView: View {
                         }
                         .padding(.horizontal)
                         
-                        // Stats Grid
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 8),
-                            GridItem(.flexible(), spacing: 8),
-                            GridItem(.flexible(), spacing: 8),
-                            GridItem(.flexible(), spacing: 8)
-                        ], spacing: 8) {
-                            StatCard(title: "Nuevos", value: "\(user.totalConqueredTerritories ?? 0)", icon: "flag.fill", color: Color(hex: "32D74B"))
-                            StatCard(title: "Defendidos", value: "\(user.totalDefendedTerritories ?? 0)", icon: "shield.fill", color: Color(hex: "4C6FFF"))
-                            StatCard(title: "Robados", value: "\(user.totalStolenTerritories ?? 0)", icon: "flag.slash.fill", color: Color(hex: "FF3B30"))
-                            StatCard(title: "Recup.", value: "\(user.totalRecapturedTerritories ?? 0)", icon: "arrow.counterclockwise", color: Color(hex: "FF9F0A"))
-                        }
-                        .padding(.horizontal)
+                        statsGrid
+                            .padding(.horizontal)
                         
                         // Recent Impact (Optional)
                         if let recent = user.recentTerritories, recent > 0 {
@@ -149,45 +60,9 @@ struct UserProfileView: View {
                                 .padding(.horizontal)
                         }
                         
-                        // Badges Section
-                        if let badges = user.badges, !badges.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Insignias")
-                                    .font(.title3)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal)
-                                
-                                LazyVGrid(columns: [
-                                    GridItem(.adaptive(minimum: 60), spacing: 12)
-                                ], spacing: 12) {
-                                    ForEach(badges, id: \.self) { badgeId in
-                                        let def = BadgeSystem.getDefinition(for: badgeId)
-                                        
-                                        VStack(spacing: 4) {
-                                            Text(def.icon)
-                                                .font(.system(size: 32))
-                                                .padding(10)
-                                                .background(def.color.opacity(0.15))
-                                                .clipShape(Circle())
-                                                .overlay(
-                                                    Circle().stroke(def.color.opacity(0.3), lineWidth: 1)
-                                                )
-                                            
-                                            Text(def.name)
-                                                .font(.caption2)
-                                                .fontWeight(.medium)
-                                                .foregroundColor(.gray)
-                                                .multilineTextAlignment(.center)
-                                                .lineLimit(2)
-                                                .frame(height: 24)
-                                        }
-                                        .frame(height: 80)
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                        }
+                        seasonalHistorySection
+                        
+                        badgesSection
                         
                         Spacer(minLength: 40)
                     }
@@ -198,9 +73,234 @@ struct UserProfileView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray.opacity(0.5))
-                            .font(.title3)
+                        .foregroundColor(.gray.opacity(0.5))
+                        .font(.title3)
                     }
+                }
+            }
+        }
+    }
+    
+    private var headerSection: some View {
+        VStack(spacing: 16) {
+            ZStack(alignment: .bottomTrailing) {
+                avatarView
+                    .frame(width: 120, height: 120)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(LinearGradient(
+                                colors: [Color(hex: "4C6FFF"), Color(hex: "A259FF")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ), lineWidth: 4)
+                    )
+                
+                // Prestige Badge
+                if let prestige = user.prestige, prestige > 0 {
+                    VStack(spacing: 0) {
+                        Image(systemName: "star.circle.fill")
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .orange)
+                            .font(.system(size: 32))
+                        
+                        Text("\(prestige)")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .background(Color.orange)
+                            .clipShape(Capsule())
+                            .offset(y: -8)
+                    }
+                    .offset(x: 4, y: 4)
+                }
+                
+                // Map Icon Badge
+                if let icon = user.mapIcon {
+                    Text(icon)
+                        .font(.system(size: 32))
+                        .padding(8)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                        .offset(x: 40, y: 40)
+                        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+                }
+            }
+            
+            VStack(spacing: 4) {
+                Text(user.displayName ?? "Adventurer")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                HStack(spacing: 8) {
+                    Label("Level \(user.level)", systemImage: "bolt.fill")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(Color(hex: "A259FF"))
+                    
+                    if let streak = user.currentStreakWeeks, streak > 0 {
+                        Label("\(streak) sem racha", systemImage: "flame.fill")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.orange)
+                    }
+                    
+                    if let fires = user.fireReactions, fires > 0 {
+                        Label("\(fires)", systemImage: "flame.circle.fill")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.red)
+                    }
+
+                    if let swords = user.swordReactions, swords > 0 {
+                        Label("\(swords)", systemImage: "bolt.shield.fill")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.orange)
+                    }
+
+                    if let shields = user.shieldReactions, shields > 0 {
+                        Label("\(shields)", systemImage: "shield.fill")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.blue)
+                    }
+                    
+                    if let totalDist = user.totalDistanceKm, totalDist > 0 {
+                        Label("\(String(format: "%.1f", totalDist)) GPS", systemImage: "map.fill")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.cyan)
+                    }
+                    
+                    if let manualDist = user.totalDistanceNoGpsKm, manualDist > 0 {
+                        Label("\(String(format: "%.1f", manualDist)) Manual", systemImage: "gauge.with.needle")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.gray)
+                    }
+                }
+                
+                if let joinedAt = user.joinedAt {
+                    Text("Aventurero desde \(joinedAt, style: .date)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.gray.opacity(0.8))
+                        .padding(.top, 4)
+                }
+            }
+        }
+    }
+    
+    private var statsGrid: some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 8),
+            GridItem(.flexible(), spacing: 8),
+            GridItem(.flexible(), spacing: 8),
+            GridItem(.flexible(), spacing: 8)
+        ], spacing: 8) {
+            StatCard(title: "Nuevos", value: "\(user.totalConqueredTerritories ?? 0)", icon: "flag.fill", color: Color(hex: "32D74B"))
+            StatCard(title: "Defendidos", value: "\(user.totalDefendedTerritories ?? 0)", icon: "shield.fill", color: Color(hex: "4C6FFF"))
+            StatCard(title: "Robados", value: "\(user.totalStolenTerritories ?? 0)", icon: "flag.slash.fill", color: Color(hex: "FF3B30"))
+            StatCard(title: "Recup.", value: "\(user.totalRecapturedTerritories ?? 0)", icon: "arrow.counterclockwise", color: Color(hex: "FF9F0A"))
+        }
+    }
+    
+    private var seasonalHistorySection: some View {
+        Group {
+            if let history = user.seasonHistory, !history.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Historial de Temporadas")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(Array(history.values.sorted(by: { $0.id > $1.id })), id: \.id) { season in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(season.seasonName ?? "Temporada")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.orange)
+                                    
+                                    HStack {
+                                        Label("\(season.finalXp) XP", systemImage: "bolt.fill")
+                                        Spacer()
+                                        Label("\(season.finalCells ?? 0) celdas", systemImage: "square.grid.3x3.fill")
+                                    }
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.gray)
+                                    
+                                    if season.prestigeEarned > 0 {
+                                        HStack {
+                                            Image(systemName: "star.fill")
+                                                .foregroundColor(.orange)
+                                            Text("+\(season.prestigeEarned) Prestigio")
+                                                .font(.caption2)
+                                                .fontWeight(.black)
+                                                .foregroundColor(.white)
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.orange.opacity(0.2))
+                                        .cornerRadius(6)
+                                    }
+                                }
+                                .padding()
+                                .frame(width: 180)
+                                .background(Color(hex: "1C1C1E"))
+                                .cornerRadius(12)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+            }
+        }
+    }
+    
+    private var badgesSection: some View {
+        Group {
+            if let badges = user.badges, !badges.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Insignias")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal)
+                    
+                    LazyVGrid(columns: [
+                        GridItem(.adaptive(minimum: 60), spacing: 12)
+                    ], spacing: 12) {
+                        ForEach(badges, id: \.self) { badgeId in
+                            let def = BadgeSystem.getDefinition(for: badgeId)
+                            
+                            VStack(spacing: 4) {
+                                Text(def.icon)
+                                    .font(.system(size: 32))
+                                    .padding(10)
+                                    .background(def.color.opacity(0.15))
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle().stroke(def.color.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                Text(def.name)
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.gray)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .frame(height: 24)
+                            }
+                            .frame(height: 80)
+                        }
+                    }
+                    .padding(.horizontal)
                 }
             }
         }
@@ -367,7 +467,7 @@ struct UserProfileView: View {
             
             // Section 2: Actual Weekly Intensity (Distance)
             VStack(alignment: .leading, spacing: 10) {
-                Text("Intensidad Semanal")
+                Text("Intensidad Semanal (GPS)")
                     .font(.headline)
                     .foregroundColor(.white)
                 

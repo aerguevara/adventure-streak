@@ -21,8 +21,12 @@ class HistoryViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     @Published var isImporting = false
+    @Published var isLoadingMore = false
+    @Published var canLoadMore = true
     @Published var showAlert = false
     @Published var alertMessage = ""
+    
+    private var lastDocument: QueryDocumentSnapshot?
     
     init(
         activityStore: ActivityStore,
@@ -65,6 +69,50 @@ class HistoryViewModel: ObservableObject {
     
     func loadActivities() {
         self.activities = activityStore.fetchAllActivities()
+        // If we have less than 20, we might need to fetch more from server to fill the first page
+        if self.activities.count < 20 {
+            Task {
+                await fetchNextPage()
+            }
+        }
+    }
+    
+    func fetchNextPage() async {
+        guard !isLoadingMore && canLoadMore else { return }
+        guard let userId = authService.userId else { return }
+        
+        isLoadingMore = true
+        print("📥 [History] Fetching next page (starting after \(lastDocument?.documentID ?? "none"))...")
+        
+        do {
+            let result = try await ActivityRepository.shared.fetchActivities(
+                userId: userId,
+                limit: 20,
+                lastDoc: lastDocument
+            )
+            
+            await MainActor.run {
+                if result.activities.isEmpty {
+                    self.canLoadMore = false
+                } else {
+                    // Update store with new activities to ensure they are cached
+                    self.activityStore.saveActivities(result.activities)
+                    self.lastDocument = result.lastDoc
+                    // activities list will update automatically via subscription to activityStore.$activities
+                    
+                    // If we got less than the limit, we've reached the end
+                    if result.activities.count < 20 {
+                        self.canLoadMore = false
+                    }
+                }
+                self.isLoadingMore = false
+            }
+        } catch {
+            print("❌ [History] Pagination error: \(error.localizedDescription)")
+            await MainActor.run {
+                self.isLoadingMore = false
+            }
+        }
     }
     
     func importFromHealthKit() {

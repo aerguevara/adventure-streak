@@ -13,6 +13,24 @@ struct DocumentID<T: Codable>: Codable {
 }
 #endif
 
+struct SeasonHistory: Codable, Identifiable {
+    var id: String // seasonId
+    let seasonName: String?
+    let finalXp: Int
+    let finalCells: Int?
+    let prestigeEarned: Int
+    let completedAt: Date?
+    
+    enum CodingKeys: String, CodingKey {
+        case id = "seasonId"
+        case seasonName
+        case finalXp
+        case finalCells
+        case prestigeEarned
+        case completedAt
+    }
+}
+
 struct User: Identifiable, Codable {
     @DocumentID var id: String?
     let email: String?
@@ -34,6 +52,9 @@ struct User: Identifiable, Codable {
     
     // Extended Profile Info
     var prestige: Int?
+    var fireReactions: Int?
+    var swordReactions: Int?
+    var shieldReactions: Int?
     var currentStreakWeeks: Int?
     var bestWeeklyDistanceKm: Double?
     var currentWeekDistanceKm: Double?
@@ -50,6 +71,7 @@ struct User: Identifiable, Codable {
     
     // Flag for global data reset acknowledgment
     var hasAcknowledgedDecReset: Bool?
+    var lastAcknowledgeSeasonId: String?
     
     // Badges
     var badges: [String]?
@@ -60,6 +82,9 @@ struct User: Identifiable, Codable {
     var invitationPath: [String]?
     var invitationQuota: Int?
     var invitationCount: Int?
+    
+    // Seasonal History
+    var seasonHistory: [String: SeasonHistory]?
 
     init(id: String? = nil,
          email: String? = nil,
@@ -84,12 +109,14 @@ struct User: Identifiable, Codable {
          recentTheftVictims: [Rival]? = nil,
          recentThieves: [Rival]? = nil,
          hasAcknowledgedDecReset: Bool? = nil,
+         lastAcknowledgeSeasonId: String? = nil,
          badges: [String]? = nil,
          invitationVerified: Bool? = nil,
          invitedBy: String? = nil,
          invitationPath: [String]? = nil,
          invitationQuota: Int? = nil,
-         invitationCount: Int? = nil) {
+         invitationCount: Int? = nil,
+         seasonHistory: [String: SeasonHistory]? = nil) {
         self.id = id
         self.email = email
         self.displayName = displayName
@@ -113,12 +140,14 @@ struct User: Identifiable, Codable {
         self.recentTheftVictims = recentTheftVictims
         self.recentThieves = recentThieves
         self.hasAcknowledgedDecReset = hasAcknowledgedDecReset
+        self.lastAcknowledgeSeasonId = lastAcknowledgeSeasonId
         self.badges = badges
         self.invitationVerified = invitationVerified
         self.invitedBy = invitedBy
         self.invitationPath = invitationPath
         self.invitationQuota = invitationQuota
         self.invitationCount = invitationCount
+        self.seasonHistory = seasonHistory
     }
 
     enum CodingKeys: String, CodingKey {
@@ -137,6 +166,9 @@ struct User: Identifiable, Codable {
         case totalRecapturedTerritories
         case totalActivities
         case prestige
+        case fireReactions
+        case swordReactions
+        case shieldReactions
         case currentStreakWeeks
         case bestWeeklyDistanceKm
         case currentWeekDistanceKm
@@ -144,12 +176,17 @@ struct User: Identifiable, Codable {
         case recentTheftVictims
         case recentThieves
         case hasAcknowledgedDecReset
+        case lastAcknowledgeSeasonId
         case badges
         case invitationVerified
         case invitedBy
         case invitationPath
         case invitationQuota
         case invitationCount
+        case seasonHistory
+        case totalDistanceKm
+        case totalDistanceNoGpsKm
+        case currentWeekDistanceNoGpsKm
     }
 
     init(from decoder: Decoder) throws {
@@ -177,20 +214,68 @@ struct User: Identifiable, Codable {
         totalRecapturedTerritories = try container.decodeIfPresent(Int.self, forKey: .totalRecapturedTerritories)
         totalActivities = try container.decodeIfPresent(Int.self, forKey: .totalActivities)
         prestige = try container.decodeIfPresent(Int.self, forKey: .prestige)
+        fireReactions = try container.decodeIfPresent(Int.self, forKey: .fireReactions)
+        swordReactions = try container.decodeIfPresent(Int.self, forKey: .swordReactions)
+        shieldReactions = try container.decodeIfPresent(Int.self, forKey: .shieldReactions)
         currentStreakWeeks = try container.decodeIfPresent(Int.self, forKey: .currentStreakWeeks)
         bestWeeklyDistanceKm = try container.decodeIfPresent(Double.self, forKey: .bestWeeklyDistanceKm)
         currentWeekDistanceKm = try container.decodeIfPresent(Double.self, forKey: .currentWeekDistanceKm)
+        totalDistanceKm = try container.decodeIfPresent(Double.self, forKey: .totalDistanceKm)
+        totalDistanceNoGpsKm = try container.decodeIfPresent(Double.self, forKey: .totalDistanceNoGpsKm)
+        currentWeekDistanceNoGpsKm = try container.decodeIfPresent(Double.self, forKey: .currentWeekDistanceNoGpsKm)
         forceLogoutVersion = try container.decodeIfPresent(Int.self, forKey: .forceLogoutVersion)
         
         recentTheftVictims = try container.decodeIfPresent([Rival].self, forKey: .recentTheftVictims)
         recentThieves = try container.decodeIfPresent([Rival].self, forKey: .recentThieves)
         hasAcknowledgedDecReset = try container.decodeIfPresent(Bool.self, forKey: .hasAcknowledgedDecReset)
+        lastAcknowledgeSeasonId = try container.decodeIfPresent(String.self, forKey: .lastAcknowledgeSeasonId)
         badges = try container.decodeIfPresent([String].self, forKey: .badges)
         invitationVerified = try container.decodeIfPresent(Bool.self, forKey: .invitationVerified)
         invitedBy = try container.decodeIfPresent(String.self, forKey: .invitedBy)
         invitationPath = try container.decodeIfPresent([String].self, forKey: .invitationPath)
         invitationQuota = try container.decodeIfPresent(Int.self, forKey: .invitationQuota)
         invitationCount = try container.decodeIfPresent(Int.self, forKey: .invitationCount)
+        seasonHistory = try container.decodeIfPresent([String: SeasonHistory].self, forKey: .seasonHistory)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(email, forKey: .email)
+        try container.encodeIfPresent(displayName, forKey: .displayName)
+        try container.encodeIfPresent(joinedAt, forKey: .joinedAt)
+        try container.encodeIfPresent(avatarURL, forKey: .avatarURL)
+        try container.encodeIfPresent(mapIcon, forKey: .mapIcon)
+        try container.encode(xp, forKey: .xp)
+        try container.encode(level, forKey: .level)
+        try container.encodeIfPresent(totalCellsOwned, forKey: .totalCellsOwned)
+        try container.encodeIfPresent(recentTerritories, forKey: .recentTerritories)
+        try container.encodeIfPresent(totalConqueredTerritories, forKey: .totalConqueredTerritories)
+        try container.encodeIfPresent(totalStolenTerritories, forKey: .totalStolenTerritories)
+        try container.encodeIfPresent(totalDefendedTerritories, forKey: .totalDefendedTerritories)
+        try container.encodeIfPresent(totalRecapturedTerritories, forKey: .totalRecapturedTerritories)
+        try container.encodeIfPresent(totalActivities, forKey: .totalActivities)
+        try container.encodeIfPresent(prestige, forKey: .prestige)
+        try container.encodeIfPresent(fireReactions, forKey: .fireReactions)
+        try container.encodeIfPresent(swordReactions, forKey: .swordReactions)
+        try container.encodeIfPresent(shieldReactions, forKey: .shieldReactions)
+        try container.encodeIfPresent(currentStreakWeeks, forKey: .currentStreakWeeks)
+        try container.encodeIfPresent(bestWeeklyDistanceKm, forKey: .bestWeeklyDistanceKm)
+        try container.encodeIfPresent(currentWeekDistanceKm, forKey: .currentWeekDistanceKm)
+        try container.encodeIfPresent(totalDistanceKm, forKey: .totalDistanceKm)
+        try container.encodeIfPresent(totalDistanceNoGpsKm, forKey: .totalDistanceNoGpsKm)
+        try container.encodeIfPresent(currentWeekDistanceNoGpsKm, forKey: .currentWeekDistanceNoGpsKm)
+        try container.encodeIfPresent(forceLogoutVersion, forKey: .forceLogoutVersion)
+        try container.encodeIfPresent(recentTheftVictims, forKey: .recentTheftVictims)
+        try container.encodeIfPresent(recentThieves, forKey: .recentThieves)
+        try container.encodeIfPresent(hasAcknowledgedDecReset, forKey: .hasAcknowledgedDecReset)
+        try container.encodeIfPresent(lastAcknowledgeSeasonId, forKey: .lastAcknowledgeSeasonId)
+        try container.encodeIfPresent(badges, forKey: .badges)
+        try container.encodeIfPresent(invitationVerified, forKey: .invitationVerified)
+        try container.encodeIfPresent(invitedBy, forKey: .invitedBy)
+        try container.encodeIfPresent(invitationPath, forKey: .invitationPath)
+        try container.encodeIfPresent(invitationQuota, forKey: .invitationQuota)
+        try container.encodeIfPresent(invitationCount, forKey: .invitationCount)
+        try container.encodeIfPresent(seasonHistory, forKey: .seasonHistory)
     }
 }
 

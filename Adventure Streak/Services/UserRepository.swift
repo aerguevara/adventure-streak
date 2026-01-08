@@ -6,7 +6,7 @@ import FirebaseFirestoreSwift
 #endif
 #endif
 #if canImport(FirebaseAuth)
-import FirebaseAuth
+@preconcurrency import FirebaseAuth
 #endif
 #if canImport(FirebaseStorage)
 import FirebaseStorage
@@ -61,7 +61,8 @@ class UserRepository: ObservableObject {
         guard let db = db as? Firestore else { return }
         
         let userRef = db.collection("users").document(user.uid)
-        
+        let userEmail = user.email
+
         // Simple and robust: check if name is needed, then setData(merge: true)
         userRef.getDocument(source: .default) { (document, error) in
             var data: [String: Any] = [
@@ -79,7 +80,7 @@ class UserRepository: ObservableObject {
             // Default values for new user part of the data if it doesn't exist
             if let document = document, !document.exists {
                 data["joinedAt"] = FieldValue.serverTimestamp()
-                data["email"] = user.email as Any
+                data["email"] = userEmail as Any
                 data["xp"] = initialXP ?? 0
                 data["level"] = initialLevel ?? 1
                 data["displayName"] = name ?? "Aventurero"
@@ -96,7 +97,7 @@ class UserRepository: ObservableObject {
                 }
 
                 // ALWAYS update email if we have one and it's missing or different (implicitly by merge)
-                if let email = user.email, !email.isEmpty {
+                if let email = userEmail, !email.isEmpty {
                     data["email"] = email
                 }
 
@@ -228,6 +229,18 @@ class UserRepository: ObservableObject {
         let userRef = db.collection("users").document(userId)
         let data: [String: Any] = [
             "hasAcknowledgedDecReset": true
+        ]
+        try await userRef.updateData(data)
+        #endif
+    }
+    
+    func acknowledgeSeason(userId: String, seasonId: String) async throws {
+        #if canImport(FirebaseFirestore)
+        guard let db = db as? Firestore else { return }
+        let userRef = db.collection("users").document(userId)
+        let data: [String: Any] = [
+            "lastAcknowledgeSeasonId": seasonId,
+            "hasAcknowledgedDecReset": true // For legacy compatibility
         ]
         try await userRef.updateData(data)
         #endif

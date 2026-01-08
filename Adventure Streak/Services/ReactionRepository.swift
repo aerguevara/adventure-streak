@@ -119,18 +119,18 @@ final class ReactionRepository: ObservableObject {
 
                 transaction.setData(statsFields, forDocument: statsRef, merge: true)
 
-                // 5. Update Author Prestige (Fire = Prestige)
-                // Logic: Only change if Fire status changes
-                var prestigeChange: Int64 = 0
-                if type == .fire && oldType != .fire {
-                    prestigeChange = 1
-                } else if type != .fire && oldType == .fire {
-                    prestigeChange = -1
-                }
+                transaction.setData(statsFields, forDocument: statsRef, merge: true)
 
-                if prestigeChange != 0 {
-                    let authorRef = self.db.collection("users").document(authorId)
-                    transaction.setData(["prestige": FieldValue.increment(prestigeChange)], forDocument: authorRef, merge: true)
+                // 5. Update Author Social Scores
+                // Logic: Support all reaction types (🔥, ⚔️, 🛡️) globally
+                let authorRef = self.db.collection("users").document(authorId)
+                
+                // Increment New Global Counter
+                transaction.setData(["\(type.rawValue)Reactions": FieldValue.increment(Int64(1))], forDocument: authorRef, merge: true)
+                
+                // Decrement Old Global Counter
+                if let old = oldType {
+                    transaction.setData(["\(old.rawValue)Reactions": FieldValue.increment(Int64(-1))], forDocument: authorRef, merge: true)
                 }
                 
                 // Notification handled by Cloud Function (onReactionCreated)
@@ -180,6 +180,11 @@ final class ReactionRepository: ObservableObject {
                 }
 
                 transaction.updateData(fields, forDocument: statsRef)
+                
+                // Decrement Global User Counter
+                let authorRef = self.db.collection("users").document(authorId)
+                transaction.setData(["\(reaction.rawValue)Reactions": FieldValue.increment(Int64(-1))], forDocument: authorRef, merge: true)
+                
                 transaction.deleteDocument(userRef)
                 return nil as Any?
             }
