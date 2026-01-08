@@ -96,6 +96,10 @@ final class ActivityRepository {
     
     /// Saves or updates an activity in the top-level `activities` collection keyed by user.
     func saveActivity(_ activity: ActivitySession, territories: [TerritoryCell]? = nil, userId: String) async throws {
+        guard await !SeasonManager.shared.isResetAcknowledgmentPending else {
+            print("[Activities] Reset acknowledgment pending. Aborting saveActivity.")
+            return
+        }
         #if canImport(FirebaseFirestore)
         let docId = activity.id.uuidString
         let docRef = db.collection("activities").document(docId)
@@ -288,6 +292,11 @@ final class ActivityRepository {
     /// Batch-save convenience; iterates sequentially to avoid Firestore rate limits on small batches.
     func saveActivities(_ activities: [ActivitySession], userId: String) async {
         for activity in activities {
+            // Check if reset became pending during the loop
+            guard await !SeasonManager.shared.isResetAcknowledgmentPending else {
+                print("[Activities] Reset acknowledgment pending. Aborting batch saveActivities.")
+                return
+            }
             // Check if already exists to avoid redundant processing
             #if canImport(FirebaseFirestore)
             do {
@@ -389,14 +398,22 @@ final class ActivityRepository {
     
     /// Ensure remote collection contains all local activities; uploads any missing and logs differences.
     func ensureRemoteParity(userId: String, activityStore: ActivityStore = .shared, territoryStore: TerritoryStore? = nil) async {
+        guard await !SeasonManager.shared.isResetAcknowledgmentPending else {
+            print("[Activities] Reset acknowledgment pending. Skipping parity check.")
+            return
+        }
+        
         let localActivities = activityStore.fetchAllActivities()
         let localIds = Set(localActivities.map { $0.id.uuidString })
         let remoteIds = await fetchRemoteActivityIds(userId: userId)
         
-        let missingRemote = localActivities.filter { !remoteIds.contains($0.id.uuidString) }
+        let cutoffDate = await GameConfigService.shared.cutoffDate()
+        let missingRemote = localActivities.filter { 
+            !remoteIds.contains($0.id.uuidString) && $0.startDate >= cutoffDate 
+        }
         let extraRemoteIds = remoteIds.subtracting(localIds)
         
-        print("[Activities] Parity check — local: \(localIds.count), remote: \(remoteIds.count), missingRemote: \(missingRemote.count), extraRemote: \(extraRemoteIds.count)")
+        print("[Activities] Parity check — local: \(localIds.count), remote: \(remoteIds.count), missingRemote: \(missingRemote.count) (filtered by cutoff \(cutoffDate)), extraRemote: \(extraRemoteIds.count)")
         
         if !missingRemote.isEmpty {
             print("[Activities] Uploading \(missingRemote.count) missing activities to remote")

@@ -5,6 +5,9 @@ import MapKit
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 class TerritoryRepository: ObservableObject {
     // NEW: Singleton instance for shared access
@@ -115,7 +118,7 @@ class TerritoryRepository: ObservableObject {
     
     func observeTerritories(in region: MKCoordinateRegion) {
         #if canImport(FirebaseFirestore)
-        guard let db = db as? Firestore else { return }
+        guard let db = db as? Firestore, Auth.auth().currentUser != nil else { return }
         
         // DEBOUNCING: Check if we've moved enough to justify a new query (20% threshold)
         if let last = lastObservedRegion {
@@ -171,7 +174,7 @@ class TerritoryRepository: ObservableObject {
     
     func observeProactiveZone(around center: CLLocationCoordinate2D, radiusInMeters: Double = 10000) {
         #if canImport(FirebaseFirestore)
-        guard let db = db as? Firestore else { return }
+        guard let db = db as? Firestore, Auth.auth().currentUser != nil else { return }
         
         // Use Geohash for proactive zone (radius 10km -> precision 5 is enough)
         let hash = Geohash.encode(latitude: center.latitude, longitude: center.longitude, precision: 5)

@@ -17,6 +17,11 @@ final class ActivitySyncService {
             return []
         }
         
+        guard !SeasonManager.shared.isResetAcknowledgmentPending else {
+            print("⏭️ [Sync] Reset acknowledgment pending. Skipping HealthKit check.")
+            return []
+        }
+        
         let userId = AuthenticationService.shared.userId ?? "unknown_user"
         
         // 1. Fetch from HealthKit
@@ -32,24 +37,19 @@ final class ActivitySyncService {
         let allExistingIds = localIds.union(remoteIds.compactMap { UUID(uuidString: $0) })
         
         // 3. Filter by date and existence
-        print("🔍 [Sync] Cutoff Date: \(cutoffDate)")
+        print("🔍 [Sync] Cutoff Date to apply: \(cutoffDate)")
         print("🔍 [Sync] Total HK Workouts fetched: \(hkWorkouts.count)")
         
+        var cutoffStatsCount = 0
         let newHKWorkouts = hkWorkouts.filter { workout in
             let isAfter = workout.endDate >= cutoffDate
+            if !isAfter { cutoffStatsCount += 1 }
             let isNew = !allExistingIds.contains(workout.uuid)
-            if !isAfter && !isNew {
-                // Already exists and too old, skip
-            } else if isAfter && !isNew {
-                // New enough but already synced
-            } else if !isAfter && isNew {
-                 // Skip old workout silently to avoid console spam
-                 // print("⏭️ [Sync] Skipping OLD workout: \(workoutName(for: workout) ?? "Unnamed") on \(workout.endDate)")
-            }
             return isAfter && isNew
         }
         
-        print("🔍 [Sync] New workouts to import: \(newHKWorkouts.count)")
+        print("🔍 [Sync] Filtered out \(cutoffStatsCount) workouts by date (before \(cutoffDate)).")
+        print("🔍 [Sync] New workouts to import after deduplication: \(newHKWorkouts.count)")
         
         // 4. Map to ActivitySessions
         var sessions: [ActivitySession] = []
@@ -91,6 +91,10 @@ final class ActivitySyncService {
     @MainActor
     func processSessions(_ sessions: [ActivitySession], progress: @escaping (Int, Int) -> Void) async {
         guard !isSyncing else { return }
+        guard !SeasonManager.shared.isResetAcknowledgmentPending else {
+            print("⏭️ [Sync] Reset acknowledgment pending. Skipping processing.")
+            return
+        }
         isSyncing = true
         
         defer {

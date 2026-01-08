@@ -104,9 +104,10 @@ class MapViewModel: ObservableObject {
             .compactMap { $0 }
             .first() // Only set initial region once
             .sink { [weak self] location in
-                self?.region.center = location.coordinate
+                guard let self = self, AuthenticationService.shared.userId != nil else { return }
+                self.region.center = location.coordinate
                 // Initial fetch for the starting location
-                self?.territoryRepository.observeTerritories(in: self?.region ?? MKCoordinateRegion())
+                self.territoryRepository.observeTerritories(in: self.region)
             }
             .store(in: &cancellables)
         
@@ -114,7 +115,7 @@ class MapViewModel: ObservableObject {
         $region
             .debounce(for: .seconds(1.0), scheduler: RunLoop.main)
             .sink { [weak self] newRegion in
-                guard let self = self else { return }
+                guard let self = self, AuthenticationService.shared.userId != nil else { return }
                 
                 // Only query if the region has changed significantly (e.g. > 20% of the span)
                 if let last = self.lastQueryRegion {
@@ -594,6 +595,8 @@ class MapViewModel: ObservableObject {
     }
     
     private func fetchIcons(for userIds: Set<String>) async {
+        guard AuthenticationService.shared.userId != nil else { return }
+        
         #if canImport(FirebaseFirestore)
         let db = Firestore.shared
         var newIconsFound = false

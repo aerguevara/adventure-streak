@@ -136,13 +136,34 @@ class WorkoutsViewModel: ObservableObject {
             }
             .store(in: &cancellables)
             
-        // NEW: Trigger import safely only after initial Firestore sync
+        // NEW: Sync Orchestration - THE GATEKEEPER
+        SeasonManager.shared.$canStartSync
+            .receive(on: RunLoop.main)
+            .removeDuplicates()
+            .sink { [weak self] ready in
+                guard let self = self, ready, let userId = AuthenticationService.shared.userId else { return }
+                
+                print("🏁 [WorkoutsViewModel] System ready to sync! Starting orchestration for \(userId)")
+                
+                // 1. Iniciar observación en tiempo real si no está activa
+                ActivityStore.shared.startObserving(userId: userId)
+                
+                // 2. Sincronizar desde remoto
+                Task {
+                    guard !AuthenticationService.shared.isSyncingData else { return }
+                    await self.syncFromRemote()
+                }
+            }
+            .store(in: &cancellables)
+
+        // NEW: Trigger HealthKit import ONLY after FIRST successful remote sync of the current session
         self.activityStore.$isSynced
             .receive(on: RunLoop.main)
-            .filter { $0 } // Only when true
-            .first() // Only the first time it becomes true
+            .filter { $0 }
+            .first()
             .sink { [weak self] _ in
-                print("🔄 ActivityStore synced -> Triggering initial HealthKit check...")
+                guard SeasonManager.shared.canStartSync else { return }
+                print("🔄 [WorkoutsViewModel] First Remote Sync completed -> Triggering HealthKit check...")
                 self?.importFromHealthKit()
             }
             .store(in: &cancellables)
@@ -233,6 +254,7 @@ class WorkoutsViewModel: ObservableObject {
     }
     
     func retryPendingImports() {
+        guard !SeasonManager.shared.isResetAcknowledgmentPending else { return }
         let pendingIds = Set(pendingRouteStore.pending.map { $0.id })
         guard !pendingIds.isEmpty else {
             print("Retry pending -> no pending route imports")

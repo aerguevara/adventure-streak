@@ -18,7 +18,7 @@ class AuthenticationService: NSObject, ObservableObject {
     @Published var userAvatarURL: String?
     @Published var userMapIcon: String?
     @Published var isSyncingData = false
-    @Published var isInvitationVerified = false
+    @Published var isInvitationVerified: Bool? = nil
     @Published var invitationQuota = 0
     @Published var invitationCount = 0
     
@@ -57,12 +57,8 @@ class AuthenticationService: NSObject, ObservableObject {
             }
             self.observeForceLogout(for: user.uid)
             
-            // Sincronizar actividades remotas si ya hay sesión persistida
-            Task {
-                await self.fullSync(userId: user.uid)
-                // Iniciar observación en tiempo real
-                ActivityStore.shared.startObserving(userId: user.uid)
-            }
+            // Sincronización se moverá al coordinador/gatekeeper (SeasonManager + WorkoutsViewModel)
+            // que esperará a que el perfil y la config estén cargados y validados.
         }
     }
     
@@ -147,9 +143,9 @@ class AuthenticationService: NSObject, ObservableObject {
                     // ✅ UNBLOCK UI: Set authenticated immediately
                     self.isAuthenticated = true
                     
-                    await self.fullSync(userId: user.uid)
-                    
-                    ActivityStore.shared.startObserving(userId: user.uid)
+                    // Sincronización se moverá al coordinador
+                    // await self.fullSync(userId: user.uid)
+                    // ActivityStore.shared.startObserving(userId: user.uid)
                     
                     completion(true, nil)
                 }
@@ -271,13 +267,13 @@ class AuthenticationService: NSObject, ObservableObject {
                             self.isAuthenticated = true
                             completion(true, nil)
                             
-                            // Sync Activities in BACKGROUND
-                            Task {
-                                await self.fullSync(userId: firebaseUser.uid)
-                                await MainActor.run {
-                                    ActivityStore.shared.startObserving(userId: firebaseUser.uid)
-                                }
-                            }
+                            // Sync Activities se moverá al gatekeeper
+                            // Task {
+                            //     await self.fullSync(userId: firebaseUser.uid)
+                            //     await MainActor.run {
+                            //         ActivityStore.shared.startObserving(userId: firebaseUser.uid)
+                            //     }
+                            // }
                         }
                     }
                 }
@@ -300,19 +296,24 @@ class AuthenticationService: NSObject, ObservableObject {
             self.userAvatarURL = nil
             self.userMapIcon = nil
             self.userEmail = nil
-            self.isInvitationVerified = false
+            self.isInvitationVerified = nil
             self.invitationQuota = 0
             self.invitationCount = 0
             userListener?.remove()
             userListener = nil
             MapIconCacheManager.shared.clear()
+            
+            // Reset session states
             Task { @MainActor in
+                SeasonManager.shared.reset()
                 ActivityStore.shared.clear()
                 TerritoryStore.shared.clear()
                 SocialService.shared.clear()
                 PendingRouteStore.shared.clear()
                 GamificationService.shared.syncState(xp: 0, level: 1)
                 ActivityStore.shared.stopObserving()
+                TerritoryRepository.shared.stopObservation()
+                TerritoryRepository.shared.stopProactiveObservation()
             }
         } catch {
             print("Error signing out: \(error)")
@@ -511,12 +512,17 @@ class AuthenticationService: NSObject, ObservableObject {
         // Enforce fetching from SERVER to ensure we get the latest verification status
         // bypassing any stale cache that says verified=false.
         UserRepository.shared.fetchUser(userId: userId, source: .server) { [weak self] user in
-            guard let self = self, let user = user else { return }
             DispatchQueue.main.async {
-                self.isInvitationVerified = user.invitationVerified ?? false
-                self.invitationQuota = user.invitationQuota ?? 0
-                self.invitationCount = user.invitationCount ?? 0
-                print("🔒 [AuthenticationService] Invitation Status Sync: Verified=\(self.isInvitationVerified)")
+                guard let self = self else { return }
+                if let user = user {
+                    self.isInvitationVerified = user.invitationVerified ?? false
+                } else {
+                    // Fallback para evitar bloqueo infinito si no existe el documento pero hay sesión
+                    self.isInvitationVerified = true
+                }
+                self.invitationQuota = user?.invitationQuota ?? 0
+                self.invitationCount = user?.invitationCount ?? 0
+                print("🔒 [AuthenticationService] Invitation Status Sync: Verified=\(self.isInvitationVerified ?? false)")
             }
         }
     }
@@ -769,13 +775,7 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
                             // ✅ UNBLOCK UI: Set authenticated immediately after verifying identity and invitation status
                             self.isAuthenticated = true
                             
-                            // Sync Activities in BACKGROUND
-                            Task {
-                                await self.fullSync(userId: user.uid)
-                                await MainActor.run {
-                                    ActivityStore.shared.startObserving(userId: user.uid)
-                                }
-                            }
+                            // Sync Activities se moverá al gatekeeper
                         }
                     }
                 }

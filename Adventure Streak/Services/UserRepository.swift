@@ -234,14 +234,17 @@ class UserRepository: ObservableObject {
         #endif
     }
     
-    func acknowledgeSeason(userId: String, seasonId: String) async throws {
+    func acknowledgeSeason(userId: String, seasonId: String, resetDate: Date? = nil) async throws {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }
         let userRef = db.collection("users").document(userId)
-        let data: [String: Any] = [
+        var data: [String: Any] = [
             "lastAcknowledgeSeasonId": seasonId,
             "hasAcknowledgedDecReset": true // For legacy compatibility
         ]
+        if let resetDate = resetDate {
+            data["lastAcknowledgedResetAt"] = resetDate
+        }
         try await userRef.updateData(data)
         #endif
     }
@@ -301,18 +304,8 @@ class UserRepository: ObservableObject {
                 // FORCE ID ASSIGNMENT: Custom init(from:) in User model bypasses @DocumentID auto-mapping
                 user.id = document.documentID
                 
-                // If the user hasn't acknowledged the reset yet, it means 
-                // the server just performed a reset. We clear local territories.
-                // We only do this ONCE per state change to avoid infinite loops with ProfileViewModel stats updates.
-                if user.hasAcknowledgedDecReset == false {
-                    if self.lastObservedResetState != false {
-                        print("🔄 UserRepository: Reset transition detected (false). Clearing TerritoryStore.")
-                        TerritoryStore.shared.clear()
-                        self.lastObservedResetState = false
-                    }
-                } else {
-                    self.lastObservedResetState = true
-                }
+                // delegate evaluation to SeasonManager (Gatekeeper)
+                SeasonManager.shared.evaluateResetStatus(user: user, config: GameConfigService.shared.config)
                 
                 completion(user)
             } catch {

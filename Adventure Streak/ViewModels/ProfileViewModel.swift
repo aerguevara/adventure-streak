@@ -86,7 +86,11 @@ class ProfileViewModel: ObservableObject {
     @Published var reservedIcons: Set<String> = []
     @Published var hasAcknowledgedDecReset: Bool = true // Legacy
     @Published var lastAcknowledgeSeasonId: String? = nil
+    @Published var lastAcknowledgeResetDate: Date? = nil
     @Published var showSeasonResetModal: Bool = false
+    
+    private var currentUser: User? = nil
+    private var lastAcknowledgmentTimestamp: Date? = nil
     
     // Rivals
     @Published var recentTheftVictims: [Rival] = []
@@ -231,7 +235,8 @@ class ProfileViewModel: ObservableObject {
             .compactMap { $0?.coordinate }
             .first() // Only trigger proactive zone once per load/location acquisition
             .receive(on: RunLoop.main)
-            .sink { coordinate in
+            .sink { [weak self] coordinate in
+                guard self?.authService.userId != nil else { return }
                 print("ProfileViewModel: Location acquired, triggering proactive target search...")
                 TerritoryRepository.shared.observeProactiveZone(around: coordinate)
             }
@@ -253,10 +258,11 @@ class ProfileViewModel: ObservableObject {
             }
             .store(in: &cancellables)
             
-        // NEW: Observe SeasonManager for season changes
+        // NEW: Observe SeasonManager for season changes & reset status
         SeasonManager.shared.$currentSeason
+            .combineLatest(SeasonManager.shared.$isResetAcknowledgmentPending)
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] _, _ in
                 self?.updateSeasonModalStatus()
             }
             .store(in: &cancellables)
@@ -339,6 +345,8 @@ class ProfileViewModel: ObservableObject {
         self.lastUserXP = -1
         self.lastUserLevel = -1
         self.lastAcknowledgeSeasonId = nil
+        self.isProfileLoaded = false
+        self.showSeasonResetModal = false
     }
     
     func refreshGamification() {
@@ -639,7 +647,31 @@ class ProfileViewModel: ObservableObject {
         let isResetAcknowledged = user.hasAcknowledgedDecReset ?? true
         print("DEBUG: ProfileViewModel: hasAcknowledgedDecReset is \(isResetAcknowledged). Show modal: \(!isResetAcknowledged)")
         self.hasAcknowledgedDecReset = isResetAcknowledged
-        self.lastAcknowledgeSeasonId = user.lastAcknowledgeSeasonId
+        
+        // SHIELD: Only ignore server data if we JUST acknowledged locally in the last 30 seconds.
+        // This prevents the "stale read" flicker (where Firestore returns old data before the write)
+        // without blocking intentional manual server resets (which would happen outside this window).
+        let isRecentlyAcknowledged = lastAcknowledgmentTimestamp.map { Date().timeIntervalSince($0) < 30 } ?? false
+        
+        if isRecentlyAcknowledged {
+            print("🛡️ [ProfileViewModel] Acknowledgment shield ACTIVE. Keeping current local state.")
+        } else {
+            self.lastAcknowledgeSeasonId = user.lastAcknowledgeSeasonId
+            self.lastAcknowledgeResetDate = user.lastSeasonReset
+            
+            // Sync UserDefaults to keep track across launches
+            if let seasonId = user.lastAcknowledgeSeasonId {
+                UserDefaults.standard.set(seasonId, forKey: "lastAcknowledgeSeasonId")
+            }
+            if let resetDate = user.lastSeasonReset {
+                UserDefaults.standard.set(resetDate.timeIntervalSince1970, forKey: "lastAcknowledgeResetDate")
+            } else {
+                // If server says no reset date, clear local record
+                UserDefaults.standard.removeObject(forKey: "lastAcknowledgeResetDate")
+            }
+        }
+        
+        self.currentUser = user
         self.isProfileLoaded = true
         self.updateSeasonModalStatus()
         
@@ -748,11 +780,16 @@ class ProfileViewModel: ObservableObject {
     func acknowledgeSeason(_ seasonId: String) async {
         guard let userId = authService.userId else { return }
         do {
-            try await userRepository.acknowledgeSeason(userId: userId, seasonId: seasonId)
+            let serverResetDate = self.currentUser?.lastSeasonReset ?? Date()
+            let configResetDate = GameConfigService.shared.config.globalResetDate ?? Date()
+            let safetyFloor = max(serverResetDate, configResetDate)
             
-            // Set onboarding date to the global reset date (or now as fallback)
-            // to allow re-importing workouts that happened during this "new era".
-            let safetyFloor = GameConfigService.shared.config.globalResetDate ?? Date()
+            // 0. Update server acknowledgment (IMPORTANT: Pass resetDate to avoid repeated popups)
+            try await userRepository.acknowledgeSeason(userId: userId, seasonId: seasonId, resetDate: serverResetDate)
+            
+            // NEW: Use a stricter safety floor. 
+            
+            print("🛡️ [ProfileViewModel] Setting new onboarding safety floor to \(safetyFloor)")
             UserDefaults.standard.set(safetyFloor.timeIntervalSince1970, forKey: "onboardingCompletionDate")
             
             // Clear all local caches to ensure a completely clean state after reset
@@ -762,17 +799,25 @@ class ProfileViewModel: ObservableObject {
             SocialService.shared.clear()
             PendingRouteStore.shared.clear()
             
-            // Recargar perfil del usuario inmediatamente (para refrescar XP/Nivel)
+            // 1. Update local acknowledgment state synchronously to avoid flicker
+            self.lastAcknowledgeSeasonId = seasonId
+            if let resetDate = self.currentUser?.lastSeasonReset {
+                self.lastAcknowledgeResetDate = resetDate
+                UserDefaults.standard.set(resetDate.timeIntervalSince1970, forKey: "lastAcknowledgeResetDate")
+            }
+            UserDefaults.standard.set(seasonId, forKey: "lastAcknowledgeSeasonId")
+            
+            self.showSeasonResetModal = false
+            SeasonManager.shared.isResetAcknowledgmentPending = false
+            self.hasAcknowledgedDecReset = true
+            self.lastAcknowledgmentTimestamp = Date()
+            
+            // 2. Recargar perfil del usuario (esto desencadenará actualizaciones reactivas, 
+            // pero ya tenemos las banderas locales actualizadas para el modal).
             authService.refreshUserProfile(userId: userId)
             
-            await MainActor.run {
-                self.lastAcknowledgeSeasonId = seasonId
-                self.showSeasonResetModal = false
-                self.hasAcknowledgedDecReset = true
-                
-                // NOTIFICATION: Tell WorkoutsViewModel to re-import immediately (HK + Remote)
-                NotificationCenter.default.post(name: NSNotification.Name("TriggerImmediateImport"), object: nil)
-            }
+            // 3. NOTIFICATION: Tell WorkoutsViewModel to re-import immediately (HK + Remote)
+            NotificationCenter.default.post(name: NSNotification.Name("TriggerImmediateImport"), object: nil)
         } catch {
             print("Error acknowledging season: \(error)")
         }
@@ -803,14 +848,14 @@ class ProfileViewModel: ObservableObject {
     
     // MARK: - Season Modal Logic
     private func updateSeasonModalStatus() {
-        let currentSeasonId = SeasonManager.shared.currentSeason.id
-        let isAauthenticated = AuthenticationService.shared.isAuthenticated
+        guard authService.userId != nil else {
+            self.showSeasonResetModal = false
+            return
+        }
         
-        self.showSeasonResetModal = isAauthenticated && 
-                                    isProfileLoaded && 
-                                    configService.isLoaded &&
-                                    lastAcknowledgeSeasonId != currentSeasonId
+        // Now delegating to SeasonManager but we keep showSeasonResetModal for the UI
+        self.showSeasonResetModal = SeasonManager.shared.isResetAcknowledgmentPending
         
-        print("DEBUG: ProfileViewModel: updateSeasonModalStatus. isAuthenticated: \(isAauthenticated), isLoaded: \(isProfileLoaded), configLoaded: \(configService.isLoaded), lastAck: \(lastAcknowledgeSeasonId ?? "nil"), current: \(currentSeasonId). Result: \(showSeasonResetModal)")
+        print("DEBUG: ProfileViewModel: updateSeasonModalStatus. Result: \(showSeasonResetModal)")
     }
 }

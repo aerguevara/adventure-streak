@@ -72,6 +72,8 @@ struct User: Identifiable, Codable {
     // Flag for global data reset acknowledgment
     var hasAcknowledgedDecReset: Bool?
     var lastAcknowledgeSeasonId: String?
+    var lastSeasonReset: Date?
+    var lastAcknowledgedResetAt: Date?
     
     // Badges
     var badges: [String]?
@@ -110,6 +112,8 @@ struct User: Identifiable, Codable {
          recentThieves: [Rival]? = nil,
          hasAcknowledgedDecReset: Bool? = nil,
          lastAcknowledgeSeasonId: String? = nil,
+         lastSeasonReset: Date? = nil,
+         lastAcknowledgedResetAt: Date? = nil,
          badges: [String]? = nil,
          invitationVerified: Bool? = nil,
          invitedBy: String? = nil,
@@ -141,6 +145,8 @@ struct User: Identifiable, Codable {
         self.recentThieves = recentThieves
         self.hasAcknowledgedDecReset = hasAcknowledgedDecReset
         self.lastAcknowledgeSeasonId = lastAcknowledgeSeasonId
+        self.lastSeasonReset = lastSeasonReset
+        self.lastAcknowledgedResetAt = lastAcknowledgedResetAt
         self.badges = badges
         self.invitationVerified = invitationVerified
         self.invitedBy = invitedBy
@@ -177,6 +183,8 @@ struct User: Identifiable, Codable {
         case recentThieves
         case hasAcknowledgedDecReset
         case lastAcknowledgeSeasonId
+        case lastSeasonReset
+        case lastAcknowledgedResetAt
         case badges
         case invitationVerified
         case invitedBy
@@ -229,6 +237,8 @@ struct User: Identifiable, Codable {
         recentThieves = try container.decodeIfPresent([Rival].self, forKey: .recentThieves)
         hasAcknowledgedDecReset = try container.decodeIfPresent(Bool.self, forKey: .hasAcknowledgedDecReset)
         lastAcknowledgeSeasonId = try container.decodeIfPresent(String.self, forKey: .lastAcknowledgeSeasonId)
+        lastSeasonReset = try container.decodeIfPresent(Date.self, forKey: .lastSeasonReset)
+        lastAcknowledgedResetAt = try container.decodeIfPresent(Date.self, forKey: .lastAcknowledgedResetAt)
         badges = try container.decodeIfPresent([String].self, forKey: .badges)
         invitationVerified = try container.decodeIfPresent(Bool.self, forKey: .invitationVerified)
         invitedBy = try container.decodeIfPresent(String.self, forKey: .invitedBy)
@@ -269,6 +279,8 @@ struct User: Identifiable, Codable {
         try container.encodeIfPresent(recentThieves, forKey: .recentThieves)
         try container.encodeIfPresent(hasAcknowledgedDecReset, forKey: .hasAcknowledgedDecReset)
         try container.encodeIfPresent(lastAcknowledgeSeasonId, forKey: .lastAcknowledgeSeasonId)
+        try container.encodeIfPresent(lastSeasonReset, forKey: .lastSeasonReset)
+        try container.encodeIfPresent(lastAcknowledgedResetAt, forKey: .lastAcknowledgedResetAt)
         try container.encodeIfPresent(badges, forKey: .badges)
         try container.encodeIfPresent(invitationVerified, forKey: .invitationVerified)
         try container.encodeIfPresent(invitedBy, forKey: .invitedBy)
@@ -302,4 +314,3 @@ struct RivalryRelationship: Identifiable {
     var isUserLeading: Bool { userScore >= rivalScore }
     var isVengeancePending: Bool { rivalScore > userScore }
 }
-

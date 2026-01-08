@@ -3,6 +3,9 @@ import Combine
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 struct GameConfig: Equatable {
     var loadHistoricalWorkouts: Bool
@@ -78,8 +81,22 @@ final class GameConfigService: ObservableObject {
     @Published private(set) var isLoaded = false
     
     private var loadTask: Task<GameConfig, Never>?
+    private var cancellables = Set<AnyCancellable>()
     
-    private init() {}
+    private init() {
+        setupForegroundObserver()
+    }
+    
+    private func setupForegroundObserver() {
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in
+                Task {
+                    print("[Config] App foregrounded, refreshing config...")
+                    await self?.refresh()
+                }
+            }
+            .store(in: &cancellables)
+    }
     
     func loadConfigIfNeeded() async {
         if isLoaded {
@@ -135,11 +152,15 @@ final class GameConfigService: ObservableObject {
             if userAnchorTimestamp > 0 {
                 let userAnchorDate = Date(timeIntervalSince1970: userAnchorTimestamp)
                 let ultraFinalDate = userAnchorDate > finalDate ? userAnchorDate : finalDate
-                print("⚙️ [Config] Reset Floor Applied: \(resetDate). Final Cutoff: \(ultraFinalDate)")
+                print("⚙️ [Config] Cutoff Date Calculation:")
+                print("   - Global Reset Date: \(resetDate)")
+                print("   - Global Lookback (\(days)d): \(globalLookback)")
+                print("   - User Anchor Date: \(userAnchorDate)")
+                print("   - FINAL CUTOFF: \(ultraFinalDate)")
                 return ultraFinalDate
             }
             
-            print("⚙️ [Config] Reset Floor Applied: \(resetDate). Final Cutoff: \(finalDate)")
+            print("⚙️ [Config] Cutoff (No User Anchor): Reset \(resetDate), Lookback \(globalLookback) -> Final: \(finalDate)")
             return finalDate
         }
         
@@ -147,7 +168,7 @@ final class GameConfigService: ObservableObject {
         if userAnchorTimestamp > 0 {
             let userAnchorDate = Date(timeIntervalSince1970: userAnchorTimestamp)
             let finalDate = userAnchorDate > globalLookback ? userAnchorDate : globalLookback
-            print("⚙️ [Config] Hybrid Cutoff (No Reset): Global \(globalLookback) vs User \(userAnchorDate) -> Final: \(finalDate)")
+            print("⚙️ [Config] Cutoff (User Anchor Only): Global \(globalLookback) vs User \(userAnchorDate) -> Final: \(finalDate)")
             return finalDate
         }
         
@@ -156,6 +177,12 @@ final class GameConfigService: ObservableObject {
     }
     
     private func fetchRemoteConfig() async -> GameConfig? {
+        // Guard against unauthenticated fetch if rules require it
+        guard Auth.auth().currentUser != nil else {
+            print("[Config] Skipping remote fetch (no user logged in)")
+            return nil
+        }
+        
         var loaded = config
         
         #if canImport(FirebaseFirestore)
