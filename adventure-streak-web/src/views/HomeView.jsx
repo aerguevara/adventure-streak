@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { collection, query, orderBy, limit, onSnapshot, doc } from "firebase/firestore";
 import { Link } from 'react-router-dom';
 
 function HomeView() {
     const [rankingData, setRankingData] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [seasonInfo, setSeasonInfo] = useState({
+        name: "Nueva Temporada",
+        subtitle: "Enero 2026"
+    });
 
     useEffect(() => {
         const q = query(
@@ -40,6 +44,20 @@ function HomeView() {
         return () => unsubscribe();
     }, []);
 
+    useEffect(() => {
+        const docRef = doc(db, "config", "gameplay");
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setSeasonInfo({
+                    name: data.currentSeasonName || "Nueva Temporada",
+                    subtitle: data.currentSeasonSubtitle || "T1 2026"
+                });
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
     const scrollToRanking = () => {
         document.getElementById('ranking')?.scrollIntoView({ behavior: 'smooth' });
     };
@@ -60,7 +78,7 @@ function HomeView() {
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-adventure-blue opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-adventure-blue"></span>
                             </span>
-                            Próxima Temporada Disponible
+                            {seasonInfo.name} - {seasonInfo.subtitle}
                         </div>
                         <h1 className="text-5xl md:text-7xl font-bold mb-8 leading-[1.1] tracking-tight">
                             Domina tu ciudad.<br />

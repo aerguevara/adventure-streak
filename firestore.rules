@@ -24,6 +24,17 @@ service cloud.firestore {
       match /vengeance_targets/{targetId} {
         allow read, write: if isOwner(userId);
       }
+      
+      // Social connections
+      match /followers/{followerId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
+      
+      match /following/{followingId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
     }
 
     // 2. Activities Collection
@@ -55,7 +66,7 @@ service cloud.firestore {
     //   they sign the new document with their own ID. This prevents impersonation.
     // - Delete: Only the current owner can remove it.
     match /remote_territories/{cellId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
