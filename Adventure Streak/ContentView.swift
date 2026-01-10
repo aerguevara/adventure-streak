@@ -49,7 +49,14 @@ struct ContentView: View {
                     .background(Color(.systemBackground))
                 } else if !authService.isAuthenticated {
                     PremiumLoginView()
-                } else if !authService.isInvitationVerified {
+                } else if authService.isInvitationVerified == nil {
+                    VStack(spacing: 12) {
+                        ProgressView("Verificando acceso...")
+                            .progressViewStyle(.circular)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                } else if authService.isInvitationVerified == false {
                     InvitationView()
                 } else if !onboardingViewModel.hasCompletedOnboarding {
                     OnboardingView(viewModel: onboardingViewModel)
@@ -67,7 +74,7 @@ struct ContentView: View {
             // Modal detallado para primera carga cuando no hay datos locales
             if configService.isLoaded,
                authService.isAuthenticated,
-               authService.isInvitationVerified,
+               authService.isInvitationVerified == true,
                onboardingViewModel.hasCompletedOnboarding,
                activityStore.activities.isEmpty,
                (workoutsViewModel.isLoading || authService.isSyncingData) {

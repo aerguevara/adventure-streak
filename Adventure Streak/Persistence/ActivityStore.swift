@@ -16,12 +16,11 @@ class ActivityStore: ObservableObject {
     
     private init() {
         self.activities = store.load()
-        // If we have cached data, we consider it "synced" enough to prevent duplicate imports
-        // until the real sync arrives.
-        if !activities.isEmpty {
-            self.isSynced = true
-        }
-        print("🗄️ ActivityStore loaded \(activities.count) activities")
+        // DO NOT set isSynced = true here. 
+        // Sync should only be true after we successfully receive a snapshot from Firestore
+        // to prevent premature HealthKit imports before knowing the server state.
+        self.isSynced = false
+        print("🗄️ ActivityStore loaded \(activities.count) activities from cache")
         if let first = activities.first {
             print("   First activity missions: \(first.missions?.count ?? 0)")
             if let mission = first.missions?.first {

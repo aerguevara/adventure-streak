@@ -113,7 +113,7 @@ class MapViewModel: ObservableObject {
         
         // NEW: Region change listener with debounce for remote territories
         $region
-            .debounce(for: .seconds(1.0), scheduler: RunLoop.main)
+            .debounce(for: .seconds(0.2), scheduler: RunLoop.main)
             .sink { [weak self] newRegion in
                 guard let self = self, AuthenticationService.shared.userId != nil else { return }
                 
@@ -139,7 +139,7 @@ class MapViewModel: ObservableObject {
         // OPTIMIZATION: Filter visible territories
         // Combine latest territories with latest visible region
         territoryStore.$conqueredCells
-            .combineLatest($region.debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .userInteractive)))
+            .combineLatest($region.debounce(for: .milliseconds(100), scheduler: DispatchQueue.global(qos: .userInteractive)))
             .combineLatest(configService.$config)
             .map { combined, config -> [TerritoryCell] in
                 let (cellsDict, region) = combined
@@ -189,7 +189,6 @@ class MapViewModel: ObservableObject {
         // NEW: Optimized pipeline - Process on background, update on main
         territoryRepository.$otherTerritories
             .combineLatest(territoryStore.$conqueredCells, AuthenticationService.shared.$userId)
-            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .userInitiated)) // Debounce to prevent thrashing
             .receive(on: DispatchQueue.global(qos: .userInitiated)) // Process in background
             .map { [weak self] (remote, localDict, currentUserId) -> [RemoteTerritory] in
                 guard let self = self else { return [] }
@@ -263,9 +262,10 @@ class MapViewModel: ObservableObject {
                     }
                 }
                 
-                // 2. Return only TRUE rivals
+                // 2. Return only TRUE rivals (and double check expiration)
+                let now = Date()
                 let rivals = remote.filter {
-                    $0.userId != currentUserId && !effectiveLocalIds.contains($0.id ?? "")
+                    $0.userId != currentUserId && !effectiveLocalIds.contains($0.id ?? "") && $0.expiresAt > now
                 }
 
                 // Cap rivals to avoid flooding UI in dense maps

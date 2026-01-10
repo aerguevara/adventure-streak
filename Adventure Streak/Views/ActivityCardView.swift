@@ -101,8 +101,8 @@ struct ActivityCardView: View {
                         .font(.system(size: 20, weight: .black, design: .rounded))
                         .foregroundColor(Color(hex: "32D74B"))
                     
-                    if !missionNames.isEmpty {
-                        MissionChipsView(missions: missionNames)
+                    if hasTerritoryImpact {
+                        ActivityImpactStatsView(data: activity.activityData)
                     }
                 }
                 
@@ -263,29 +263,52 @@ struct ActivityCardView: View {
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
-    private var missionNames: [String] {
-        guard let subtitle = activity.eventSubtitle else { return [] }
-        let cleaned = subtitle
-            .replacingOccurrences(of: "Misiones:", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "Misiones", with: "", options: .caseInsensitive)
-        let separators: CharacterSet = ["·", "•", ","]
-        let tokens = cleaned
-            .components(separatedBy: separators)
-            .flatMap { $0.components(separatedBy: "·") }
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        return tokens
-            .filter { !$0.isEmpty }
-            .filter { token in
-                let lower = token.lowercased()
-                if lower.contains("nuevas: 0") || lower.contains("defendidas: 0") || lower.contains("recapturadas: 0") {
-                    return false
-                }
-                return !lower.contains("territorio") && !lower.contains("zona") && !lower.contains("conquist")
-            }
-    }
-
     private var hasTerritoryImpact: Bool {
         activity.activityData.newZonesCount > 0 || activity.activityData.defendedZonesCount > 0 || activity.activityData.recapturedZonesCount > 0 || activity.activityData.stolenZonesCount > 0
+    }
+}
+
+// MARK: - Impact Components
+struct ActivityImpactStatsView: View {
+    let data: SocialActivityData
+    
+    var body: some View {
+        let columns = [GridItem(.adaptive(minimum: 100), spacing: 8, alignment: .leading)]
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+            if data.newZonesCount > 0 {
+                ActivityImpactBadge(icon: "map.fill", text: "\(data.newZonesCount) Nuevas", color: Color(hex: "32D74B"))
+            }
+            if data.stolenZonesCount > 0 {
+                ActivityImpactBadge(icon: "bolt.shield.fill", text: "\(data.stolenZonesCount) Robadas", color: Color(hex: "FF3B30"))
+            }
+            if data.recapturedZonesCount > 0 {
+                ActivityImpactBadge(icon: "arrow.counterclockwise", text: "\(data.recapturedZonesCount) Recup.", color: Color(hex: "FF9F0A"))
+            }
+            if data.defendedZonesCount > 0 {
+                ActivityImpactBadge(icon: "shield.fill", text: "\(data.defendedZonesCount) Defend.", color: Color(hex: "4C6FFF"))
+            }
+        }
+    }
+}
+
+struct ActivityImpactBadge: View {
+    let icon: String
+    let text: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .bold))
+            Text(text)
+                .font(.system(size: 12, weight: .black))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.15))
+        .foregroundColor(color)
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(color.opacity(0.3), lineWidth: 1))
     }
 }
 
@@ -305,24 +328,6 @@ struct ProposalMetricSmall: View {
     }
 }
 
-private struct MissionChipsView: View {
-    let missions: [String]
-
-    var body: some View {
-        let columns = [GridItem(.adaptive(minimum: 72), spacing: 8, alignment: .leading)]
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-            ForEach(missions, id: \.self) { mission in
-                Text(mission)
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.primary.opacity(0.9))
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 10)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(10)
-            }
-        }
-    }
-}
 
 struct ReactionBarView: View {
     let state: ActivityReactionState

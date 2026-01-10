@@ -170,7 +170,34 @@ struct SocialPostDetailView: View {
                     }
                     .padding(.horizontal)
                     
-                    // Potential Reactions / Social actions could go here
+                    // Missions Section
+                    if !missionNames.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Misiones Completadas")
+                                .font(.title3.bold())
+                                .foregroundColor(.white)
+                            
+                            let columns = [GridItem(.adaptive(minimum: 120), spacing: 10, alignment: .leading)]
+                            LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                                ForEach(missionNames, id: \.self) { mission in
+                                    Text(mission)
+                                        .font(.subheadline.bold())
+                                        .foregroundColor(.white.opacity(0.9))
+                                        .padding(.vertical, 8)
+                                        .padding(.horizontal, 12)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(Color.white.opacity(0.08))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                                )
+                                        )
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
                 }
                 .padding(.top, 20)
                 .padding(.bottom, 50)
@@ -276,6 +303,27 @@ struct SocialPostDetailView: View {
             let mins = minutes % 60
             return "\(hours)h \(mins)m"
         }
+    }
+
+    private var missionNames: [String] {
+        guard let subtitle = post.eventSubtitle else { return [] }
+        let cleaned = subtitle
+            .replacingOccurrences(of: "Misiones:", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "Misiones", with: "", options: .caseInsensitive)
+        let separators: CharacterSet = ["·", "•", ","]
+        let tokens = cleaned
+            .components(separatedBy: separators)
+            .flatMap { $0.components(separatedBy: "·") }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return tokens
+            .filter { !$0.isEmpty }
+            .filter { token in
+                let lower = token.lowercased()
+                if lower.contains("nuevas: 0") || lower.contains("defendidas: 0") || lower.contains("recapturadas: 0") {
+                    return false
+                }
+                return !lower.contains("territorio") && !lower.contains("zona") && !lower.contains("conquist")
+            }
     }
 }
 

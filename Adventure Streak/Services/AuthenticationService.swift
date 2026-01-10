@@ -676,6 +676,65 @@ class AuthenticationService: NSObject, ObservableObject {
             throw error
         }
     }
+    
+    func deleteAccount() async throws {
+        let callId = Int.random(in: 1000...9999)
+        guard let user = Auth.auth().currentUser else {
+            print("❌ [Auth][\(callId)] No user logged in for deletion")
+            return
+        }
+        
+        do {
+            print("📡 [Auth][\(callId)] Fetching ID Token for account deletion...")
+            let idToken = try await user.getIDToken()
+            
+            #if DEBUG
+            let endpoint = "https://us-central1-adventure-streak.cloudfunctions.net/deleteAccountPRE"
+            print("🔧 [Auth] Using PRE environment for deletion: \(endpoint)")
+            #else
+            let endpoint = "https://us-central1-adventure-streak.cloudfunctions.net/deleteAccount"
+            print("🌍 [Auth] Using PRO environment for deletion: \(endpoint)")
+            #endif
+            
+            guard let url = URL(string: endpoint) else {
+                throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+            }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+            
+            // Empty body for onCall with no args
+            let body: [String: Any] = ["data": [:]]
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            print("📡 [Auth][\(callId)] Sending HTTP Request (Deletion Archival)...")
+            
+            // Fire and forget the archival process in the background.
+            // We capture the request which contains the ID Token already.
+            Task(priority: .background) {
+                do {
+                    let (_, response) = try await URLSession.shared.data(for: request)
+                    if let httpResponse = response as? HTTPURLResponse {
+                        print("✅ [Auth][\(callId)] Background Archival Response: \(httpResponse.statusCode)")
+                    }
+                } catch {
+                    print("❌ [Auth][\(callId)] Background Archival Failed: \(error.localizedDescription)")
+                }
+            }
+            
+            // 2. Perform IMMEDIATE local sign out and cleanup
+            print("🚀 [Auth][\(callId)] Triggering immediate local sign-out")
+            await MainActor.run {
+                self.signOut()
+            }
+            
+        } catch {
+            print("❌ [Auth][\(callId)] Deletion Error (Initial Stage): \(error.localizedDescription)")
+            throw error
+        }
+    }
 }
 
 extension AuthenticationService: ASAuthorizationControllerDelegate {

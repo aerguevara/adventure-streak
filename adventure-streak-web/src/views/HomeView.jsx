@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc } from "firebase/firestore";
 import { Link } from 'react-router-dom';
+import LiveFeed from '../components/LiveFeed';
+import MapSnippet from '../components/MapSnippet';
 
 function HomeView() {
     const [rankingData, setRankingData] = useState([]);
@@ -14,7 +16,7 @@ function HomeView() {
     useEffect(() => {
         const q = query(
             collection(db, "users"),
-            orderBy("level", "desc"),
+            orderBy("xp", "desc"),
             limit(20)
         );
 
@@ -58,15 +60,16 @@ function HomeView() {
         return () => unsubscribe();
     }, []);
 
-    const scrollToRanking = () => {
-        document.getElementById('ranking')?.scrollIntoView({ behavior: 'smooth' });
-    };
-
     return (
         <div className="min-h-screen bg-adventure-dark text-white font-sans selection:bg-adventure-blue/30 scroll-smooth">
-            <main>
+            <main className="pt-20">
+                {/* Live Activity Feed */}
+                <div className="w-full bg-adventure-dark/80 backdrop-blur-md border-b border-white/5 relative z-30">
+                    <LiveFeed />
+                </div>
+
                 {/* Hero Section */}
-                <section className="relative pt-40 pb-20 px-6 overflow-hidden">
+                <section className="relative pt-32 pb-20 px-6 overflow-hidden">
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-full pointer-events-none">
                         <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[80%] bg-adventure-blue/20 blur-[120px] rounded-full animate-pulse" />
                         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[70%] bg-adventure-orange/10 blur-[100px] rounded-full" />
@@ -89,10 +92,11 @@ function HomeView() {
                         <p className="text-xl text-white/50 mb-12 max-w-2xl mx-auto leading-relaxed">
                             Convierte tus entrenamientos en una conquista global. Cada kilómetro cuenta para expandir tu imperio y desafiar a otros aventureros.
                         </p>
+
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                             <a
-                                href="#"
-                                className="transition-transform hover:scale-105"
+                                href="https://apps.apple.com/app/adventure-streak/id1669285098"
+                                className="transition-transform hover:scale-105 active:scale-95"
                                 aria-label="Descargar en el App Store"
                             >
                                 <img
@@ -101,13 +105,12 @@ function HomeView() {
                                     className="h-16"
                                 />
                             </a>
-
                         </div>
                     </div>
                 </section>
 
                 {/* Features Section */}
-                <section id="features" className="max-w-7xl mx-auto px-6 py-24 border-t border-white/5">
+                <section id="features" className="max-w-7xl mx-auto px-6 py-12">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
                         <div className="glass-card p-10 hover:border-adventure-blue/40 transition-colors group">
                             <div className="w-14 h-14 bg-adventure-blue/10 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
@@ -139,26 +142,48 @@ function HomeView() {
                     </div>
                 </section>
 
+                {/* Map Preview Section */}
+                <section className="max-w-7xl mx-auto px-6 py-20 border-t border-white/5">
+                    <div className="glass-card overflow-hidden bg-black/40 border-white/5 relative group">
+                        <div className="p-12 md:p-20 flex flex-col md:flex-row items-center gap-12">
+                            <div className="flex-1 text-center md:text-left">
+                                <h2 className="text-4xl md:text-5xl font-bold mb-6">Explora el Mapa de Guerra</h2>
+                                <p className="text-white/40 text-lg mb-8">
+                                    Visualiza los territorios conquistados en tiempo real. ¿Quién domina tu barrio hoy?
+                                </p>
+                                <Link
+                                    to="/map"
+                                    className="inline-flex items-center gap-4 bg-white text-black px-8 py-4 rounded-full font-bold hover:bg-adventure-blue hover:text-white transition-all active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-adventure-blue/20"
+                                >
+                                    <span>Ver Mapa Global</span>
+                                    <span className="text-xl">🗺️</span>
+                                </Link>
+                            </div>
+                            <div className="flex-1 relative min-h-[400px] w-full group-hover:scale-[1.02] transition-transform duration-700">
+                                <MapSnippet />
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 {/* Detailed Ranking Section */}
-                <section id="ranking" className="max-w-7xl mx-auto px-6 py-20">
+                <section id="ranking" className="max-w-7xl mx-auto px-6 py-20 pb-40">
                     <div className="text-center mb-16">
                         <h2 className="text-4xl font-bold mb-4">Clasificación Global</h2>
                         <p className="text-white/40">Domina las celdas y escala posiciones con tus conquistas.</p>
                     </div>
 
-                    <div className="glass-card overflow-x-auto overflow-y-hidden">
+                    <div className="glass-card overflow-x-auto ring-1 ring-white/5 shadow-2xl">
                         <div className="min-w-[1000px]">
                             <div className="p-6 bg-white/5 border-b border-white/5 flex items-center text-xs font-bold uppercase tracking-widest text-white/30">
-                                <span className="w-12">Rk</span>
-                                <span className="flex-1">Explorador</span>
-                                <div className="flex gap-10 items-center text-right pr-4">
+                                <span className="w-16 pl-4 text-center">Rk</span>
+                                <span className="flex-1 text-left">Explorador</span>
+                                <div className="flex gap-10 items-center text-right pr-8">
                                     <span className="w-20">Nivel / XP</span>
                                     <span className="w-24 text-adventure-blue">Mapa (Celdas)</span>
                                     <span className="w-24">Km GPS</span>
                                     <span className="w-16 text-emerald-400">Nuevos</span>
                                     <span className="w-16 text-red-400">Robados</span>
-                                    <span className="w-16 text-orange-400">Defend.</span>
-                                    <span className="w-16 text-purple-400">Recup.</span>
                                 </div>
                             </div>
 
@@ -169,38 +194,46 @@ function HomeView() {
                                     </div>
                                 ) : (
                                     rankingData.map((user) => (
-                                        <div key={user.rank} className="p-6 flex items-center hover:bg-white/[0.02] transition-colors">
-                                            <span className={`w-12 font-bold ${user.rank === 1 ? 'text-adventure-orange' : user.rank <= 3 ? 'text-adventure-blue' : 'text-white/30'}`}>
-                                                {user.rank}
-                                            </span>
+                                        <div key={user.rank} className={`p-6 flex items-center hover:bg-white/[0.02] transition-colors ${user.rank <= 3 ? 'bg-white/[0.01]' : ''}`}>
+                                            <div className="w-16 flex justify-center">
+                                                {user.rank === 1 ? (
+                                                    <span className="text-3xl drop-shadow-[0_0_10px_rgba(255,165,0,0.5)]">🥇</span>
+                                                ) : user.rank === 2 ? (
+                                                    <span className="text-2xl text-slate-400">🥈</span>
+                                                ) : user.rank === 3 ? (
+                                                    <span className="text-2xl text-amber-700">🥉</span>
+                                                ) : (
+                                                    <span className="font-mono text-white/20">{user.rank}</span>
+                                                )}
+                                            </div>
                                             <div className="flex-1 flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-white/5 rounded-full overflow-hidden flex items-center justify-center text-xl">
+                                                <div className={`w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-xl border-2 ${user.rank === 1 ? 'border-adventure-orange' : 'border-white/5'}`}>
                                                     {user.avatar.startsWith('http') ? (
                                                         <img src={user.avatar} alt="" className="w-full h-full object-cover" />
                                                     ) : (
                                                         user.avatar
                                                     )}
                                                 </div>
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold">{user.name}</span>
-                                                    <span className="text-[10px] text-white/20 uppercase font-mono tracking-tighter">Explorador de Élite</span>
+                                                <div className="flex flex-col text-left">
+                                                    <span className={`font-bold text-lg ${user.rank === 1 ? 'text-adventure-orange' : ''}`}>{user.name}</span>
+                                                    <span className="text-[10px] text-white/20 uppercase font-mono tracking-wider">
+                                                        {user.rank === 1 ? 'Gran Conquistador' : user.level > 10 ? 'Explorador Veterano' : 'Aventurero'}
+                                                    </span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex gap-10 items-center text-right pr-4">
+                                            <div className="flex gap-10 items-center text-right pr-8">
                                                 <div className="w-20 flex flex-col items-end">
-                                                    <span className="font-semibold text-adventure-blue">Lvl {user.level}</span>
-                                                    <span className="text-[10px] text-white/40">{user.xp} XP</span>
+                                                    <span className="font-bold text-adventure-blue">Lvl {user.level}</span>
+                                                    <span className="text-[10px] text-white/30 tracking-tighter">{user.xp.toLocaleString()} XP</span>
                                                 </div>
                                                 <div className="w-24 flex flex-col items-end">
-                                                    <span className="bg-adventure-blue/10 text-adventure-blue px-2 py-1 rounded text-sm font-bold">{user.cells}</span>
-                                                    <span className="text-[9px] text-white/20 mt-1 uppercase tracking-tighter italic">Celdas Totales</span>
+                                                    <span className="bg-adventure-blue/10 text-adventure-blue px-3 py-1 rounded-full text-sm font-bold border border-adventure-blue/20">{user.cells}</span>
+                                                    <span className="text-[9px] text-white/20 mt-1 uppercase tracking-tighter font-medium text-center">Celdas</span>
                                                 </div>
-                                                <span className="w-24 font-mono text-sm">{user.km.toFixed(1)} km</span>
-                                                <span className="w-16 font-bold text-emerald-400/80">{user.conquered}</span>
-                                                <span className="w-16 font-bold text-red-400/80">{user.stolen}</span>
-                                                <span className="w-16 font-bold text-orange-400/80">{user.defended}</span>
-                                                <span className="w-16 font-bold text-purple-400/80">{user.recaptured}</span>
+                                                <span className="w-24 font-mono text-sm text-white/60">{user.km.toFixed(1)} km</span>
+                                                <span className="w-16 font-bold text-emerald-400/60">{user.conquered}</span>
+                                                <span className="w-16 font-bold text-red-400/60">{user.stolen}</span>
                                             </div>
                                         </div>
                                     ))
@@ -208,21 +241,19 @@ function HomeView() {
                             </div>
                         </div>
                     </div>
-
-                    <div className="mt-8 p-6 glass-card bg-adventure-blue/5 border-adventure-blue/20">
-                        <h4 className="text-adventure-blue font-bold mb-2 flex items-center gap-2">
-                            ℹ️ ¿Qué significan estas métricas?
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs text-white/40">
-                            <p><strong className="text-white/60">Mapa (Celdas):</strong> El recuento total de territorios que posees actualmente en el mapa global.</p>
-                            <p><strong className="text-white/60">Nuevos:</strong> Celdas conquistadas que no pertenecían a ningún otro jugador anteriormente.</p>
-                            <p><strong className="text-white/60">Robados:</strong> Celdas que has arrebatado a otros jugadores mediante tus incursiones.</p>
-                            <p><strong className="text-white/60">Defendidos:</strong> Intentos de robo que has bloqueado manteniendo tu racha o nivel.</p>
-                            <p><strong className="text-white/60">Recuperados:</strong> Celdas que te habían robado y has vuelto a reclamar para tu imperio.</p>
-                        </div>
-                    </div>
                 </section>
             </main>
+
+            {/* Floating CTA */}
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-1000">
+                <a
+                    href="https://apps.apple.com/app/adventure-streak/id1669285098"
+                    className="flex items-center gap-3 bg-white text-black px-8 py-4 rounded-2xl font-bold shadow-2xl hover:bg-adventure-blue hover:text-white transition-all transform hover:scale-105 active:scale-95 group"
+                >
+                    <span>Únete a la Conquista</span>
+                    <span className="text-xl group-hover:translate-x-1 transition-transform">→</span>
+                </a>
+            </div>
         </div>
     );
 }

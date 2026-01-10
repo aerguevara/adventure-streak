@@ -5,6 +5,12 @@ description: Guía unificada para compilación de iOS y ejecución de scripts de
 
 # Guía de Desarrollo para Adventure Streak
 
+## 0. Protocolo de Trabajo
+> [!IMPORTANT]
+> **Planificación Obligatoria**: Antes de realizar cualquier cambio en el código o ejecutar scripts, se debe presentar siempre un plan detallado de los cambios propuestos.
+> 
+> **Aprobación Requerida**: NUNCA se debe proceder con la implementación hasta que el usuario haya dado su "ok" o aprobación explícita al plan presentado.
+
 Estas instrucciones deben seguirse siempre que se solicite compilar el proyecto iOS o ejecutar un script de administración/migración en el backend.
 
 ## 1. Compilación de la App iOS

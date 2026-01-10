@@ -14,6 +14,7 @@ struct ProfileDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: RelationTab = .following
     @State private var showSignOutConfirmation = false
+    @State private var showDeleteConfirmation = false
     @State private var showImagePicker = false
     @State private var pickedImage: UIImage?
     @State private var showIconPicker = false
@@ -398,6 +399,35 @@ struct ProfileDetailView: View {
                     .padding(.horizontal)
                     #endif
                     
+                    // Delete Account Button
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        HStack {
+                            if profileViewModel.isDeletingAccount {
+                                ProgressView()
+                                    .tint(.red)
+                                    .padding(.trailing, 8)
+                            } else {
+                                Image(systemName: "trash.fill")
+                            }
+                            Text("Borrar cuenta")
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(.red.opacity(0.8))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red.opacity(0.05))
+                        .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.red.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 20)
+                    .disabled(profileViewModel.isDeletingAccount)
+                    
                     Spacer(minLength: 40)
                 }
             }
@@ -447,6 +477,17 @@ struct ProfileDetailView: View {
             Button("Cancelar", role: .cancel) {}
         } message: {
             Text("¿Estás seguro de que quieres cerrar sesión?")
+        }
+        .confirmationDialog("Borrar cuenta", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+            Button("Borrar permanentemente", role: .destructive) {
+                Task {
+                    await profileViewModel.deleteAccount()
+                    dismiss()
+                }
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Esta acción es irreversible. Se borrarán todos tus datos y se eliminará tu acceso. ¿Estás seguro?")
         }
         .sheet(isPresented: $showDebugMenu) {
             DebugSimulationView(workoutsViewModel: workoutsViewModel)

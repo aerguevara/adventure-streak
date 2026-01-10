@@ -330,7 +330,8 @@ class SocialService: ObservableObject {
     }
     
     private func startObservingFollowing() {
-        guard let currentUserId = AuthenticationService.shared.userId else { return }
+        guard let currentUserId = AuthenticationService.shared.userId,
+              Auth.auth().currentUser != nil else { return }
         
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore else { return }

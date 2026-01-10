@@ -58,7 +58,9 @@ class TerritoryRepository: ObservableObject {
     // NEW: Observe vengeance targets for the current user
     func observeVengeanceTargets(userId: String) {
         #if canImport(FirebaseFirestore)
-        guard let db = db as? Firestore, !userId.isEmpty else { return }
+        guard let db = db as? Firestore, !userId.isEmpty,
+              let currentUser = Auth.auth().currentUser,
+              currentUser.uid == userId else { return }
         
         // Prevent redundant listener setup
         if observingVengeanceUserId == userId {
@@ -122,8 +124,8 @@ class TerritoryRepository: ObservableObject {
         
         // DEBOUNCING: Check if we've moved enough to justify a new query (20% threshold)
         if let last = lastObservedRegion {
-            let latThreshold = last.span.latitudeDelta * 0.2
-            let lonThreshold = last.span.longitudeDelta * 0.2
+            let latThreshold = last.span.latitudeDelta * 0.1
+            let lonThreshold = last.span.longitudeDelta * 0.1
             
             let latDiff = abs(region.center.latitude - last.center.latitude)
             let lonDiff = abs(region.center.longitude - last.center.longitude)
@@ -138,9 +140,9 @@ class TerritoryRepository: ObservableObject {
         self.currentRegion = region
         
         // Determine required Geohash precision based on zoom level
-        // Approx: span 0.1 deg (~11km) -> precision 5 (~4.9km x 4.9km)
-        // span 0.02 deg (~2km) -> precision 6 (~1.2km x 0.6km)
-        let precision = region.span.latitudeDelta > 0.1 ? 5 : 6
+        // Approx: span 0.2 deg (~22km) -> precision 5 (~4.9km x 4.9km)
+        // Adjust threshold to use Precision 5 earlier for smoother panning
+        let precision = region.span.latitudeDelta >= 0.04 ? 5 : 6
         let centerHash = Geohash.encode(latitude: region.center.latitude, longitude: region.center.longitude, precision: precision)
         let neighborHashes = Geohash.neighbours(for: centerHash)
         
@@ -161,7 +163,8 @@ class TerritoryRepository: ObservableObject {
                 let query = db.collection("remote_territories")
                     .whereField("geohash", isGreaterThanOrEqualTo: hash)
                     .whereField("geohash", isLessThanOrEqualTo: hash + "~")
-                    .limit(to: 500)
+                    .whereField("expiresAt", isGreaterThan: Date())
+                    .limit(to: 1000) // Double limit for better coverage
                 
                 let listener = setupRelativeListener(query: query, geohash: hash)
                 geohashListeners[hash] = listener

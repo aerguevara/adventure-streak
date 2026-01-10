@@ -7,6 +7,9 @@ import FirebaseMessaging
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 @MainActor
 class NotificationService: ObservableObject {
@@ -29,7 +32,8 @@ class NotificationService: ObservableObject {
     // MARK: - In-App Notifications
     
     func startObserving() {
-        guard let userId = AuthenticationService.shared.userId else { return }
+        guard let userId = AuthenticationService.shared.userId,
+              Auth.auth().currentUser != nil else { return }
         
         #if canImport(FirebaseFirestore)
         listenerRegistration?.remove()

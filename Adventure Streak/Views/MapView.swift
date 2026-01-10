@@ -115,35 +115,37 @@ struct MapView: UIViewRepresentable {
             mapView.removeOverlays(staleOverlays)
         }
         
-        // 3. Add New or Stale Territories
-        // We add if it's new OR if it was stale (removed above)
-        let toAddIds = newIds.subtracting(currentIds).union(staleIds)
-        
-        if !toAddIds.isEmpty {
-            let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id) }
-            let newOverlays = territoriesToAdd.compactMap { cell -> MKPolygon? in
-                guard cell.boundary.count >= 3 else { return nil }
-                var coords = cell.boundary.map { $0.coordinate }
+            // 3. Add New or Stale Territories
+            let toAddIds = newIds.subtracting(currentIds).union(staleIds)
+            
+            if !toAddIds.isEmpty {
+                // EXTREME SANITY CHECK: Ensure we don't double-add if memory and map are out of sync
+                let existingMapOverlays = mapView.overlays.compactMap { $0 as? MKPolygon }
+                let existingIdsOnMap = Set(existingMapOverlays.compactMap { $0.title })
                 
-                // Ensure closure fallback for legacy data
-                if let first = coords.first, let last = coords.last,
-                   (first.latitude != last.latitude || first.longitude != last.longitude) {
-                    coords.append(first)
+                let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id) }
+                let newOverlays = territoriesToAdd.compactMap { cell -> MKPolygon? in
+                    // If it's ALREADY on the map somehow but not in our coordinated Set, remove it first
+                    if existingIdsOnMap.contains(cell.id) {
+                        let toRemove = existingMapOverlays.filter { $0.title == cell.id }
+                        mapView.removeOverlays(toRemove)
+                    }
+
+                    guard cell.boundary.count >= 3 else { return nil }
+                    var coords = cell.boundary.map { $0.coordinate }
+                    
+                    if let first = coords.first, let last = coords.last,
+                       (first.latitude != last.latitude || first.longitude != last.longitude) {
+                        coords.append(first)
+                    }
+                    
+                    let polygon = MKPolygon(coordinates: coords, count: coords.count)
+                    polygon.title = cell.id
+                    polygon.subtitle = cell.expiresAt < Date() ? "expired" : "local"
+                    return polygon
                 }
-                
-                let polygon = MKPolygon(coordinates: coords, count: coords.count)
-                polygon.title = cell.id // ID stored in title
-                
-                // Check for expiration
-                if cell.expiresAt < Date() {
-                    polygon.subtitle = "expired"
-                } else {
-                    polygon.subtitle = "local"
-                }
-                return polygon
+                mapView.addOverlays(newOverlays)
             }
-            mapView.addOverlays(newOverlays)
-        }
         
         context.coordinator.renderedTerritoryIds = newIds
         
@@ -200,20 +202,29 @@ struct MapView: UIViewRepresentable {
         }
         
         if !toAddIds.isEmpty {
+            // EXTREME SANITY CHECK: Ensure we don't double-add rivals
+            let existingMapOverlays = mapView.overlays.compactMap { $0 as? MKPolygon }
+            let existingIdsOnMap = Set(existingMapOverlays.compactMap { $0.title })
+
             let rivalsToAdd = newRivals.filter { toAddIds.contains($0.id ?? "") }
             let newOverlays = rivalsToAdd.compactMap { territory -> MKPolygon? in
+                let id = territory.id ?? ""
+                if existingIdsOnMap.contains(id) {
+                    let toRemove = existingMapOverlays.filter { $0.title == id }
+                    mapView.removeOverlays(toRemove)
+                }
+
                 guard territory.boundary.count >= 3 else { return nil }
                 var coords = territory.boundary.map { $0.coordinate }
                 
-                // Ensure closure fallback
                 if let first = coords.first, let last = coords.last,
                    (first.latitude != last.latitude || first.longitude != last.longitude) {
                     coords.append(first)
                 }
                 
                 let polygon = MKPolygon(coordinates: coords, count: coords.count)
-                polygon.title = territory.id // ID stored in title
-                polygon.subtitle = "rival" // Tag as rival
+                polygon.title = id
+                polygon.subtitle = "rival"
                 return polygon
             }
             mapView.addOverlays(newOverlays)
@@ -338,11 +349,14 @@ struct MapView: UIViewRepresentable {
                     let cell = parent.viewModel.territoryStore.conqueredCells[id]
                     let defenseCount = cell?.defenseCount ?? 0
                     
-                    renderer.strokeColor = .green
-                    renderer.fillColor = UIColor.green.withAlphaComponent(0.5)
+                    // Visual optimization to prevent "repainted" amassing
+                    // Use a slightly higher fill alpha and lower stroke alpha for smooth edges
+                    renderer.strokeColor = UIColor.green.withAlphaComponent(0.3)
+                    renderer.fillColor = UIColor.green.withAlphaComponent(0.6)
                     
                     // Visual "Wall" reinforcement based on defenses
-                    renderer.lineWidth = CGFloat(1 + min(defenseCount, 4))
+                    // Thinner base line to avoid grid saturation
+                    renderer.lineWidth = CGFloat(0.5 + Double(min(defenseCount, 4)) * 0.5)
                 }
                 return renderer
             }

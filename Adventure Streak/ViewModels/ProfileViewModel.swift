@@ -63,6 +63,7 @@ class ProfileViewModel: ObservableObject {
         SeasonManager.shared.getCurrentSeason()
     }
     @Published var isLoading: Bool = false
+    @Published var isDeletingAccount: Bool = false
     @Published var errorMessage: String? = nil
     
     // NEW: Competitive Stats
@@ -271,6 +272,7 @@ class ProfileViewModel: ObservableObject {
     private var lastUserUID: String = ""
     private var lastUserXP: Int = -1
     private var lastUserLevel: Int = -1
+    private var lastUserName: String = "" // NEW: Track last name to detect changes
     
     // MARK: - Actions
     func fetchProfileData() {
@@ -292,11 +294,16 @@ class ProfileViewModel: ObservableObject {
                 self.isLoading = false
                 
                 if let user = user {
-                    // DEDUPLICATION: Only update if it's a new user or stats changed
-                    if self.lastUserUID != user.id || self.lastUserXP != user.xp || self.lastUserLevel != user.level {
+                    // DEDUPLICATION: Only update if it's a new user, stats changed, OR NAME CHANGED
+                    if self.lastUserUID != user.id || 
+                       self.lastUserXP != user.xp || 
+                       self.lastUserLevel != user.level ||
+                       self.lastUserName != user.displayName {
+                        
                         self.lastUserUID = user.id ?? ""
                         self.lastUserXP = user.xp
                         self.lastUserLevel = user.level
+                        self.lastUserName = user.displayName ?? ""
                         
                         self.updateWithUser(user)
                         
@@ -344,6 +351,7 @@ class ProfileViewModel: ObservableObject {
         self.lastUserUID = ""
         self.lastUserXP = -1
         self.lastUserLevel = -1
+        self.lastUserName = "" // NEW
         self.lastAcknowledgeSeasonId = nil
         self.isProfileLoaded = false
         self.showSeasonResetModal = false
@@ -857,5 +865,22 @@ class ProfileViewModel: ObservableObject {
         self.showSeasonResetModal = SeasonManager.shared.isResetAcknowledgmentPending
         
         print("DEBUG: ProfileViewModel: updateSeasonModalStatus. Result: \(showSeasonResetModal)")
+    }
+    
+    func deleteAccount() async {
+        isDeletingAccount = true
+        errorMessage = nil
+        
+        do {
+            try await authService.deleteAccount()
+            await MainActor.run {
+                isDeletingAccount = false
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Error al borrar la cuenta: \(error.localizedDescription)"
+                isDeletingAccount = false
+            }
+        }
     }
 }

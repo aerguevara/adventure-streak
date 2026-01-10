@@ -119,7 +119,7 @@ class UserRepository: ObservableObject {
     
     func updateFCMToken(userId: String, token: String) {
         #if canImport(FirebaseFirestore)
-        guard let db = db as? Firestore else { return }
+        guard let db = db as? Firestore, Auth.auth().currentUser != nil else { return }
         let userRef = db.collection("users").document(userId)
         userRef.setData([
             // Mantener solo el token activo de este dispositivo (campo string)
