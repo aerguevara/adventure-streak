@@ -27,13 +27,15 @@ struct ContentView: View {
         _mapViewModel = StateObject(wrappedValue: MapViewModel(locationService: locService, territoryStore: terrStore, activityStore: actStore, configService: GameConfigService.shared))
         
         let terrService = TerritoryService(territoryStore: terrStore)
-        _workoutsViewModel = StateObject(wrappedValue: WorkoutsViewModel(activityStore: actStore, territoryService: terrService, configService: GameConfigService.shared))
+        let workoutsVM = WorkoutsViewModel(activityStore: actStore, territoryService: terrService, configService: GameConfigService.shared)
+        _workoutsViewModel = StateObject(wrappedValue: workoutsVM)
         
         _profileViewModel = StateObject(wrappedValue: ProfileViewModel(
             activityStore: actStore, 
             territoryStore: terrStore, 
             configService: GameConfigService.shared,
-            locationService: locService // NEW: Pass the shared local instance
+            locationService: locService,
+            workoutsViewModel: workoutsVM // NEW: Dependency for modal coordination
         ))
     }
     
@@ -132,6 +134,11 @@ struct ContentView: View {
                 Task {
                     await profileViewModel.acknowledgeSeason(seasonId)
                 }
+            }
+        }
+        .fullScreenCover(isPresented: $profileViewModel.showStolenTerritoriesModal) {
+            StolenTerritoriesModal(items: profileViewModel.newStolenItems) {
+                profileViewModel.acknowledgeThefts()
             }
         }
     }

@@ -84,16 +84,18 @@ struct MapView17: View {
                 
                 Spacer()
                 
-                if let owner = viewModel.selectedTerritoryOwner {
+                if viewModel.selectedTerritoryOwner != nil,
+                   viewModel.selectedTerritoryId != nil {
                     TerritoryOwnerCard(
-                        ownerName: owner,
-                        territoryId: viewModel.selectedTerritoryId ?? "",
+                        ownerName: viewModel.selectedTerritoryOwner ?? "Aventurero",
+                        territoryId: viewModel.selectedTerritoryId ?? "???",
                         avatarData: viewModel.selectedTerritoryOwnerAvatarData,
                         ownerIcon: viewModel.selectedTerritoryOwnerIcon,
                         xp: viewModel.selectedTerritoryOwnerXP,
                         territories: viewModel.selectedTerritoryOwnerTerritories,
                         firstConqueredAt: viewModel.selectedTerritoryFirstConqueredAt,
                         defenseCount: viewModel.selectedTerritoryDefenseCount,
+                        ownerUserId: viewModel.selectedTerritoryOwnerId,
                         onClose: {
                             withAnimation(.spring()) {
                                 viewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)

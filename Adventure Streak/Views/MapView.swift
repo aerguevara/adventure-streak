@@ -74,79 +74,61 @@ struct MapView: UIViewRepresentable {
     }
     
     private func updateTerritories(mapView: MKMapView, context: Context) {
-        let currentIds = context.coordinator.renderedTerritoryIds
         let newTerritories = viewModel.visibleTerritories
         let newIds = Set(newTerritories.map { $0.id })
         
-        // 1. Remove territories that are no longer visible
-        let toRemoveIds = currentIds.subtracting(newIds)
-        if !toRemoveIds.isEmpty {
-            let overlaysToRemove = mapView.overlays.filter { overlay in
-                guard let title = overlay.title, let id = title else { return false }
-                return toRemoveIds.contains(id)
-            }
-            mapView.removeOverlays(overlaysToRemove)
-        }
+        // 1. Get exact state of what is ALREADY on the map
+        let existingOverlays = mapView.overlays.compactMap { $0 as? MKPolygon }
+        let existingIdsOnMap = Set(existingOverlays.compactMap { $0.title })
         
-        // 2. Detect State Changes for Persisting Territories (Local <-> Expired)
-        var staleIds = Set<String>()
-        // Optimization: Create map for O(1) lookup
+        // 2. Identify stale overlays (state change local <-> expired)
         let newTerritoryMap = Dictionary(uniqueKeysWithValues: newTerritories.map { ($0.id, $0) })
-        
-        for overlay in mapView.overlays {
-            if let polygon = overlay as? MKPolygon,
-               let id = polygon.title,
-               let cell = newTerritoryMap[id] {
-                
-                let expectedSubtitle = cell.expiresAt < Date() ? "expired" : "local"
-                // Only check overlays marked as territories (local/expired), ignore rivals for now
-                if (polygon.subtitle == "local" || polygon.subtitle == "expired") && polygon.subtitle != expectedSubtitle {
-                    staleIds.insert(id)
-                }
-            }
-        }
-        
-        // Remove stale overlays to force redraw
-        if !staleIds.isEmpty {
-            let staleOverlays = mapView.overlays.filter { overlay in
-                guard let title = overlay.title, let id = title else { return false }
-                return staleIds.contains(id)
-            }
-            mapView.removeOverlays(staleOverlays)
-        }
-        
-            // 3. Add New or Stale Territories
-            let toAddIds = newIds.subtracting(currentIds).union(staleIds)
+        let toRemoveOverlays = existingOverlays.filter { polygon in
+            guard let id = polygon.title else { return true } // Remove invalid ones
             
-            if !toAddIds.isEmpty {
-                // EXTREME SANITY CHECK: Ensure we don't double-add if memory and map are out of sync
-                let existingMapOverlays = mapView.overlays.compactMap { $0 as? MKPolygon }
-                let existingIdsOnMap = Set(existingMapOverlays.compactMap { $0.title })
-                
-                let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id) }
-                let newOverlays = territoriesToAdd.compactMap { cell -> MKPolygon? in
-                    // If it's ALREADY on the map somehow but not in our coordinated Set, remove it first
-                    if existingIdsOnMap.contains(cell.id) {
-                        let toRemove = existingMapOverlays.filter { $0.title == cell.id }
-                        mapView.removeOverlays(toRemove)
-                    }
-
-                    guard cell.boundary.count >= 3 else { return nil }
-                    var coords = cell.boundary.map { $0.coordinate }
-                    
-                    if let first = coords.first, let last = coords.last,
-                       (first.latitude != last.latitude || first.longitude != last.longitude) {
-                        coords.append(first)
-                    }
-                    
-                    let polygon = MKPolygon(coordinates: coords, count: coords.count)
-                    polygon.title = cell.id
-                    polygon.subtitle = cell.expiresAt < Date() ? "expired" : "local"
-                    return polygon
+            // Remove if not in visible set
+            if !newIds.contains(id) { return true }
+            
+            // Remove if state (local/expired) changed
+            if let cell = newTerritoryMap[id] {
+                let expectedSubtitle = cell.expiresAt < Date() ? "expired" : "local"
+                if (polygon.subtitle == "local" || polygon.subtitle == "expired") && polygon.subtitle != expectedSubtitle {
+                    return true
                 }
-                mapView.addOverlays(newOverlays)
             }
+            
+            return false
+        }
         
+        if !toRemoveOverlays.isEmpty {
+            mapView.removeOverlays(toRemoveOverlays)
+        }
+        
+        // 3. Add only what is MISSING from the map
+        // Refresh existingIds after removals
+        let remainingIds = existingIdsOnMap.subtracting(Set(toRemoveOverlays.compactMap { $0.title }))
+        let toAddIds = newIds.subtracting(remainingIds)
+        
+        if !toAddIds.isEmpty {
+            let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id) }
+            let newOverlays = territoriesToAdd.compactMap { cell -> MKPolygon? in
+                guard cell.boundary.count >= 3 else { return nil }
+                var coords = cell.boundary.map { $0.coordinate }
+                
+                if let first = coords.first, let last = coords.last,
+                   (first.latitude != last.latitude || first.longitude != last.longitude) {
+                    coords.append(first)
+                }
+                
+                let polygon = MKPolygon(coordinates: coords, count: coords.count)
+                polygon.title = cell.id
+                polygon.subtitle = cell.expiresAt < Date() ? "expired" : "local"
+                return polygon
+            }
+            mapView.addOverlays(newOverlays)
+        }
+        
+        // Final sync of coordinator tracking to prevent mismatch
         context.coordinator.renderedTerritoryIds = newIds
         
         // Update Local Icons
@@ -154,29 +136,39 @@ struct MapView: UIViewRepresentable {
     }
     
     private func updateLocalAnnotations(mapView: MKMapView, context: Context) {
-        let currentIds = context.coordinator.renderedLocalIconIds
         let newTerritories = viewModel.visibleTerritories
-        let newIds = Set(newTerritories.map { $0.id + "_icon" })
+        let auth = AuthenticationService.shared
+        let newIds = Set(newTerritories.map { "\($0.ownerUserId ?? auth.userId ?? "unknown"):\($0.id)_icon" })
         
-        let toRemoveIds = currentIds.subtracting(newIds)
-        let toAddIds = newIds.subtracting(currentIds)
+        let existingAnnotations = mapView.annotations.filter { !($0 is MKUserLocation) }
         
-        if !toRemoveIds.isEmpty {
-            let annotationsToRemove = mapView.annotations.filter { annotation in
-                guard let title = annotation.title, let id = title else { return false }
-                return toRemoveIds.contains(id)
-            }
-            mapView.removeAnnotations(annotationsToRemove)
+        // ONLY target annotations that were previously rendered by THIS function
+        let myPreviouslyRenderedIds = context.coordinator.renderedLocalIconIds
+        let toRemoveAnnotations = existingAnnotations.filter { ann in
+            guard let title = ann.title ?? nil else { return false }
+            return myPreviouslyRenderedIds.contains(title) && !newIds.contains(title)
         }
+        
+        if !toRemoveAnnotations.isEmpty {
+            mapView.removeAnnotations(toRemoveAnnotations)
+        }
+        
+        // Match against ACTUAL map state to avoid duplicates
+        let currentIconIdsOnMap = Set(existingAnnotations.compactMap { $0.title ?? "" })
+        let toAddIds = newIds.subtracting(currentIconIdsOnMap)
         
         if !toAddIds.isEmpty {
             let auth = AuthenticationService.shared
-            let territoriesToAdd = newTerritories.filter { toAddIds.contains($0.id + "_icon") }
+            let territoriesToAdd = newTerritories.filter { cell in
+                let userId = cell.ownerUserId ?? auth.userId ?? "unknown"
+                return toAddIds.contains("\(userId):\(cell.id)_icon")
+            }
             let newAnnotations = territoriesToAdd.map { cell -> MKPointAnnotation in
                 let annotation = MKPointAnnotation()
+                let userId = cell.ownerUserId ?? auth.userId ?? "unknown"
                 annotation.coordinate = cell.centerCoordinate
-                annotation.title = cell.id + "_icon"
-                annotation.subtitle = cell.ownerUserId ?? auth.userId
+                annotation.title = "\(userId):\(cell.id)_icon"
+                annotation.subtitle = userId
                 return annotation
             }
             mapView.addAnnotations(newAnnotations)
@@ -186,34 +178,29 @@ struct MapView: UIViewRepresentable {
     }
     
     private func updateRivals(mapView: MKMapView, context: Context) {
-        let currentIds = context.coordinator.renderedRivalIds
         let newRivals = viewModel.otherTerritories
         let newIds = Set(newRivals.map { $0.id ?? "" })
         
-        let toRemoveIds = currentIds.subtracting(newIds)
-        let toAddIds = newIds.subtracting(currentIds)
+        let existingOverlays = mapView.overlays.compactMap { $0 as? MKPolygon }
         
-        if !toRemoveIds.isEmpty {
-            let overlaysToRemove = mapView.overlays.filter { overlay in
-                guard let title = overlay.title, let id = title else { return false }
-                return toRemoveIds.contains(id)
-            }
-            mapView.removeOverlays(overlaysToRemove)
+        // ONLY target overlays that are "rival"
+        let myPreviouslyRenderedIds = context.coordinator.renderedRivalIds
+        let toRemoveOverlays = existingOverlays.filter { polygon in
+            guard let id = polygon.title else { return false }
+            return polygon.subtitle == "rival" && myPreviouslyRenderedIds.contains(id) && !newIds.contains(id)
         }
         
+        if !toRemoveOverlays.isEmpty {
+            mapView.removeOverlays(toRemoveOverlays)
+        }
+        
+        // Identify missing ones by checking ACTUAL map state
+        let currentRivalIdsOnMap = Set(existingOverlays.filter { $0.subtitle == "rival" }.compactMap { $0.title })
+        let toAddIds = newIds.subtracting(currentRivalIdsOnMap)
+        
         if !toAddIds.isEmpty {
-            // EXTREME SANITY CHECK: Ensure we don't double-add rivals
-            let existingMapOverlays = mapView.overlays.compactMap { $0 as? MKPolygon }
-            let existingIdsOnMap = Set(existingMapOverlays.compactMap { $0.title })
-
             let rivalsToAdd = newRivals.filter { toAddIds.contains($0.id ?? "") }
             let newOverlays = rivalsToAdd.compactMap { territory -> MKPolygon? in
-                let id = territory.id ?? ""
-                if existingIdsOnMap.contains(id) {
-                    let toRemove = existingMapOverlays.filter { $0.title == id }
-                    mapView.removeOverlays(toRemove)
-                }
-
                 guard territory.boundary.count >= 3 else { return nil }
                 var coords = territory.boundary.map { $0.coordinate }
                 
@@ -223,43 +210,48 @@ struct MapView: UIViewRepresentable {
                 }
                 
                 let polygon = MKPolygon(coordinates: coords, count: coords.count)
-                polygon.title = id
+                polygon.title = territory.id
                 polygon.subtitle = "rival"
                 return polygon
             }
             mapView.addOverlays(newOverlays)
         }
         
-        
         context.coordinator.renderedRivalIds = newIds
-        
-        // 3. Update Rival Annotations (Icons)
         updateRivalAnnotations(mapView: mapView, context: context)
     }
     
     private func updateRivalAnnotations(mapView: MKMapView, context: Context) {
-        let currentIds = context.coordinator.renderedRivalIconIds
         let newRivals = viewModel.otherTerritories
-        let newIds = Set(newRivals.map { ($0.id ?? "") + "_icon" })
+        let newIds = Set(newRivals.map { "\($0.userId ?? "unknown"):(\($0.id ?? ""))_icon" })
         
-        let toRemoveIds = currentIds.subtracting(newIds)
-        let toAddIds = newIds.subtracting(currentIds)
+        let existingAnnotations = mapView.annotations.filter { !($0 is MKUserLocation) }
         
-        if !toRemoveIds.isEmpty {
-            let annotationsToRemove = mapView.annotations.filter { annotation in
-                guard let title = annotation.title, let id = title else { return false }
-                return toRemoveIds.contains(id)
-            }
-            mapView.removeAnnotations(annotationsToRemove)
+        // ONLY target rival icons
+        let myPreviouslyRenderedIds = context.coordinator.renderedRivalIconIds
+        let toRemoveAnnotations = existingAnnotations.filter { ann in
+            guard let title = ann.title ?? nil else { return false }
+            return myPreviouslyRenderedIds.contains(title) && !newIds.contains(title)
         }
         
+        if !toRemoveAnnotations.isEmpty {
+            mapView.removeAnnotations(toRemoveAnnotations)
+        }
+        
+        let currentRivalIconIdsOnMap = Set(existingAnnotations.compactMap { $0.title ?? "" })
+        let toAddIds = newIds.subtracting(currentRivalIconIdsOnMap)
+        
         if !toAddIds.isEmpty {
-            let rivalsToAdd = newRivals.filter { toAddIds.contains(($0.id ?? "") + "_icon") }
+            let rivalsToAdd = newRivals.filter { territory in
+                let userId = territory.userId ?? "unknown"
+                return toAddIds.contains("\(userId):(\(territory.id ?? ""))_icon")
+            }
             let newAnnotations = rivalsToAdd.map { territory -> MKPointAnnotation in
                 let annotation = MKPointAnnotation()
+                let userId = territory.userId ?? "unknown"
                 annotation.coordinate = territory.centerCoordinate
-                annotation.title = (territory.id ?? "") + "_icon"
-                annotation.subtitle = territory.userId // Store userId in subtitle for icon lookup
+                annotation.title = "\(userId):(\(territory.id ?? ""))_icon"
+                annotation.subtitle = userId
                 return annotation
             }
             mapView.addAnnotations(newAnnotations)

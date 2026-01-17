@@ -35,6 +35,22 @@ struct MainTabView: View {
                 VStack(alignment: .trailing, spacing: 16) {
                     Spacer()
                     
+                    // Refresh Button
+                    Button(action: {
+                        mapViewModel.refreshTerritories()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(Color.blue)
+                        .clipShape(Circle())
+                        .shadow(radius: 4)
+                        .rotationEffect(.degrees(mapViewModel.isRefreshing ? 360 : 0))
+                        .animation(mapViewModel.isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: mapViewModel.isRefreshing)
+                    }
+                    .padding(.trailing, 16)
+                    
                     // Location Button
                     Button(action: {
                         mapViewModel.centerOnUserLocation()
@@ -50,17 +66,18 @@ struct MainTabView: View {
                     .padding(.trailing, 16)
                     .padding(.bottom, mapViewModel.selectedTerritoryId == nil ? 24 : 0)
                     
-                    if let owner = mapViewModel.selectedTerritoryOwner,
-                       let territoryId = mapViewModel.selectedTerritoryId {
+                    if mapViewModel.selectedTerritoryOwner != nil,
+                       mapViewModel.selectedTerritoryId != nil {
                         TerritoryOwnerCard(
-                            ownerName: owner,
-                            territoryId: territoryId,
+                            ownerName: mapViewModel.selectedTerritoryOwner ?? "Aventurero",
+                            territoryId: mapViewModel.selectedTerritoryId ?? "???",
                             avatarData: mapViewModel.selectedTerritoryOwnerAvatarData,
                             ownerIcon: mapViewModel.selectedTerritoryOwnerIcon,
                             xp: mapViewModel.selectedTerritoryOwnerXP,
                             territories: mapViewModel.selectedTerritoryOwnerTerritories,
                             firstConqueredAt: mapViewModel.selectedTerritoryFirstConqueredAt,
                             defenseCount: mapViewModel.selectedTerritoryDefenseCount,
+                            ownerUserId: mapViewModel.selectedTerritoryOwnerId,
                             onClose: {
                                 mapViewModel.selectTerritory(id: nil, ownerName: nil, ownerUserId: nil)
                             }

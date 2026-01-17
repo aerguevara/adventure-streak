@@ -34,6 +34,9 @@ class MapViewModel: ObservableObject {
     @Published var currentActivityDistance: Double = 0.0
     @Published var currentActivityDuration: TimeInterval = 0.0
     
+    // NEW: Refresh state
+    @Published var isRefreshing = false
+    
     // NEW: Loading state removed to allow map to load first
     // @Published var isLoading = true
     
@@ -136,49 +139,42 @@ class MapViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // OPTIMIZATION: Filter visible territories
-        // Combine latest territories with latest visible region
+        // Local Territories pipeline without viewport pruning
         territoryStore.$conqueredCells
-            .combineLatest($region.debounce(for: .milliseconds(100), scheduler: DispatchQueue.global(qos: .userInteractive)))
-            .combineLatest(configService.$config)
-            .map { combined, config -> [TerritoryCell] in
-                let (cellsDict, region) = combined
-                
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .map { cellsDict -> [TerritoryCell] in
                 let allCells = Array(cellsDict.values)
-                let recentCells = allCells // Show everything
                 
-                // Simple bounding box check
-                let minLat = region.center.latitude - region.span.latitudeDelta / 2
-                let maxLat = region.center.latitude + region.span.latitudeDelta / 2
-                let minLon = region.center.longitude - region.span.longitudeDelta / 2
-                let maxLon = region.center.longitude + region.span.longitudeDelta / 2
+                // Geometry check
+                let valid = allCells.filter { $0.boundary.count >= 3 }
                 
-                // Filter cells whose center is within the visible region (plus a small buffer)
-                // AND validate geometry (must have at least 3 points)
-                let visible = recentCells.filter { cell in
-                    // Geometry check
-                    guard cell.boundary.count >= 3 else { return false }
-                    
-                    // Visibility check
-                    return cell.centerLatitude >= minLat && cell.centerLatitude <= maxLat &&
-                           cell.centerLongitude >= minLon && cell.centerLongitude <= maxLon
-                }
+                // Hard Cap: 1000 cells for stability
+                let result = Array(valid.prefix(1000))
                 
-                // 2. Hard Cap: Never return more than 500 polygons to keep UI smooth
-                let result = Array(visible.prefix(500))
-                
-                // NEW: Trigger icon fetch for local territories if needed
+                // NEW: Trigger icon fetch for local territories
                 let owners = Set(result.compactMap { $0.ownerUserId })
                 if !owners.isEmpty {
-                    Task { [weak self] in
-                        await self?.fetchIcons(for: owners)
+                    Task { @MainActor in
+                        // We need access to the view model instance
                     }
                 }
                 
                 return result
             }
             .receive(on: RunLoop.main)
-            .assign(to: &$visibleTerritories)
+            .sink { [weak self] result in
+                guard let self = self else { return }
+                self.visibleTerritories = result
+                
+                // Trigger icon fetch on main thread safely
+                let owners = Set(result.compactMap { $0.ownerUserId })
+                if !owners.isEmpty {
+                    Task {
+                        await self.fetchIcons(for: owners)
+                    }
+                }
+            }
+            .store(in: &cancellables)
         
         territoryStore.$conqueredCells
             .map { dict in
@@ -297,6 +293,18 @@ class MapViewModel: ObservableObject {
             }
             .store(in: &cancellables)
             
+        // Observe blocked users to refresh map details
+        ModerationService.shared.$blockedUserIds
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                // Re-select current territory if any to update anonymization
+                if let id = self?.selectedTerritoryId {
+                    self?.selectTerritory(id: id, ownerName: self?.selectedTerritoryOwner, ownerUserId: self?.selectedTerritoryOwnerId)
+                }
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+            
         // NEW: React to logout
         AuthenticationService.shared.$userId
             .receive(on: RunLoop.main)
@@ -405,11 +413,13 @@ class MapViewModel: ObservableObject {
             return nil
         }()
         
+        let isBlocked = finalOwnerId.map { ModerationService.shared.isBlocked(userId: $0) } ?? false
+        
         selectedTerritoryId = id
-        selectedTerritoryOwner = finalOwnerName
+        selectedTerritoryOwner = isBlocked ? "Aventurero Bloqueado" : finalOwnerName
         selectedTerritoryOwnerId = finalOwnerId
-        selectedTerritoryOwnerAvatarData = finalOwnerId.flatMap { AvatarCacheManager.shared.data(for: $0) }
-        selectedTerritoryOwnerIcon = finalOwnerId.flatMap { userIcons[$0] }
+        selectedTerritoryOwnerAvatarData = isBlocked ? nil : finalOwnerId.flatMap { AvatarCacheManager.shared.data(for: $0) }
+        selectedTerritoryOwnerIcon = isBlocked ? "👤" : finalOwnerId.flatMap { userIcons[$0] }
         
         // Find the cell or remote to extract age and defenses
         if let cell = territoryStore.conqueredCells[id ?? ""] {
@@ -637,5 +647,45 @@ class MapViewModel: ObservableObject {
             }
         }
         #endif
+    }
+    
+    func refreshTerritories() {
+        guard !isRefreshing else { return }
+        print("[Map] Manual refresh triggered...")
+        isRefreshing = true
+        
+        // Clear lastQueryRegion to force a re-trigger of the debounce logic in the observer
+        self.lastQueryRegion = nil
+        
+        // 1. Force repository to rebuild listeners and clear cache for rivals
+        territoryRepository.observeTerritories(in: region, force: true)
+        
+        // 2. Sync user's own territories from Firestore
+        if let userId = AuthenticationService.shared.userId {
+            Task {
+                await territoryRepository.syncUserTerritories(userId: userId, store: territoryStore)
+                
+                // 3. Refresh selection metadata if something is selected to reflect ownership changes
+                if let selectedId = selectedTerritoryId {
+                    var newOwnerId = selectedTerritoryOwnerId
+                    var newOwnerName = selectedTerritoryOwner
+                    
+                    if let cell = territoryStore.conqueredCells[selectedId] {
+                        newOwnerId = cell.ownerUserId ?? userId
+                        newOwnerName = cell.ownerDisplayName
+                    } else if let remote = otherTerritories.first(where: { $0.id == selectedId }) {
+                        newOwnerId = remote.userId
+                        newOwnerName = nil
+                    }
+                    
+                    self.selectTerritory(id: selectedId, ownerName: newOwnerName, ownerUserId: newOwnerId)
+                }
+            }
+        }
+        
+        // Brief delay to simulate/show loading state
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.isRefreshing = false
+        }
     }
 }

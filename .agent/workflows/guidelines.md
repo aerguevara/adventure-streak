@@ -38,8 +38,8 @@ Siempre inicializa el SDK de Firebase Admin con el Project ID y el Service Accou
 import * as admin from 'firebase-admin';
 import * as path from 'path';
 
-// Ruta relativa desde functions/src/scripts/ hacia la raíz del proyecto
-const serviceAccountPath = path.resolve(__dirname, '../../../../backend-admin/secrets/serviceAccount.json');
+// Ruta relativa desde backend-admin/scripts/
+const serviceAccountPath = path.resolve(__dirname, '../secrets/serviceAccount.json');
 
 admin.initializeApp({
   credential: admin.credential.cert(require(serviceAccountPath)),
@@ -59,8 +59,11 @@ const db = admin.firestore().getFirestore("(default)");
 ```
 
 ### Ubicación y Ejecución
-- Los scripts nuevos deben colocarse en `functions/firebase-function-notifications/functions/src/scripts/`.
-- Antes de ejecutar un script nuevo, asegúrate de que no haya errores de compilación de TypeScript en esa carpeta.
+> [!IMPORTANT]
+> **UBICACIÓN OBLIGATORIA**: Todos los scripts de administración o análisis deben ir en `backend-admin/scripts/`. 
+> **PROHIBIDO**: No colocar scripts en `functions/src/scripts/` ni en ninguna subcarpeta de `functions`.
+
+- Los scripts deben organizarse en carpetas dentro de `backend-admin/scripts/` según su propósito (ej. `analysis`, `maintenance`, `migrations`).
 
 ---
 

@@ -87,6 +87,9 @@ struct User: Identifiable, Codable {
     
     // Seasonal History
     var seasonHistory: [String: SeasonHistory]?
+    
+    // Moderation
+    var blockedUsers: [String]?
 
     init(id: String? = nil,
          email: String? = nil,
@@ -120,7 +123,8 @@ struct User: Identifiable, Codable {
          invitationPath: [String]? = nil,
          invitationQuota: Int? = nil,
          invitationCount: Int? = nil,
-         seasonHistory: [String: SeasonHistory]? = nil) {
+         seasonHistory: [String: SeasonHistory]? = nil,
+         blockedUsers: [String]? = nil) {
         self.id = id
         self.email = email
         self.displayName = displayName
@@ -154,6 +158,7 @@ struct User: Identifiable, Codable {
         self.invitationQuota = invitationQuota
         self.invitationCount = invitationCount
         self.seasonHistory = seasonHistory
+        self.blockedUsers = blockedUsers
     }
 
     enum CodingKeys: String, CodingKey {
@@ -192,6 +197,7 @@ struct User: Identifiable, Codable {
         case invitationQuota
         case invitationCount
         case seasonHistory
+        case blockedUsers
         case totalDistanceKm
         case totalDistanceNoGpsKm
         case currentWeekDistanceNoGpsKm
@@ -209,6 +215,7 @@ struct User: Identifiable, Codable {
         joinedAt = try container.decodeIfPresent(Date.self, forKey: .joinedAt)
         avatarURL = try container.decodeIfPresent(String.self, forKey: .avatarURL)
         mapIcon = try container.decodeIfPresent(String.self, forKey: .mapIcon)
+        blockedUsers = try container.decodeIfPresent([String].self, forKey: .blockedUsers)
         
         // Fix: Provide defaults for missing XP/Level
         xp = try container.decodeIfPresent(Int.self, forKey: .xp) ?? 0
@@ -288,6 +295,7 @@ struct User: Identifiable, Codable {
         try container.encodeIfPresent(invitationQuota, forKey: .invitationQuota)
         try container.encodeIfPresent(invitationCount, forKey: .invitationCount)
         try container.encodeIfPresent(seasonHistory, forKey: .seasonHistory)
+        try container.encodeIfPresent(blockedUsers, forKey: .blockedUsers)
     }
 }
 

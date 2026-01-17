@@ -118,12 +118,12 @@ class TerritoryRepository: ObservableObject {
         #endif
     }
     
-    func observeTerritories(in region: MKCoordinateRegion) {
+    func observeTerritories(in region: MKCoordinateRegion, force: Bool = false) {
         #if canImport(FirebaseFirestore)
         guard let db = db as? Firestore, Auth.auth().currentUser != nil else { return }
         
-        // DEBOUNCING: Check if we've moved enough to justify a new query (20% threshold)
-        if let last = lastObservedRegion {
+        // DEBOUNCING: Check if we've moved enough to justify a new query (unless forced)
+        if !force, let last = lastObservedRegion {
             let latThreshold = last.span.latitudeDelta * 0.1
             let lonThreshold = last.span.longitudeDelta * 0.1
             
@@ -136,24 +136,33 @@ class TerritoryRepository: ObservableObject {
             }
         }
         
+        if force {
+            print("[Territories] Force refreshing territories for region...")
+        }
+        
         self.lastObservedRegion = region
         self.currentRegion = region
         
         // Determine required Geohash precision based on zoom level
-        // Approx: span 0.2 deg (~22km) -> precision 5 (~4.9km x 4.9km)
-        // Adjust threshold to use Precision 5 earlier for smoother panning
         let precision = region.span.latitudeDelta >= 0.04 ? 5 : 6
         let centerHash = Geohash.encode(latitude: region.center.latitude, longitude: region.center.longitude, precision: precision)
         let neighborHashes = Geohash.neighbours(for: centerHash)
         
-        // Remove listeners for hashes no longer needed
+        // Remove listeners for hashes no longer needed (or all if forced)
         let currentHashes = Set(neighborHashes)
         for hash in geohashListeners.keys {
-            if !currentHashes.contains(hash) {
+            if force || !currentHashes.contains(hash) {
                 if let listener = geohashListeners[hash] as? ListenerRegistration {
                     listener.remove()
                 }
                 geohashListeners.removeValue(forKey: hash)
+                
+                // If forced, also clear local cache for these hashes to ensure UI refresh
+                if force {
+                    storageQueue.sync { // Synchronous clear to avoid race with new listener
+                        _ = self.territoriesByGeohash.removeValue(forKey: hash)
+                    }
+                }
             }
         }
         
@@ -164,7 +173,7 @@ class TerritoryRepository: ObservableObject {
                     .whereField("geohash", isGreaterThanOrEqualTo: hash)
                     .whereField("geohash", isLessThanOrEqualTo: hash + "~")
                     .whereField("expiresAt", isGreaterThan: Date())
-                    .limit(to: 1000) // Double limit for better coverage
+                    .limit(to: 1000)
                 
                 let listener = setupRelativeListener(query: query, geohash: hash)
                 geohashListeners[hash] = listener

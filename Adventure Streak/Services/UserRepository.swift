@@ -307,6 +307,11 @@ class UserRepository: ObservableObject {
                 // delegate evaluation to SeasonManager (Gatekeeper)
                 SeasonManager.shared.evaluateResetStatus(user: user, config: GameConfigService.shared.config)
                 
+                // Sync moderation blocklist
+                if let blocked = user.blockedUsers {
+                    ModerationService.shared.syncBlockedUsers(from: blocked)
+                }
+                
                 completion(user)
             } catch {
                 print("❌ UserRepository: Decoding error for user \(userId): \(error)")

@@ -69,6 +69,37 @@ final class ActivitySyncService {
                         }
                     }
                 }
+                
+                // RETRY LOGIC: If outdoor and route is empty, check retry counter with cooldown
+                if route.isEmpty {
+                    let retryKey = "sync_retry_\(workout.uuid.uuidString)"
+                    let lastRetryTimeKey = "sync_retry_time_\(workout.uuid.uuidString)"
+                    
+                    let currentRetries = UserDefaults.standard.integer(forKey: retryKey)
+                    let lastRetryTime = UserDefaults.standard.double(forKey: lastRetryTimeKey)
+                    let now = Date().timeIntervalSince1970
+                    
+                    if currentRetries < 5 {
+                        // Only increment and "spend" a retry if at least 60 seconds have passed since last attempt
+                        if now - lastRetryTime > 60 {
+                            let nextRetry = currentRetries + 1
+                            UserDefaults.standard.set(nextRetry, forKey: retryKey)
+                            UserDefaults.standard.set(now, forKey: lastRetryTimeKey)
+                            print("⏳ [Sync] Outdoor workout \(workout.uuid) has empty route. Retry \(nextRetry)/5. Last retry was \(Int(now - lastRetryTime))s ago. Skipping for now.")
+                        } else {
+                            print("⏳ [Sync] Outdoor workout \(workout.uuid) has empty route. Waiting for cooldown (last attempt \(Int(now - lastRetryTime))s ago). Skipping.")
+                        }
+                        continue // Skip this workout for this sync cycle
+                    } else {
+                        print("⚠️ [Sync] Outdoor workout \(workout.uuid) still has empty route after 5 retries. Importing without route.")
+                        UserDefaults.standard.removeObject(forKey: retryKey)
+                        UserDefaults.standard.removeObject(forKey: lastRetryTimeKey)
+                    }
+                } else {
+                    // Success! Clean up retry counters if they were there
+                    UserDefaults.standard.removeObject(forKey: "sync_retry_\(workout.uuid.uuidString)")
+                    UserDefaults.standard.removeObject(forKey: "sync_retry_time_\(workout.uuid.uuidString)")
+                }
             }
             
             let session = ActivitySession(

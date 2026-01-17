@@ -90,6 +90,19 @@ class ProfileViewModel: ObservableObject {
     @Published var lastAcknowledgeResetDate: Date? = nil
     @Published var showSeasonResetModal: Bool = false
     
+    // NEW: Stolen Territories Interaction
+    @Published var showStolenTerritoriesModal: Bool = false
+    @Published var newStolenItems: [TerritoryInventoryItem] = []
+    private var lastSeenTheftTimestamp: Date {
+        get {
+            let ts = UserDefaults.standard.double(forKey: "lastSeenTheftTimestamp")
+            return ts == 0 ? Date.distantPast : Date(timeIntervalSince1970: ts)
+        }
+        set {
+            UserDefaults.standard.set(newValue.timeIntervalSince1970, forKey: "lastSeenTheftTimestamp")
+        }
+    }
+    
     private var currentUser: User? = nil
     private var lastAcknowledgmentTimestamp: Date? = nil
     
@@ -142,6 +155,7 @@ class ProfileViewModel: ObservableObject {
     private let gamificationService: GamificationService
     private let configService: GameConfigService
     private let locationService: LocationService // NEW
+    private let workoutsViewModel: WorkoutsViewModel // NEW: To check processing status
     #if canImport(FirebaseStorage)
     private let storage = Storage.storage()
     #endif
@@ -153,7 +167,8 @@ class ProfileViewModel: ObservableObject {
          authService: AuthenticationService = .shared,
          gamificationService: GamificationService = .shared,
          configService: GameConfigService,
-         locationService: LocationService = .shared) { // NEW
+         locationService: LocationService = .shared,
+         workoutsViewModel: WorkoutsViewModel) { // NEW
         self.activityStore = activityStore
         self.territoryStore = territoryStore
         self.userRepository = userRepository
@@ -161,6 +176,7 @@ class ProfileViewModel: ObservableObject {
         self.gamificationService = gamificationService
         self.configService = configService
         self.locationService = locationService // NEW
+        self.workoutsViewModel = workoutsViewModel // NEW
         
         // Initial load
         Task {
@@ -487,6 +503,41 @@ class ProfileViewModel: ObservableObject {
         
         // Calculate High Value Targets
         self.highValueTargets = calculateHighValueTargets()
+        
+        // NEW: Check for new thefts not seen by the user
+        checkForNewThefts()
+    }
+    
+    private func checkForNewThefts() {
+        // PRIORIDAD: Si hay un resumen de entrenamiento procesándose o mostrándose, no mostramos el de robos
+        // Esto evita que el usuario vea dos modales al mismo tiempo.
+        guard !workoutsViewModel.showProcessingSummary && !workoutsViewModel.isImporting else {
+            print("⏳ [ProfileViewModel] Postponing theft modal: Workouts are processing/showing summary.")
+            return
+        }
+        
+        let lastSeen = self.lastSeenTheftTimestamp
+        let newestThefts = vengeanceItems.filter { item in
+            guard let stolenAt = item.thieveryData?.stolenAt else { return false }
+            return stolenAt > lastSeen
+        }
+        
+        if !newestThefts.isEmpty {
+            // Asegurar que estén ordenados por fecha descendente (más reciente primero)
+            self.newStolenItems = newestThefts.sorted { 
+                ($0.thieveryData?.stolenAt ?? Date.distantPast) > ($1.thieveryData?.stolenAt ?? Date.distantPast) 
+            }
+            self.showStolenTerritoriesModal = true
+            print("🚨 [ProfileViewModel] Found \(newestThefts.count) new thefts since \(lastSeen)")
+        }
+    }
+    
+    func acknowledgeThefts() {
+        let latestDate = vengeanceItems.compactMap { $0.thieveryData?.stolenAt }.max() ?? Date()
+        self.lastSeenTheftTimestamp = latestDate
+        self.showStolenTerritoriesModal = false
+        self.newStolenItems = []
+        print("✅ [ProfileViewModel] Thefts acknowledged up to \(latestDate)")
     }
     
     private func calculateHighValueTargets() -> [HighValueTargetItem] {

@@ -60,9 +60,32 @@ struct ActivityCardView: View {
                         .foregroundColor(.secondary)
                 }
                 Spacer()
-                Text(timeAgo(from: activity.date))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(timeAgo(from: activity.date))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    
+                    if activity.userId != AuthenticationService.shared.userId {
+                        Menu {
+                            Button(role: .destructive) {
+                                ModerationService.shared.blockUser(userId: activity.userId)
+                            } label: {
+                                Label("Bloquear Aventurero", systemImage: "hand.raised.fill")
+                            }
+                            
+                            Button {
+                                ModerationService.shared.reportUser(userId: activity.userId, reason: "Actividad Inapropiada", context: activity.activityId)
+                            } label: {
+                                Label("Reportar Actividad", systemImage: "exclamationmark.bubble.fill")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                                .padding(4)
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)

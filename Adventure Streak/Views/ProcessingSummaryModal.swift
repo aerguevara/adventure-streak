@@ -188,8 +188,9 @@ struct ProcessingSummaryModal: View {
                     if summary.totalNewTerritories > 0 {
                         SocialAchievementBadge(icon: "map.fill", text: "\(summary.totalNewTerritories) Nuevos", color: Color(hex: "32D74B"))
                     }
-                    if summary.totalStolen > 0 {
-                        SocialAchievementBadge(icon: "bolt.shield.fill", text: "\(summary.totalStolen) Robados", color: Color(hex: "FF3B30"))
+                    let totalStolenDisplay = summary.totalStolen + summary.vengeanceFulfilledCount
+                    if totalStolenDisplay > 0 {
+                        SocialAchievementBadge(icon: "bolt.shield.fill", text: "\(totalStolenDisplay) Robados", color: Color(hex: "FF3B30"))
                     }
                     if summary.totalDefended > 0 {
                         SocialAchievementBadge(icon: "shield.fill", text: "\(summary.totalDefended) Defendidos", color: Color(hex: "0A84FF"))
@@ -197,9 +198,7 @@ struct ProcessingSummaryModal: View {
                     if summary.totalRecaptured > 0 {
                         SocialAchievementBadge(icon: "arrow.triangle.2.circlepath", text: "\(summary.totalRecaptured) Renovados", color: Color(hex: "BF5AF2"))
                     }
-                    if summary.vengeanceFulfilledCount > 0 {
-                        SocialAchievementBadge(icon: "bolt.fill", text: "\(summary.vengeanceFulfilledCount) Venganzas", color: Color(hex: "22D3EE"))
-                    }
+                    // Vengeance badge removed from here as requested, aggregated into 'Robados'
                     if summary.highestRarity != "Común" {
                         SocialAchievementBadge(icon: "trophy.fill", text: summary.highestRarity.uppercased(), color: rarityColor(summary.highestRarity))
                     }
@@ -296,7 +295,7 @@ struct ProcessingSummaryModal: View {
             HStack {
                 Image(systemName: "flag.slash.fill")
                     .foregroundColor(.red)
-                Text("Territorios Robados: \(summary.totalStolen)")
+                Text("Territorios Robados: \(summary.totalStolen + summary.vengeanceFulfilledCount)")
                     .fontWeight(.bold)
                     .foregroundColor(.white)
             }

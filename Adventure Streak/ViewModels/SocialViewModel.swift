@@ -29,6 +29,14 @@ class SocialViewModel: ObservableObject {
             .assign(to: \.reactionStates, on: self)
             .store(in: &cancellables)
 
+        // Observe blocked users to refresh feed
+        ModerationService.shared.$blockedUserIds
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         // Ensure service is observing
         socialService.startObserving()
     }
@@ -42,9 +50,10 @@ class SocialViewModel: ObservableObject {
     }
 
     var displayPosts: [SocialPost] {
-        posts.sorted { lhs, rhs in
-            lhs.date > rhs.date
-        }
+        posts.filter { !ModerationService.shared.isBlocked(userId: $0.userId) }
+            .sorted { lhs, rhs in
+                lhs.date > rhs.date
+            }
     }
 
     private func reactionScore(for post: SocialPost) -> Int {

@@ -9,6 +9,7 @@ struct TerritoryOwnerCard: View {
     let territories: Int?
     let firstConqueredAt: Date?
     let defenseCount: Int?
+    let ownerUserId: String?
     let onClose: () -> Void
     
     var body: some View {
@@ -65,6 +66,31 @@ struct TerritoryOwnerCard: View {
                 }
                 
                 Spacer()
+                
+                // Moderation Menu
+                if let ownerId = ownerUserId, ownerId != AuthenticationService.shared.userId {
+                    Menu {
+                        Button(role: .destructive) {
+                            ModerationService.shared.blockUser(userId: ownerId)
+                            onClose()
+                        } label: {
+                            Label("Bloquear Aventurero", systemImage: "hand.raised.fill")
+                        }
+                        
+                        Button {
+                            ModerationService.shared.reportUser(userId: ownerId, reason: "Contenido Inapropiado (Nombre/Icono)")
+                        } label: {
+                            Label("Reportar Aventurero", systemImage: "exclamationmark.bubble.fill")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 20))
+                            .foregroundColor(.white.opacity(0.6))
+                            .padding(8)
+                            .background(Color.white.opacity(0.1))
+                            .clipShape(Circle())
+                    }
+                }
                 
                 // Close button
                 Button(action: onClose) {
