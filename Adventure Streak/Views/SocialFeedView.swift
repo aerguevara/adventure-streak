@@ -22,12 +22,9 @@ struct SocialFeedView: View {
                     emptyStateView
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 24) {
-                            StoriesBarView(stories: viewModel.stories) { story in
-                                selectedStory = story
-                                showStoryPlayer = true
-                            }
-                            .padding(.bottom, 10)
+                        LazyVStack(spacing: 16) { // Reduced from 24
+                            StoriesBarView(viewModel: viewModel)
+                                // Removed .padding(.bottom, 10)
                             
                             ForEach(viewModel.displayPosts) { post in
                                 NavigationLink {
@@ -39,6 +36,9 @@ struct SocialFeedView: View {
                                         onReaction: { viewModel.react(to: post, with: $0) }
                                     )
                                     .glowPulse(isActive: isMostRecent(post), color: .orange)
+                                    .onAppear {
+                                        viewModel.markAsSeen(post)
+                                    }
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -58,10 +58,24 @@ struct SocialFeedView: View {
                     .refreshable {
                         await viewModel.refresh()
                     }
+                    .onDisappear {
+                        viewModel.commitSeenStatus()
+                    }
                 }
             }
             .navigationTitle("Social")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        viewModel.markAllAsSeen()
+                    }) {
+                        Image(systemName: "checkmark.circle.badge.questionmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.orange)
+                    }
+                }
+            }
         }
         .fullScreenCover(isPresented: $showStoryPlayer) {
              StoryContainerView(

@@ -11,6 +11,7 @@ struct ActivityCardView: View {
     @State private var pendingReaction: ReactionType? = nil
     @State private var territoryCells: [TerritoryCell] = []
     @State private var isLoadingTerritories: Bool
+    let isNew: Bool
 
     init(activity: SocialPost, reactionState: ActivityReactionState, onReaction: @escaping (ReactionType) -> Void) {
         self.activity = activity
@@ -20,6 +21,7 @@ struct ActivityCardView: View {
         // Predetermine loading state based on activity type if it has an ID
         let isOutdoor = activity.activityData.activityType.isOutdoor
         self._isLoadingTerritories = State(initialValue: isOutdoor && activity.activityId != nil)
+        self.isNew = !FeedSeenService.shared.isSeen(postId: activity.id)
     }
 
     private var mergedReactionState: ActivityReactionState {
@@ -54,6 +56,16 @@ struct ActivityCardView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
                         levelBadge
+                        
+                        if isNew {
+                            Text("NUEVO")
+                                .font(.system(size: 8, weight: .black))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.orange)
+                                .cornerRadius(4)
+                        }
                     }
                     Text(activity.activityData.locationLabel ?? "Explorando")
                         .font(.caption)

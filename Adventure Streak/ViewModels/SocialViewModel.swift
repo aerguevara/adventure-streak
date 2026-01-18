@@ -5,11 +5,14 @@ import Combine
 class SocialViewModel: ObservableObject {
     @Published var posts: [SocialPost] = []
     @Published var stories: [UserStory] = []
+    @Published var carouselActivities: [SocialPost] = []
     @Published var isLoading: Bool = false
     @Published var reactionStates: [String: ActivityReactionState] = [:]
+    private var sessionSeenIds = Set<String>()
 
     private let socialService = SocialService.shared
     private let reactionRepository = ReactionRepository.shared
+    private let seenService = FeedSeenService.shared
     private var cancellables = Set<AnyCancellable>()
 
     init() {
@@ -37,6 +40,14 @@ class SocialViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Observe seen status changes
+        seenService.$seenIds
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         // Ensure service is observing
         socialService.startObserving()
     }
@@ -45,15 +56,41 @@ class SocialViewModel: ObservableObject {
         if posts.isEmpty {
             isLoading = true
         }
+        commitSeenStatus()
         await socialService.refreshFeed()
         isLoading = false
+    }
+
+    func commitSeenStatus() {
+        if !sessionSeenIds.isEmpty {
+            seenService.markAsSeen(postIds: sessionSeenIds)
+            sessionSeenIds.removeAll()
+        }
     }
 
     var displayPosts: [SocialPost] {
         posts.filter { !ModerationService.shared.isBlocked(userId: $0.userId) }
             .sorted { lhs, rhs in
-                lhs.date > rhs.date
+                let lhsSeen = seenService.isSeen(postId: lhs.id)
+                let rhsSeen = seenService.isSeen(postId: rhs.id)
+                
+                if lhsSeen != rhsSeen {
+                    return !lhsSeen // Unseen posts first
+                }
+                
+                return lhs.date > rhs.date
             }
+    }
+
+    func markAsSeen(_ post: SocialPost) {
+        sessionSeenIds.insert(post.id)
+    }
+
+    func markAllAsSeen() {
+        let allIds = Set(posts.map { $0.id })
+        seenService.markAsSeen(postIds: allIds)
+        sessionSeenIds.removeAll()
+        objectWillChange.send()
     }
 
     private func reactionScore(for post: SocialPost) -> Int {
@@ -147,11 +184,29 @@ class SocialViewModel: ObservableObject {
         let now = Date()
         let twentyFourHoursAgo = now.addingTimeInterval(-24 * 3600)
         
-        let territoryEvents = posts.filter { post in
+        // 1. Filter posts with territory impact from the last 24h
+        let recentImpactPosts = posts.filter { post in
             post.date >= twentyFourHoursAgo && post.hasTerritoryImpact
         }
         
-        let grouped = Dictionary(grouping: territoryEvents) { $0.userId }
+        // 2. Deduplicate by activityId to "no duplicar nada"
+        // pick the best representative post for each unique activityId
+        var uniqueActivities: [String: SocialPost] = [:]
+        for post in recentImpactPosts {
+            let key = post.activityId ?? post.id
+            if uniqueActivities[key] != nil {
+                // Keep the one with more stats or higher priority event type if needed
+                // For now, first one usually suffices if FeedRepo did its job
+                continue
+            }
+            uniqueActivities[key] = post
+        }
+        
+        let activitiesList = Array(uniqueActivities.values).sorted(by: { $0.date > $1.date })
+        self.carouselActivities = activitiesList
+        
+        // 3. Keep grouping by user for Stories (if still used elsewhere)
+        let grouped = Dictionary(grouping: activitiesList) { $0.userId }
         
         self.stories = grouped.compactMap { (userId, activities) -> UserStory? in
             guard let firstActivity = activities.first else { return nil }

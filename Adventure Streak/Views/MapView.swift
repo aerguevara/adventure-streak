@@ -223,7 +223,7 @@ struct MapView: UIViewRepresentable {
     
     private func updateRivalAnnotations(mapView: MKMapView, context: Context) {
         let newRivals = viewModel.otherTerritories
-        let newIds = Set(newRivals.map { "\($0.userId ?? "unknown"):(\($0.id ?? ""))_icon" })
+        let newIds = Set(newRivals.map { "\($0.userId):(\($0.id ?? ""))_icon" })
         
         let existingAnnotations = mapView.annotations.filter { !($0 is MKUserLocation) }
         
@@ -243,12 +243,12 @@ struct MapView: UIViewRepresentable {
         
         if !toAddIds.isEmpty {
             let rivalsToAdd = newRivals.filter { territory in
-                let userId = territory.userId ?? "unknown"
+                let userId = territory.userId
                 return toAddIds.contains("\(userId):(\(territory.id ?? ""))_icon")
             }
             let newAnnotations = rivalsToAdd.map { territory -> MKPointAnnotation in
                 let annotation = MKPointAnnotation()
-                let userId = territory.userId ?? "unknown"
+                let userId = territory.userId
                 annotation.coordinate = territory.centerCoordinate
                 annotation.title = "\(userId):(\(territory.id ?? ""))_icon"
                 annotation.subtitle = userId

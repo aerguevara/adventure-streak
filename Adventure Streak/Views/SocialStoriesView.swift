@@ -1,26 +1,287 @@
 import SwiftUI
 import MapKit
 
-struct StoriesBarView: View {
-    let stories: [UserStory]
-    let onSelect: (UserStory) -> Void
+struct SocialCarouselView: View {
+    let posts: [SocialPost]
+    
+    @State private var offset: CGFloat = 0
+    @State private var contentWidth: CGFloat = 0
     
     var body: some View {
-        if stories.isEmpty {
+        if posts.isEmpty {
             EmptyStoriesView()
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(stories) { story in
-                        StoryCircleView(story: story) {
-                            onSelect(story)
-                        }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Label {
+                        Text("LIVE")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundColor(.white)
+                    } icon: {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 8, height: 8)
+                            .shadow(color: .red, radius: 4)
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(4)
+                    
+                    Text("BREAKING NEWS")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundColor(.red)
+                        .tracking(2)
+                    
+                    Spacer()
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 22)
+                
+                ZStack(alignment: .leading) {
+                    // Futuristic Background Strip
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(hex: "4A0000").opacity(0.6),
+                                    Color.black.opacity(0.9)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay(
+                            // Scanlines effect
+                            VStack(spacing: 2) {
+                                ForEach(0..<15) { _ in
+                                    Color.white.opacity(0.03)
+                                        .frame(height: 1)
+                                }
+                            }
+                        )
+                        .overlay(
+                            Rectangle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [.clear, .red.opacity(0.3), .clear],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                                .frame(height: 1),
+                            alignment: .top
+                        )
+
+                    HStack(spacing: 0) {
+                        contentGroup
+                        contentGroup
+                        contentGroup
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .offset(x: offset)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 80)
+                .clipped()
+                .contentShape(Rectangle())
+                .allowsHitTesting(false)
+            }
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.4))
+        }
+    }
+    
+    private var contentGroup: some View {
+        HStack(spacing: 0) {
+            ForEach(posts) { post in
+                CarouselCardView(post: post)
+                    .background(
+                        GeometryReader { itemGeo in
+                            Color.clear.onAppear {
+                                if contentWidth == 0 && post.id == posts.first?.id {
+                                    // Logic handled by wrapping groups, but we can verify here
+                                }
+                            }
+                        }
+                    )
             }
         }
+        .background(
+            GeometryReader { geo in
+                Color.clear.onAppear {
+                    if contentWidth == 0 {
+                        contentWidth = geo.size.width
+                        startAnimation(totalWidth: contentWidth)
+                    }
+                }
+            }
+        )
+    }
+    
+    private func startAnimation(totalWidth: CGFloat) {
+        offset = 0
+        let duration = max(12, Double(posts.count) * 2.5) // Faster, technical feel
+        withAnimation(.linear(duration: duration).repeatForever(autoreverses: false)) {
+            offset = -totalWidth
+        }
+    }
+}
+
+struct CarouselCardView: View {
+    let post: SocialPost
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Separator Line (Futuristic)
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, .red.opacity(0.5), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 1, height: 60)
+            
+            HStack(spacing: 10) {
+                // Avatar (Smaller for the strip look)
+                AvatarView(user: post.user, size: 36)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.red.opacity(0.5), lineWidth: 1))
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(post.user.displayName.uppercased())
+                        .font(.system(size: 11, weight: .black))
+                        .foregroundColor(.white)
+                    
+                    Text(eventDescription(for: post))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+                    
+                    HStack(spacing: 4) {
+                        if let location = post.activityData.locationLabel {
+                            Text(location)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.red.opacity(0.8))
+                        }
+                        
+                        Text("•")
+                            .font(.system(size: 9))
+                            .foregroundColor(.white.opacity(0.3))
+                        
+                        Text(timeAgo(from: post.date).uppercased())
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                
+                // Mini indicator of stats
+                HStack(spacing: 6) {
+                    miniStat(icon: "star.fill", value: "\(post.activityData.xpEarned)", color: Color(hex: "A259FF"))
+                    if post.activityData.stolenZonesCount > 0 {
+                        miniStat(icon: "bolt.shield.fill", text: "STOLEN", value: "\(post.activityData.stolenZonesCount)", color: .red)
+                    } else if post.activityData.newZonesCount > 0 {
+                        miniStat(icon: "map.fill", text: "NEW", value: "\(post.activityData.newZonesCount)", color: Color(hex: "32D74B"))
+                    }
+                }
+                .padding(.leading, 8)
+            }
+            .padding(.vertical, 4)
+        }
+        .frame(height: 80)
+        .padding(.trailing, 30) // More space between news items
+    }
+
+    private func miniStat(icon: String, text: String? = nil, value: String, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(color)
+            
+            if let text {
+                Text(text)
+                    .font(.system(size: 7, weight: .black))
+                    .foregroundColor(color.opacity(0.8))
+            }
+            
+            Text(value)
+                .font(.system(size: 10, weight: .black))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.1))
+        .cornerRadius(4)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(color.opacity(0.3), lineWidth: 0.5)
+        )
+    }
+
+
+    private func eventDescription(for post: SocialPost) -> String {
+        let data = post.activityData
+        if post.eventType == .territoryConquered {
+            return "ha conquistado un territorio"
+        }
+        if data.stolenZonesCount > 0 {
+            return "ha robado \(data.stolenZonesCount) \(data.stolenZonesCount == 1 ? "zona" : "zonas")"
+        }
+        if data.newZonesCount > 0 {
+            return "ha descubierto \(data.newZonesCount) \(data.newZonesCount == 1 ? "zona" : "zonas")"
+        }
+        if data.recapturedZonesCount > 0 {
+            return "ha recuperado territorios"
+        }
+        return "está explorando"
+    }
+
+    private func timeAgo(from date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        formatter.locale = Locale(identifier: "es_ES")
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+struct AvatarView: View {
+    let user: SocialUser
+    let size: CGFloat
+    
+    var body: some View {
+        Group {
+            if let data = user.avatarData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else if let avatarURL = user.avatarURL {
+                AsyncImage(url: avatarURL) { image in
+                    image.resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    Circle().fill(Color(hex: "2C2C2E"))
+                }
+            } else {
+                Circle()
+                    .fill(Color(hex: "2C2C2E"))
+                    .overlay(
+                        Text(user.displayName.prefix(1).uppercased())
+                            .font(.system(size: size * 0.4, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+struct StoriesBarView: View {
+    @ObservedObject var viewModel: SocialViewModel
+    
+    var body: some View {
+        SocialCarouselView(posts: viewModel.carouselActivities)
     }
 }
 
