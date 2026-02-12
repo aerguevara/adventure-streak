@@ -138,6 +138,24 @@ class MapViewModel: ObservableObject {
                 self.territoryRepository.observeTerritories(in: newRegion)
             }
             .store(in: &cancellables)
+            
+        // NEW: React to user's own map icon change
+        AuthenticationService.shared.$userMapIcon
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newIcon in
+                guard let self = self, let userId = AuthenticationService.shared.userId else { return }
+                if let icon = newIcon {
+                    print("[Map] Updating local user icon in MapViewModel: \(icon)")
+                    self.userIcons[userId] = icon
+                    self.iconVersion += 1
+                    
+                    // If we have a selected territory and it's ours, update selection icon too
+                    if self.selectedTerritoryOwnerId == userId {
+                        self.selectedTerritoryOwnerIcon = icon
+                    }
+                }
+            }
+            .store(in: &cancellables)
         
         // Local Territories pipeline without viewport pruning
         territoryStore.$conqueredCells
@@ -145,8 +163,11 @@ class MapViewModel: ObservableObject {
             .map { cellsDict -> [TerritoryCell] in
                 let allCells = Array(cellsDict.values)
                 
-                // Geometry check
-                let valid = allCells.filter { $0.boundary.count >= 3 }
+                // NEW: Exclude territories expired for more than 24 hours
+                let gracePeriodThreshold = Date().addingTimeInterval(-24 * 3600)
+                let valid = allCells.filter { 
+                    $0.boundary.count >= 3 && $0.expiresAt > gracePeriodThreshold 
+                }
                 
                 // Hard Cap: 1000 cells for stability
                 let result = Array(valid.prefix(1000))

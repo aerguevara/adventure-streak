@@ -206,6 +206,7 @@ class TerritoryRepository: ObservableObject {
         let query = db.collection("remote_territories")
             .whereField("geohash", isGreaterThanOrEqualTo: hash)
             .whereField("geohash", isLessThanOrEqualTo: hash + "~")
+            .whereField("expiresAt", isGreaterThan: Date()) // Filter expired territories from server results
             .limit(to: 500)
             
         proactiveListener = query.addSnapshotListener { [weak self] snapshot, error in
@@ -214,10 +215,17 @@ class TerritoryRepository: ObservableObject {
                 return
             }
             
+            let now = Date()
             DispatchQueue.global(qos: .userInitiated).async {
                 let territories = documents.compactMap { doc -> RemoteTerritory? in
-                    var territory = try? doc.data(as: RemoteTerritory.self)
-                    territory?.id = doc.documentID
+                    guard var territory = try? doc.data(as: RemoteTerritory.self) else { return nil }
+                    territory.id = doc.documentID
+                    
+                    // Local SAFETY GUARD: Double check expiration to handle Firestore latency or clock diffs
+                    if territory.expiresAt <= now {
+                        return nil
+                    }
+                    
                     return territory
                 }
                 

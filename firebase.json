@@ -1,12 +1,8 @@
 {
-    "firestore": [
-        {
-            "database": "(default)",
-            "rules": "firestore.rules"
-        },
-        {
-            "database": "adventure-streak-pre",
-            "rules": "firestore.rules"
-        }
-    ]
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
 }

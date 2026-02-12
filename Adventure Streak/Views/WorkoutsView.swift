@@ -5,6 +5,8 @@ struct WorkoutsView: View {
     @ObservedObject var profileViewModel: ProfileViewModel
     @ObservedObject var badgesViewModel: BadgesViewModel
     @StateObject private var notificationService = NotificationService.shared
+    @ObservedObject private var supportService = SupportService.shared
+    @Environment(\.dismiss) var dismiss
     
     @State private var showProfileDetail = false
     @State private var showNotifications = false
@@ -63,6 +65,11 @@ struct WorkoutsView: View {
                     NavigationStack {
                         NotificationsView()
                     }
+                }
+                .alert("Reporte de Incidencia", isPresented: $supportService.showAlert) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text(supportService.alertMessage)
                 }
                 .sheet(isPresented: $viewModel.showProcessingSummary) {
                     if let summary = viewModel.processingSummaryData {

@@ -28,7 +28,7 @@ const Navbar = () => {
                         )}
                     </div>
                     <a
-                        href="https://apps.apple.com/app/adventure-streak/id1669285098"
+                        href="https://apps.apple.com/es/app/adventure-streak/id6755981465"
                         className="bg-white text-black px-4 py-2 rounded-xl text-xs md:text-sm font-bold hover:bg-adventure-blue hover:text-white transition-all active:scale-95"
                     >
                         Descargar App

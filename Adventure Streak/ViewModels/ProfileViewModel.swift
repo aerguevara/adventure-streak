@@ -289,6 +289,7 @@ class ProfileViewModel: ObservableObject {
     private var lastUserXP: Int = -1
     private var lastUserLevel: Int = -1
     private var lastUserName: String = "" // NEW: Track last name to detect changes
+    private var lastUserMapIcon: String = "" // NEW: Track last icon to detect changes
     
     // MARK: - Actions
     func fetchProfileData() {
@@ -314,12 +315,14 @@ class ProfileViewModel: ObservableObject {
                     if self.lastUserUID != user.id || 
                        self.lastUserXP != user.xp || 
                        self.lastUserLevel != user.level ||
-                       self.lastUserName != user.displayName {
+                       self.lastUserName != user.displayName ||
+                       self.lastUserMapIcon != user.mapIcon {
                         
                         self.lastUserUID = user.id ?? ""
                         self.lastUserXP = user.xp
                         self.lastUserLevel = user.level
                         self.lastUserName = user.displayName ?? ""
+                        self.lastUserMapIcon = user.mapIcon ?? ""
                         
                         self.updateWithUser(user)
                         
@@ -491,8 +494,13 @@ class ProfileViewModel: ObservableObject {
         // Sort by stolenAt (most recent first) to avoid flasheo and have a logical order
         self.vengeanceItems = vItems.sorted { ($0.thieveryData?.stolenAt ?? Date.distantPast) > ($1.thieveryData?.stolenAt ?? Date.distantPast) }
         
+        // NEW: Filter expired items (Remove after 24 hours from expiry)
+        let gracePeriodThreshold = Date().addingTimeInterval(-24 * 3600)
+        
         // Sort by expiry date (closer first) to remind user to defend
-        self.territoryInventory = inventory.sorted { $0.expiresAt < $1.expiresAt }
+        self.territoryInventory = inventory
+            .filter { $0.expiresAt > gracePeriodThreshold }
+            .sorted { $0.expiresAt < $1.expiresAt }
         
         // NO WRITES TO FIRESTORE HERE.
         // The backend computes stats during activity processing.
@@ -546,23 +554,31 @@ class ProfileViewModel: ObservableObject {
         let currentUserId = authService.userId ?? ""
         
         // Filter: Rivals from PROACTIVE pool (stable)
-        let ancientRivals = repo.proactiveTerritories.filter { territory in
+        let highValueRivals = repo.proactiveTerritories.filter { territory in
             // Use firstConqueredAt if available, fallback to activityEndAt
             let referenceDate = territory.firstConqueredAt ?? territory.activityEndAt
             
             guard territory.userId != currentUserId else { return false }
             
             let ageInSeconds = now.timeIntervalSince(referenceDate)
-            return ageInSeconds > 15 * 24 * 3600 // Threshold: 15 days
+            let isOldEnough = ageInSeconds > 3 * 24 * 3600 // Threshold: 3 days
+            
+            // CRITICAL FIX: Ensure the territory is NOT expired (expiresAt must be in the future)
+            let isNotExpired = territory.expiresAt > now
+            
+            // Also include rival territories that expire in less than 24 hours
+            let isExpiringSoon = territory.expiresAt.timeIntervalSince(now) < 24 * 3600 && isNotExpired
+            
+            return (isOldEnough || isExpiringSoon) && isNotExpired
         }
         
         // Map to HighValueTargetItem
-        var items: [HighValueTargetItem] = ancientRivals.compactMap { territory in
+        var items: [HighValueTargetItem] = highValueRivals.compactMap { territory in
             guard let id = territory.id else { return nil }
             
             let referenceDate = territory.firstConqueredAt ?? territory.activityEndAt
             let ageInDays = Int(now.timeIntervalSince(referenceDate) / (24 * 3600))
-            let lootXP = ageInDays * 2 // Default factor
+            let lootXP = ageInDays * 5 // Factor x5 aligned with backend
             
             return HighValueTargetItem(
                 id: id,

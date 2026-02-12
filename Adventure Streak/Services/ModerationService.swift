@@ -11,6 +11,8 @@ class ModerationService: ObservableObject {
     static let shared = ModerationService()
     
     @Published private(set) var blockedUserIds: Set<String> = []
+    @Published var showAlert: Bool = false
+    @Published var alertMessage: String = ""
     
     private var db: Any? {
         #if canImport(FirebaseFirestore)
@@ -41,6 +43,8 @@ class ModerationService: ObservableObject {
         #endif
         
         print("[Moderation] User \(userId) blocked.")
+        self.alertMessage = "Aventurero bloqueado correctamente."
+        self.showAlert = true
         NotificationCenter.default.post(name: NSNotification.Name("UserBlockedStatusChanged"), object: nil)
     }
     
@@ -89,8 +93,12 @@ class ModerationService: ObservableObject {
         db.collection("reports").addDocument(data: reportData) { error in
             if let error = error {
                 print("[Moderation] Error sending report: \(error.localizedDescription)")
+                self.alertMessage = "Error al enviar el reporte. Inténtalo de nuevo."
+                self.showAlert = true
             } else {
                 print("[Moderation] User \(userId) reported for: \(reason)")
+                self.alertMessage = "Reporte enviado. Gracias por ayudar a mantener la comunidad segura."
+                self.showAlert = true
             }
         }
         #endif

@@ -12,7 +12,7 @@ const Footer = () => {
                     </div>
 
                     <a
-                        href="#"
+                        href="https://apps.apple.com/es/app/adventure-streak/id6755981465"
                         className="opacity-80 hover:opacity-100 transition-opacity"
                         aria-label="Descargar en el App Store"
                     >

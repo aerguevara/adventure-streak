@@ -33,6 +33,14 @@ struct WorkoutItemViewData: Identifiable {
     let startDateTime: String
     let endDateTime: String
     
+    // NEW: Additional Metadata
+    let locationLabel: String?
+    let calories: Double?
+    let averageHeartRate: Int?
+    let conqueredVictims: [String]?
+    let stolenTerritories: Int?
+    let processingStatus: ActivitySession.ProcessingStatus
+    
     // NEW: Rarity Logic
     var rarity: String {
         let totalXP = xp ?? 0
@@ -220,7 +228,13 @@ class WorkoutsViewModel: ObservableObject {
                     missionName: activity.missions?.first?.name,
                     missionDescription: activity.missions?.first?.description,
                     startDateTime: formatDateTime(activity.startDate),
-                    endDateTime: formatDateTime(activity.endDate)
+                    endDateTime: formatDateTime(activity.endDate),
+                    locationLabel: activity.locationLabel,
+                    calories: activity.calories,
+                    averageHeartRate: activity.averageHeartRate,
+                    conqueredVictims: activity.conqueredVictims,
+                    stolenTerritories: activity.territoryStats?.stolenCellsCount,
+                    processingStatus: activity.processingStatus
                 )
             }
     }

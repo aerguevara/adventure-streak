@@ -1,0 +1,28 @@
+[2026-01-18T22:52:34.218Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[2026-01-18T22:52:34.218Z] > authorizing via signed-in user (aerguevara@gmail.com)
+[2026-01-18T22:52:34.218Z] [iam] checking project adventure-streak for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[2026-01-18T22:52:34.219Z] Checked if tokens are valid: true, expires at: 1768780187690
+[2026-01-18T22:52:34.219Z] Checked if tokens are valid: true, expires at: 1768780187690
+[2026-01-18T22:52:34.219Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/adventure-streak:testIamPermissions [none]
+[2026-01-18T22:52:34.219Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/adventure-streak:testIamPermissions x-goog-quota-user=projects/adventure-streak
+[2026-01-18T22:52:34.219Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/adventure-streak:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[2026-01-18T22:52:34.429Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/adventure-streak:testIamPermissions 200
+[2026-01-18T22:52:34.429Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/adventure-streak:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+
+=== Deploying to 'adventure-streak'...
+
+i  deploying firestore 
+[2026-01-18T22:52:34.430Z] Checked if tokens are valid: true, expires at: 1768780187690
+[2026-01-18T22:52:34.430Z] Checked if tokens are valid: true, expires at: 1768780187690
+[2026-01-18T22:52:34.430Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/adventure-streak/databases/(default) [none]
+[2026-01-18T22:52:34.654Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/adventure-streak/databases/(default) 200
+[2026-01-18T22:52:34.655Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/adventure-streak/databases/(default) {"name":"projects/adventure-streak/databases/(default)","uid":"af04a7ec-4662-40e1-affa-671932d8eab2","createTime":"2025-11-22T20:17:45.702641Z","updateTime":"2025-11-22T20:17:45.702641Z","locationId":"eur3","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-01-18T21:52:34.659979Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"e","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IJ6AmPGWlpIDMP2s0PHrrZED"}
+i  firestore: deploying indexes... 
+[2026-01-18T22:52:34.723Z] TypeError: Cannot read properties of undefined (reading 'map')
+    at deployIndexes (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/firestore/deploy.js:70:38)
+    at default_1 (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/firestore/deploy.js:98:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async chain (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/index.js:42:9)
+    at async deploy (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/index.js:120:5)
+
+Error: An unexpected error has occurred.

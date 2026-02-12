@@ -21,24 +21,15 @@ async function clearPRE() {
 
     const db = getFirestore(databaseId);
 
-    const collections = [
-        "activities", "activities_archive", "feed", "feed_archive",
-        "notifications", "notifications_archive", "remote_territories",
-        "activity_reactions", "activity_reaction_stats", "users",
-        "reserved_icons", "debug_mock_workouts", "config"
-    ];
+    const collections = await db.listCollections();
 
-    for (const colName of collections) {
+    for (const colRef of collections) {
+        const colName = colRef.id;
         console.log(`   Cleaning collection: ${colName}...`);
-        const snapshot = await db.collection(colName).count().get();
-        if (snapshot.data().count === 0) continue;
 
-        console.log(`      Found ~${snapshot.data().count} documents (count approx).`);
-
-        // Use recursiveDelete for massive speedup
-        // Note: recursiveDelete requires a Query or CollectionReference.
-        const batchSize = 4000; // Large batch for recursive delete
-        await db.recursiveDelete(db.collection(colName));
+        // Use recursiveDelete for massive speedup and thoroughness
+        await db.recursiveDelete(colRef);
+        console.log(`      ✅ Collection ${colName} cleared.`);
     }
 
     console.log("✨ PRE Environment cleared successfully.");

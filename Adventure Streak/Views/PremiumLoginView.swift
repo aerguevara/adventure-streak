@@ -94,32 +94,13 @@ struct PremiumLoginView: View {
                         .background(Color.white)
                         .clipShape(Capsule())
                     }
-                    
-                    // Guest Sign In (Reviewer Mode)
-                    Button(action: {
-                        viewModel.signInAnonymously()
-                    }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "person.badge.key.fill")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 20, height: 20)
-                                .foregroundColor(.white)
-                            
-                            Text("Entrar como invitado")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                        .frame(width: 330, height: 50) // Fixed Width
-                        .background(Color.white.opacity(0.15))
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(.white.opacity(0.3), lineWidth: 1)
-                        )
-                    }
                 }
-                .padding(.bottom, 40) // No horizontal padding needed with fixed width buttons
+                .padding(.bottom, 12)
+                
+                Text("Se requiere un código de invitación para entrar.")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(.bottom, 28)
                 
                 // 5. Footer
                 VStack(spacing: 4) {

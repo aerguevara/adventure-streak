@@ -2,6 +2,9 @@ import SwiftUI
 
 struct GamifiedWorkoutCard: View {
     let workout: WorkoutItemViewData
+    @State private var showReportOptions = false
+    @State private var showReportingSuccess = false
+    @ObservedObject private var supportService = SupportService.shared
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -19,9 +22,12 @@ struct GamifiedWorkoutCard: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    // Mission name (if available) or activity title
                     if let missionName = workout.missionName {
                         Text(missionName)
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    } else if let location = workout.locationLabel {
+                        Text(location)
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                     } else {
@@ -44,10 +50,34 @@ struct GamifiedWorkoutCard: View {
                 
                 // XP Badge
                 if let xp = workout.xp {
-                    Text("+\(xp) XP")
-                        .font(.system(size: 16, weight: .heavy, design: .rounded))
-                        .foregroundColor(Color(hex: "3DF68B"))
-                        .shadow(color: Color(hex: "3DF68B").opacity(0.5), radius: 8)
+                    HStack(spacing: 8) {
+                        if workout.processingStatus != .completed {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
+                        
+                        Text("+\(xp) XP")
+                            .font(.system(size: 16, weight: .heavy, design: .rounded))
+                            .foregroundColor(Color(hex: "3DF68B"))
+                            .shadow(color: Color(hex: "3DF68B").opacity(0.5), radius: 8)
+                        
+                        Menu {
+                            Section("Reportar problema") {
+                                ForEach(IncidentType.allCases, id: \.self) { type in
+                                    Button {
+                                        SupportService.shared.reportWorkoutIncident(activityId: workout.id, type: type)
+                                    } label: {
+                                        Label(type.displayName, systemImage: "exclamationmark.bubble")
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 20))
+                                .foregroundColor(.white.opacity(0.5))
+                                .padding(8)
+                        }
+                    }
                 }
             }
             
@@ -86,6 +116,28 @@ struct GamifiedWorkoutCard: View {
                         Image(systemName: "timer")
                             .foregroundColor(.gray)
                     }
+                    
+                    if let calories = workout.calories {
+                        Label {
+                            Text("\(Int(calories)) kcal")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.8))
+                        } icon: {
+                            Image(systemName: "flame.fill")
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    
+                    if let hr = workout.averageHeartRate {
+                        Label {
+                            Text("\(hr) ppm")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.8))
+                        } icon: {
+                            Image(systemName: "heart.fill")
+                                .foregroundColor(.red)
+                        }
+                    }
                 }
                 
                 Spacer()
@@ -100,6 +152,9 @@ struct GamifiedWorkoutCard: View {
                     if def > 0 {
                         TerritoryStatChip(icon: "shield.fill", value: "\(def)", color: .blue)
                     }
+                    if let stolen = workout.stolenTerritories, stolen > 0 {
+                        TerritoryStatChip(icon: "flag.slash.fill", value: "\(stolen)", color: .red)
+                    }
                     if rec > 0 {
                         TerritoryStatChip(icon: "swords.fill", value: "\(rec)", color: .orange)
                     }
@@ -107,6 +162,41 @@ struct GamifiedWorkoutCard: View {
             } else if let territoryXP = workout.territoryXP, territoryXP > 0 {
                  // Fallback for old data
                  TerritoryStatChip(icon: "globe.europe.africa.fill", value: "+\(territoryXP) XP", color: .green)
+            }
+            
+            // Social Conquest Section
+            if let victims = workout.conqueredVictims, !victims.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("CONQUISTAS")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundColor(.gray)
+                        .tracking(1)
+                    
+                    HStack(spacing: -8) {
+                        ForEach(victims.prefix(5), id: \.self) { victim in
+                            Text(victim.prefix(1).uppercased())
+                                .font(.system(size: 10, weight: .bold))
+                                .frame(width: 24, height: 24)
+                                .background(Circle().fill(Color.blue.opacity(0.3)))
+                                .overlay(Circle().stroke(Color.black, lineWidth: 1))
+                        }
+                        
+                        if victims.count > 5 {
+                            Text("+\(victims.count - 5)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.gray)
+                                .padding(.leading, 12)
+                        }
+                        
+                        let names = victims.joined(separator: ", ")
+                        Text("Has conquistado a \(names)")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.6))
+                            .padding(.leading, victims.count > 5 ? 0 : 12)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.top, 4)
             }
             
             // 3. Footer (Badges & Streak)

@@ -38,16 +38,4 @@ final class LoginViewModel: ObservableObject {
             }
         }
     }
-    
-    func signInAnonymously() {
-        isLoading = true
-        errorMessage = nil
-        
-        authService.signInAnonymously { [weak self] success, error in
-            self?.isLoading = false
-            if let error = error {
-                self?.errorMessage = error.localizedDescription
-            }
-        }
-    }
 }

@@ -110,7 +110,9 @@ final class ActivitySyncService {
                 distanceMeters: workout.totalDistanceMeters ?? 0,
                 durationSeconds: workout.duration,
                 workoutName: workoutName(for: workout),
-                route: route
+                route: route,
+                calories: (workout as? HKWorkout)?.statistics(for: HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!)?.sumQuantity()?.doubleValue(for: .kilocalorie()),
+                averageHeartRate: nil // Heart rate requires a separate query or HKQuantitySample
             )
             sessions.append(session)
         }

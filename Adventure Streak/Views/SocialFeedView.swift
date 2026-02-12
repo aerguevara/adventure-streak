@@ -22,7 +22,7 @@ struct SocialFeedView: View {
                     emptyStateView
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 16) { // Reduced from 24
+                        LazyVStack(spacing: 12) { // Reduced from 16
                             StoriesBarView(viewModel: viewModel)
                                 // Removed .padding(.bottom, 10)
                             

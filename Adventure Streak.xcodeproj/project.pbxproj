@@ -467,7 +467,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure Streak.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 33;
+				CURRENT_PROJECT_VERSION = 34;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
@@ -481,6 +481,13 @@
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Usamos tus entrenos y rutas de la app Salud para calcular XP, territorios y mostrar tu progreso.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Necesitamos tu ubicación para mostrar el mapa";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Necesitamos tu ubicación para registrar tu ruta";
+				INFOPLIST_KEY_CFBundleURLTypes = (
+					{
+						CFBundleURLSchemes = (
+							adventurestreak,
+						);
+					},
+				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -491,7 +498,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.13;
+				MARKETING_VERSION = 2.15;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -512,7 +519,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Adventure Streak/Adventure StreakRelease.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 33;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_ASSET_PATHS = "\"Adventure Streak/Preview Content\"";
 				DEVELOPMENT_TEAM = SDRDXJM7RR;
 				ENABLE_DEBUG_DYLIB_SUPPORT = NO;
@@ -525,6 +532,13 @@
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Usamos tus entrenos y rutas de la app Salud para calcular XP, territorios y mostrar tu progreso.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Necesitamos tu ubicación para mostrar el mapa";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Necesitamos tu ubicación para registrar tu ruta";
+				INFOPLIST_KEY_CFBundleURLTypes = (
+					{
+						CFBundleURLSchemes = (
+							adventurestreak,
+						);
+					},
+				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -535,7 +549,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.13;
+				MARKETING_VERSION = 2.15;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.Adventure-Streak";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

@@ -11,6 +11,7 @@ struct TerritoryOwnerCard: View {
     let defenseCount: Int?
     let ownerUserId: String?
     let onClose: () -> Void
+    @ObservedObject private var moderationService = ModerationService.shared
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -149,6 +150,13 @@ struct TerritoryOwnerCard: View {
         )
         .padding(16)
         .shadow(color: .black.opacity(0.4), radius: 20, y: 10)
+        .alert(isPresented: $moderationService.showAlert) {
+            Alert(
+                title: Text("Moderación"),
+                message: Text(moderationService.alertMessage),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 }
 

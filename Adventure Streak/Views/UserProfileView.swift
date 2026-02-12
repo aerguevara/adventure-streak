@@ -17,7 +17,7 @@ struct UserProfileView: View {
                 Color.black.ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(spacing: 24) {
+                    LazyVStack(spacing: 12) { // Reduced from 16
                         headerSection
                             .padding(.top, 20)
                         
@@ -82,10 +82,10 @@ struct UserProfileView: View {
     }
     
     private var headerSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
                 avatarView
-                    .frame(width: 120, height: 120)
+                    .frame(width: 96, height: 96)
                     .clipShape(Circle())
                     .overlay(
                         Circle()
@@ -130,7 +130,7 @@ struct UserProfileView: View {
             
             VStack(spacing: 4) {
                 Text(user.displayName ?? "Adventurer")
-                    .font(.title2)
+                    .font(.title3)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 
@@ -250,7 +250,7 @@ struct UserProfileView: View {
                                     }
                                 }
                                 .padding()
-                                .frame(width: 180)
+                                .frame(width: 145)
                                 .background(Color(hex: "1C1C1E"))
                                 .cornerRadius(12)
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
@@ -409,8 +409,8 @@ struct UserProfileView: View {
         }
         .padding()
         .background(Color(hex: "1C1C1E"))
-        .cornerRadius(16)
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.orange.opacity(0.2), lineWidth: 1))
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.orange.opacity(0.2), lineWidth: 1))
     }
     
     @ViewBuilder
@@ -443,8 +443,8 @@ struct UserProfileView: View {
         }
         .padding()
         .background(Color(hex: "18181C"))
-        .cornerRadius(16)
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.05), lineWidth: 1))
     }
     
     @ViewBuilder
@@ -477,8 +477,8 @@ struct UserProfileView: View {
         }
         .padding()
         .background(Color(hex: "18181C"))
-        .cornerRadius(16)
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.05), lineWidth: 1))
     }
 
     private func intensityRow(label: String, value: String, ratio: Double, color: Color) -> some View {
@@ -519,18 +519,17 @@ struct StatCard: View {
     var body: some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold)) // Smaller icon
-                .foregroundColor(color)
+                .font(.system(size: 12, weight: .bold)) // Smaller icon
                 .padding(6)
                 .background(color.opacity(0.15))
                 .clipShape(Circle())
             
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .rounded)) // Compact value
+                .font(.system(size: 14, weight: .bold, design: .rounded)) // Compact value
                 .foregroundColor(.white)
             
             Text(title)
-                .font(.system(size: 10)) // Tiny title
+                .font(.system(size: 9)) // Tiny title
                 .fontWeight(.medium)
                 .foregroundColor(.gray)
                 .lineLimit(1)
@@ -540,9 +539,9 @@ struct StatCard: View {
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
         .background(Color(hex: "18181C"))
-        .cornerRadius(12)
+        .cornerRadius(10)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.white.opacity(0.05), lineWidth: 1)
         )
     }

@@ -66,12 +66,19 @@ const InviteView = () => {
                                 </>
                             )}
                         </button>
+
+                        <a
+                            href={`adventurestreak://invite?token=${token}`}
+                            className="mt-4 px-8 py-3 bg-adventure-primary text-white rounded-full font-bold shadow-lg shadow-adventure-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                        >
+                            <span>🚀</span> Abrir en la App
+                        </a>
                     </div>
                 )}
 
                 <div className="space-y-4">
                     <a
-                        href="https://apps.apple.com/app/id6739666060"
+                        href="https://apps.apple.com/es/app/adventure-streak/id6755981465"
                         className="transition-transform hover:scale-105 inline-block"
                         aria-label="Descargar en el App Store"
                     >

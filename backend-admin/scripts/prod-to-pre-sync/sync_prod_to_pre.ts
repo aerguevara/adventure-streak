@@ -7,7 +7,6 @@ import { readFileSync } from "fs";
  */
 
 const CONCURRENCY_LIMIT = 50;
-const BATCH_SIZE = 500;
 
 async function syncProdToPre() {
     console.log("🚀 Starting OPTIMIZED Sync PROD -> PRE...");
@@ -28,22 +27,16 @@ async function syncProdToPre() {
     try {
         await setSilentMode(dbPre, true);
 
-        const collections = [
-            "activities", "activity_reaction_stats", "activity_reactions",
-            "config", "debug_mock_workouts", "feed", "notifications",
-            "remote_territories", "reserved_icons", "users",
-            "activities_archive", "feed_archive", "notifications_archive",
-            "activity_reactions_archive", "remote_territories_archive"
-        ];
+        const collections = await dbProd.listCollections();
 
-        for (const colName of collections) {
+        for (const colRef of collections) {
+            const colName = colRef.id;
             console.log(`📦 Syncing collection: ${colName}...`);
-            const snapshot = await dbProd.collection(colName).count().get();
-            const count = snapshot.data().count;
-            if (count === 0) continue;
 
-            console.log(`      Found ~${count} documents to sync.`);
-            const docSnapshot = await dbProd.collection(colName).get();
+            const docSnapshot = await colRef.get();
+            if (docSnapshot.empty) continue;
+
+            console.log(`      Found ${docSnapshot.docs.length} documents to sync in ${colName}.`);
 
             await runInParallel(docSnapshot.docs, async (doc) => {
                 await copyDocRecursive(doc, dbPre);
@@ -64,45 +57,38 @@ async function copyDocRecursive(doc: QueryDocumentSnapshot | DocumentSnapshot, t
 
     // SKIP syncing 'config/maintenance' to preserve Silent Mode
     if (doc.ref.path.endsWith("config/maintenance")) {
-        console.log("   🚫 Skipping config/maintenance to preserve Silent Mode.");
         return;
     }
 
     // EXTRA SECURITY: Strip FCM tokens from all users except Admin (CVZ...)
-    // This prevents accidental notifications to real users from PRE environment
     if (doc.ref.path.startsWith("users/") && doc.ref.path.split("/").length === 2) {
         if (doc.id !== "CVZ34x99UuU6fCrOEc8Wg5nPYX82") {
-            // Strip ALL token-related fields
             const sensitiveFields = [
                 "fcmToken", "apnsToken",
                 "fcmTokens", "apnsTokens",
                 "fcmTokenUpdatedAt", "needsTokenRefresh"
             ];
-
             sensitiveFields.forEach(field => {
                 if (data[field]) delete data[field];
             });
         }
     }
 
-    // Async write to avoid blocking parallel execution
+    // Write document to target database
     await targetDb.doc(doc.ref.path).set(data);
 
+    // List all sub-collections
     const subCollections = await doc.ref.listCollections();
 
-    // Copy subcollections in parallel
+    // Copy subcollections recursively
     await runInParallel(subCollections, async (subCol) => {
         const subSnapshot = await subCol.get();
         if (subSnapshot.empty) return;
 
-        const chunks = chunk(subSnapshot.docs, BATCH_SIZE);
-        for (const batchDocs of chunks) {
-            const batch = targetDb.batch();
-            batchDocs.forEach(sd => {
-                batch.set(targetDb.doc(sd.ref.path), sd.data());
-            });
-            await batch.commit();
-        }
+        // For each document in the subcollection, recurse
+        await runInParallel(subSnapshot.docs, async (subDoc) => {
+            await copyDocRecursive(subDoc, targetDb);
+        });
     });
 }
 

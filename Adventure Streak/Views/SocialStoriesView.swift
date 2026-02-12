@@ -6,6 +6,8 @@ struct SocialCarouselView: View {
     
     @State private var offset: CGFloat = 0
     @State private var contentWidth: CGFloat = 0
+    @State private var isAnimating = false
+    @State private var animationId = UUID()
     
     var body: some View {
         if posts.isEmpty {
@@ -14,7 +16,7 @@ struct SocialCarouselView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Label {
-                        Text("LIVE")
+                        Text("EN VIVO")
                             .font(.system(size: 10, weight: .black))
                             .foregroundColor(.white)
                     } icon: {
@@ -28,7 +30,7 @@ struct SocialCarouselView: View {
                     .background(Color.red.opacity(0.8))
                     .cornerRadius(4)
                     
-                    Text("BREAKING NEWS")
+                    Text("ÚLTIMA HORA")
                         .font(.system(size: 10, weight: .black))
                         .foregroundColor(.red)
                         .tracking(2)
@@ -80,6 +82,7 @@ struct SocialCarouselView: View {
                     }
                     .fixedSize(horizontal: true, vertical: false)
                     .offset(x: offset)
+                    .id(animationId)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: 80)
@@ -89,39 +92,53 @@ struct SocialCarouselView: View {
             }
             .padding(.vertical, 8)
             .background(Color.black.opacity(0.4))
+            .onChange(of: posts) { _, _ in
+                resetAnimation()
+            }
         }
+    }
+    
+    private func resetAnimation() {
+        offset = 0
+        contentWidth = 0
+        isAnimating = false
+        animationId = UUID()
     }
     
     private var contentGroup: some View {
         HStack(spacing: 0) {
             ForEach(posts) { post in
                 CarouselCardView(post: post)
-                    .background(
-                        GeometryReader { itemGeo in
-                            Color.clear.onAppear {
-                                if contentWidth == 0 && post.id == posts.first?.id {
-                                    // Logic handled by wrapping groups, but we can verify here
-                                }
-                            }
-                        }
-                    )
             }
         }
         .background(
             GeometryReader { geo in
-                Color.clear.onAppear {
-                    if contentWidth == 0 {
-                        contentWidth = geo.size.width
-                        startAnimation(totalWidth: contentWidth)
+                Color.clear
+                    .onAppear {
+                        handleWidthUpdate(geo.size.width)
                     }
-                }
+                    .onChange(of: geo.size.width) { _, newWidth in
+                        handleWidthUpdate(newWidth)
+                    }
             }
         )
     }
+
+    private func handleWidthUpdate(_ width: CGFloat) {
+        guard width > 0 else { return }
+        // If width changed significantly or it's the first time
+        if abs(contentWidth - width) > 1 {
+            contentWidth = width
+            startAnimation(totalWidth: width)
+        }
+    }
     
     private func startAnimation(totalWidth: CGFloat) {
+        guard !isAnimating else { return }
+        isAnimating = true
+        
         offset = 0
-        let duration = max(12, Double(posts.count) * 2.5) // Faster, technical feel
+        let duration = max(24, Double(posts.count) * 5.0)
         withAnimation(.linear(duration: duration).repeatForever(autoreverses: false)) {
             offset = -totalWidth
         }
@@ -181,9 +198,9 @@ struct CarouselCardView: View {
                 HStack(spacing: 6) {
                     miniStat(icon: "star.fill", value: "\(post.activityData.xpEarned)", color: Color(hex: "A259FF"))
                     if post.activityData.stolenZonesCount > 0 {
-                        miniStat(icon: "bolt.shield.fill", text: "STOLEN", value: "\(post.activityData.stolenZonesCount)", color: .red)
+                        miniStat(icon: "bolt.shield.fill", text: "ROBADO", value: "\(post.activityData.stolenZonesCount)", color: .red)
                     } else if post.activityData.newZonesCount > 0 {
-                        miniStat(icon: "map.fill", text: "NEW", value: "\(post.activityData.newZonesCount)", color: Color(hex: "32D74B"))
+                        miniStat(icon: "map.fill", text: "NUEVO", value: "\(post.activityData.newZonesCount)", color: Color(hex: "32D74B"))
                     }
                 }
                 .padding(.leading, 8)

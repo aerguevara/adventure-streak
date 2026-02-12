@@ -476,6 +476,21 @@ class AuthenticationService: NSObject, ObservableObject {
         #if canImport(FirebaseFirestore)
         userListener = UserRepository.shared.observeUser(userId: userId) { [weak self] user in
             guard let self, let user else { return }
+            
+            // Sync Profile Data
+            DispatchQueue.main.async {
+                if let name = user.displayName, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.userName = name
+                }
+                self.userAvatarURL = user.avatarURL
+                self.userMapIcon = user.mapIcon
+                
+                // Invitation state
+                self.isInvitationVerified = user.invitationVerified ?? false
+                self.invitationQuota = user.invitationQuota ?? 0
+                self.invitationCount = user.invitationCount ?? 0
+            }
+            
             // Treat missing as 0 so a server-side set to 0 forces logout once
             let remoteVersion = user.forceLogoutVersion ?? 0
             
@@ -515,7 +530,14 @@ class AuthenticationService: NSObject, ObservableObject {
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if let user = user {
-                    self.isInvitationVerified = user.invitationVerified ?? false
+                    // Si el campo no existe pero el usuario tiene XP o actividades (es conocido), 
+                    // asumimos que ya pasó el onboarding para no bloquearlo tras un rebuild/migration.
+                    if user.invitationVerified == nil && (user.xp > 0 || user.joinedAt != nil) {
+                        self.isInvitationVerified = true
+                        print("ℹ️ [AuthenticationService] Missing verification flag but user has history. Auto-verifying.")
+                    } else {
+                        self.isInvitationVerified = user.invitationVerified ?? false
+                    }
                 } else {
                     // Fallback para evitar bloqueo infinito si no existe el documento pero hay sesión
                     self.isInvitationVerified = true

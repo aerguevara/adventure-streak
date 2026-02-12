@@ -11,6 +11,7 @@ struct ActivityCardView: View {
     @State private var pendingReaction: ReactionType? = nil
     @State private var territoryCells: [TerritoryCell] = []
     @State private var isLoadingTerritories: Bool
+    @ObservedObject private var moderationService = ModerationService.shared
     let isNew: Bool
 
     init(activity: SocialPost, reactionState: ActivityReactionState, onReaction: @escaping (ReactionType) -> Void) {
@@ -49,11 +50,11 @@ struct ActivityCardView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack(spacing: 12) {
-                avatar(size: 44)
-                VStack(alignment: .leading, spacing: 2) {
+                avatar(size: 38)
+                VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
                         Text(activity.user.displayName)
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundColor(.white)
                         levelBadge
                         
@@ -99,15 +100,15 @@ struct ActivityCardView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
             
             // Large Square Map - The Highlight
             ZStack {
                 if isLoadingTerritories {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 12)
                         .fill(Color.white.opacity(0.05))
-                        .frame(height: 200)
+                        .frame(height: 160)
                         .overlay(
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -115,9 +116,9 @@ struct ActivityCardView: View {
                         )
                 } else if !territoryCells.isEmpty {
                     TerritoryMinimapView(territories: territoryCells)
-                        .aspectRatio(1.2, contentMode: .fit)
+                        .aspectRatio(1.4, contentMode: .fit)
                         .frame(maxWidth: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                         .transition(.opacity)
                 } else if !hasTerritoryImpact {
                     // Fallback for no maps - Premium Design
@@ -129,11 +130,11 @@ struct ActivityCardView: View {
             .animation(.easeInOut(duration: 0.3), value: isLoadingTerritories)
             .animation(.easeInOut(duration: 0.3), value: territoryCells.isEmpty)
             
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 // Title & Missions
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(refinedTitle)
-                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .font(.system(size: 17, weight: .black, design: .rounded))
                         .foregroundColor(Color(hex: "32D74B"))
                     
                     if hasTerritoryImpact {
@@ -161,29 +162,36 @@ struct ActivityCardView: View {
                     isEnabled: activity.activityId != nil,
                     onReaction: handleReaction
                 )
-                .padding(.top, 4)
+                .padding(.top, 2)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 12)
         }
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 18)
                 .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
         )
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
         .task {
             if activity.activityId != nil && activity.activityData.activityType.isOutdoor && territoryCells.isEmpty {
                 await loadTerritories()
             }
         }
+        .alert(isPresented: $moderationService.showAlert) {
+            Alert(
+                title: Text("Moderación"),
+                message: Text(moderationService.alertMessage),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 
     private var premiumNoMapFallback: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(
                     LinearGradient(
                         colors: [Color(hex: "1A1A1E"), Color(hex: "0A0A0B")],
@@ -195,13 +203,13 @@ struct ActivityCardView: View {
             // Decorative background shapes
             Circle()
                 .fill(activity.activityData.activityType.color.opacity(0.15))
-                .frame(width: 150, height: 150)
-                .blur(radius: 40)
-                .offset(x: 40, y: -20)
+                .frame(width: 120, height: 120)
+                .blur(radius: 30)
+                .offset(x: 30, y: -15)
             
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 Image(systemName: activity.activityData.activityType.iconName)
-                    .font(.system(size: 60))
+                    .font(.system(size: 44))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [activity.activityData.activityType.color, activity.activityData.activityType.color.opacity(0.6)],
@@ -209,14 +217,14 @@ struct ActivityCardView: View {
                             endPoint: .bottom
                         )
                     )
-                    .shadow(color: activity.activityData.activityType.color.opacity(0.5), radius: 15)
+                    .shadow(color: activity.activityData.activityType.color.opacity(0.5), radius: 10)
                 
-                Text("Entrenamiento de \(activity.activityData.activityType.displayName)")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                Text(activity.activityData.activityType.displayName)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(.secondary)
             }
         }
-        .frame(height: 200)
+        .frame(height: 160)
     }
 
     private func avatar(size: CGFloat) -> some View {
@@ -354,10 +362,10 @@ struct ProposalMetricSmall: View {
     var color: Color = .white
     
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 11))
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 10))
                 .foregroundColor(color.opacity(0.8))
-            Text(value).font(.system(size: 13, weight: .bold))
+            Text(value).font(.system(size: 12, weight: .bold))
                 .foregroundColor(color)
         }
     }

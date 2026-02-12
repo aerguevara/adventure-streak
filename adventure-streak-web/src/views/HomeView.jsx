@@ -95,7 +95,7 @@ function HomeView() {
 
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                             <a
-                                href="https://apps.apple.com/app/adventure-streak/id1669285098"
+                                href="https://apps.apple.com/es/app/adventure-streak/id6755981465"
                                 className="transition-transform hover:scale-105 active:scale-95"
                                 aria-label="Descargar en el App Store"
                             >
@@ -247,7 +247,7 @@ function HomeView() {
             {/* Floating CTA */}
             <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-1000">
                 <a
-                    href="https://apps.apple.com/app/adventure-streak/id1669285098"
+                    href="https://apps.apple.com/es/app/adventure-streak/id6755981465"
                     className="flex items-center gap-3 bg-white text-black px-8 py-4 rounded-2xl font-bold shadow-2xl hover:bg-adventure-blue hover:text-white transition-all transform hover:scale-105 active:scale-95 group"
                 >
                     <span>Únete a la Conquista</span>
