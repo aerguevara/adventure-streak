@@ -70,16 +70,7 @@ class SocialViewModel: ObservableObject {
 
     var displayPosts: [SocialPost] {
         posts.filter { !ModerationService.shared.isBlocked(userId: $0.userId) }
-            .sorted { lhs, rhs in
-                let lhsSeen = seenService.isSeen(postId: lhs.id)
-                let rhsSeen = seenService.isSeen(postId: rhs.id)
-                
-                if lhsSeen != rhsSeen {
-                    return !lhsSeen // Unseen posts first
-                }
-                
-                return lhs.date > rhs.date
-            }
+            .sorted { $0.date > $1.date }
     }
 
     func markAsSeen(_ post: SocialPost) {

@@ -4,6 +4,7 @@ import UIKit
 #endif
 
 struct ActivityCardView: View {
+    @ObservedObject private var seenService = FeedSeenService.shared
     let activity: SocialPost
     let reactionState: ActivityReactionState
     let onReaction: (ReactionType) -> Void
@@ -12,7 +13,6 @@ struct ActivityCardView: View {
     @State private var territoryCells: [TerritoryCell] = []
     @State private var isLoadingTerritories: Bool
     @ObservedObject private var moderationService = ModerationService.shared
-    let isNew: Bool
 
     init(activity: SocialPost, reactionState: ActivityReactionState, onReaction: @escaping (ReactionType) -> Void) {
         self.activity = activity
@@ -22,7 +22,10 @@ struct ActivityCardView: View {
         // Predetermine loading state based on activity type if it has an ID
         let isOutdoor = activity.activityData.activityType.isOutdoor
         self._isLoadingTerritories = State(initialValue: isOutdoor && activity.activityId != nil)
-        self.isNew = !FeedSeenService.shared.isSeen(postId: activity.id)
+    }
+
+    private var isNew: Bool {
+        !seenService.isSeen(postId: activity.id)
     }
 
     private var mergedReactionState: ActivityReactionState {
