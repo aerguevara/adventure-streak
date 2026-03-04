@@ -874,7 +874,7 @@ private enum NextGoalSuggestionBuilder {
         case .bike: return 180 // 3 min/km
         case .hike: return 900
         case .otherOutdoor: return 600
-        case .indoor: return 480 // Equivalent for display; indoor XP uses minutes
+        default: return 480 // Equivalent for display; indoor XP uses minutes
         }
     }
     
@@ -884,7 +884,7 @@ private enum NextGoalSuggestionBuilder {
         case .walk, .hike: return XPConfig.factorWalk
         case .bike: return XPConfig.factorBike
         case .otherOutdoor: return XPConfig.factorOther
-        case .indoor: return XPConfig.factorIndoor
+        default: return XPConfig.factorIndoor
         }
     }
 }

@@ -26,6 +26,10 @@ struct ActivitySession: Identifiable, Codable, Equatable {
     // NEW: List of users who lost territory to this activity (for Summary)
     var conqueredVictims: [String]?
     
+    // NEW: Specific HealthKit Data for better classification
+    var hkActivityTypeRaw: UInt?
+    var hkActivityTypeName: String?
+    
     enum ProcessingStatus: String, Codable {
         case uploading = "uploading"
         case pending = "pending"
@@ -41,7 +45,7 @@ struct ActivitySession: Identifiable, Codable, Equatable {
         return activityType.displayName
     }
     
-    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, workoutName: String? = nil, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil, territoryStats: TerritoryStats? = nil, missions: [Mission]? = nil, calories: Double? = nil, averageHeartRate: Int? = nil, locationLabel: String? = nil, processingStatus: ProcessingStatus = .pending, conqueredVictims: [String]? = nil) {
+    init(id: UUID = UUID(), startDate: Date, endDate: Date, activityType: ActivityType, distanceMeters: Double, durationSeconds: Double, workoutName: String? = nil, route: [RoutePoint], xpBreakdown: XPBreakdown? = nil, territoryStats: TerritoryStats? = nil, missions: [Mission]? = nil, calories: Double? = nil, averageHeartRate: Int? = nil, locationLabel: String? = nil, processingStatus: ProcessingStatus = .pending, conqueredVictims: [String]? = nil, hkActivityTypeRaw: UInt? = nil, hkActivityTypeName: String? = nil) {
         self.id = id
         self.startDate = startDate
         self.endDate = endDate
@@ -58,5 +62,7 @@ struct ActivitySession: Identifiable, Codable, Equatable {
         self.locationLabel = locationLabel
         self.processingStatus = processingStatus
         self.conqueredVictims = conqueredVictims
+        self.hkActivityTypeRaw = hkActivityTypeRaw
+        self.hkActivityTypeName = hkActivityTypeName
     }
 }

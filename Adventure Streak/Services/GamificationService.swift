@@ -51,10 +51,9 @@ class GamificationService: ObservableObject {
         switch activity.activityType {
         case .run: factor *= XPConfig.factorRun
         case .bike: factor *= XPConfig.factorBike
-        case .walk: factor *= XPConfig.factorWalk
-        case .hike: factor *= XPConfig.factorWalk
+        case .walk, .hike: factor *= XPConfig.factorWalk
         case .otherOutdoor: factor *= XPConfig.factorOther
-        case .indoor: factor *= XPConfig.factorIndoor
+        default: factor *= XPConfig.factorIndoor
         }
         
         return Int(distanceKm * factor)

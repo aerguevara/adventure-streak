@@ -456,21 +456,7 @@ class HistoryViewModel: ObservableObject {
     
     nonisolated private func activityType(for workout: WorkoutProtocol) -> ActivityType {
         let isIndoor = (workout.metadata?["HKIndoorWorkout"] as? Bool) ?? false
-        
-        switch workout.workoutActivityType {
-        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
-            return .indoor
-        case .running:
-            return isIndoor ? .indoor : .run
-        case .walking:
-            return isIndoor ? .indoor : .walk
-        case .cycling:
-            return isIndoor ? .indoor : .bike
-        case .hiking:
-            return .hike
-        default:
-            return isIndoor ? .indoor : .otherOutdoor
-        }
+        return ActivityType(hkType: workout.workoutActivityType, isIndoor: isIndoor)
     }
     
     nonisolated private func workoutName(for workout: WorkoutProtocol) -> String {
@@ -496,6 +482,8 @@ class HistoryViewModel: ObservableObject {
         case .flexibility: return "Flexibility"
         case .yoga: return "Yoga"
         case .pilates: return "Pilates"
+        case .coreTraining: return "Core Training"
+        case .stairClimbing: return "Stair Climbing"
         default: return "Workout"
         }
     }

@@ -33,6 +33,8 @@ private struct FirestoreActivity: Codable {
     let processingStatus: String?
     let lastUpdatedAt: Date?
     let locationLabel: String?
+    let hkActivityTypeRaw: UInt?
+    let hkActivityTypeName: String?
     
     init(activity: ActivitySession, userId: String, routeChunkCount: Int, territoryChunkCount: Int, includeProcessingStatus: Bool) {
         self.id = activity.id.uuidString
@@ -54,6 +56,8 @@ private struct FirestoreActivity: Codable {
         self.processingStatus = includeProcessingStatus ? "uploading" : nil
         self.lastUpdatedAt = Date()
         self.locationLabel = activity.locationLabel
+        self.hkActivityTypeRaw = activity.hkActivityTypeRaw
+        self.hkActivityTypeName = activity.hkActivityTypeName
     }
 }
 
@@ -136,7 +140,9 @@ final class ActivityRepository {
             "routeChunkCount": chunks.count,
             "territoryChunkCount": territoryChunks.count,
             "lastUpdatedAt": FieldValue.serverTimestamp(),
-            "locationLabel": activity.locationLabel as Any
+            "locationLabel": activity.locationLabel as Any,
+            "hkActivityTypeRaw": activity.hkActivityTypeRaw as Any,
+            "hkActivityTypeName": activity.hkActivityTypeName as Any
         ]
         
         if includeProcessingStatus {
@@ -254,7 +260,9 @@ final class ActivityRepository {
                             territoryStats: remote.territoryStats,
                             missions: remote.missions,
                             locationLabel: remote.locationLabel,
-                            processingStatus: ActivitySession.ProcessingStatus(rawValue: remote.processingStatus ?? "") ?? .pending
+                            processingStatus: ActivitySession.ProcessingStatus(rawValue: remote.processingStatus ?? "") ?? .pending,
+                            hkActivityTypeRaw: remote.hkActivityTypeRaw,
+                            hkActivityTypeName: remote.hkActivityTypeName
                         )
                     } catch {
                         print("Error decoding firestore activity \(doc.documentID):")
@@ -476,7 +484,9 @@ final class ActivityRepository {
                         xpBreakdown: remote.xpBreakdown,
                         territoryStats: remote.territoryStats,
                         missions: remote.missions,
-                        locationLabel: remote.locationLabel
+                        locationLabel: remote.locationLabel,
+                        hkActivityTypeRaw: remote.hkActivityTypeRaw,
+                        hkActivityTypeName: remote.hkActivityTypeName
                     )
                     activities.append(session)
                 } catch {
@@ -529,7 +539,9 @@ final class ActivityRepository {
                 xpBreakdown: remote.xpBreakdown,
                 territoryStats: remote.territoryStats,
                 missions: remote.missions,
-                locationLabel: remote.locationLabel
+                locationLabel: remote.locationLabel,
+                hkActivityTypeRaw: remote.hkActivityTypeRaw,
+                hkActivityTypeName: remote.hkActivityTypeName
             )
         } catch {
             print("[Activities] Failed to fetch activity \(activityId): \(error)")
@@ -697,7 +709,9 @@ final class ActivityRepository {
                     territoryStats: remote.territoryStats,
                     missions: remote.missions,
                     locationLabel: remote.locationLabel,
-                    processingStatus: ActivitySession.ProcessingStatus(rawValue: remote.processingStatus ?? "") ?? .completed
+                    processingStatus: ActivitySession.ProcessingStatus(rawValue: remote.processingStatus ?? "") ?? .completed,
+                    hkActivityTypeRaw: remote.hkActivityTypeRaw,
+                    hkActivityTypeName: remote.hkActivityTypeName
                 )
             } catch {
                 return nil

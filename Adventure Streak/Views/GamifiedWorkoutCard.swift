@@ -16,7 +16,7 @@ struct GamifiedWorkoutCard: View {
                         .fill(workout.rarityColor.opacity(0.2))
                         .frame(width: 48, height: 48)
                     
-                    Image(systemName: iconName)
+                    Image(systemName: workout.type.iconName)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(workout.rarityColor)
                 }
@@ -256,16 +256,5 @@ struct GamifiedWorkoutCard: View {
                 .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
         )
         .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-    }
-    
-    var iconName: String {
-        switch workout.type {
-        case .run: return "figure.run"
-        case .walk: return "figure.walk"
-        case .bike: return "bicycle"
-        case .hike: return "figure.hiking"
-        case .otherOutdoor: return "figure.outdoor.cycle"
-        case .indoor: return "house"
-        }
     }
 }

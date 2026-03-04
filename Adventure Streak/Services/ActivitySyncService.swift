@@ -112,7 +112,9 @@ final class ActivitySyncService {
                 workoutName: workoutName(for: workout),
                 route: route,
                 calories: (workout as? HKWorkout)?.statistics(for: HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!)?.sumQuantity()?.doubleValue(for: .kilocalorie()),
-                averageHeartRate: nil // Heart rate requires a separate query or HKQuantitySample
+                averageHeartRate: nil, // Heart rate requires a separate query or HKQuantitySample
+                hkActivityTypeRaw: workout.workoutActivityType.rawValue,
+                hkActivityTypeName: "\(workout.workoutActivityType)"
             )
             sessions.append(session)
         }
@@ -155,21 +157,7 @@ final class ActivitySyncService {
     
     nonisolated func activityType(for workout: WorkoutProtocol) -> ActivityType {
         let isIndoor = (workout.metadata?["HKIndoorWorkout"] as? Bool) ?? false
-        
-        switch workout.workoutActivityType {
-        case .traditionalStrengthTraining, .functionalStrengthTraining, .highIntensityIntervalTraining:
-            return .indoor
-        case .running:
-            return isIndoor ? .indoor : .run
-        case .walking:
-            return isIndoor ? .indoor : .walk
-        case .cycling:
-            return isIndoor ? .indoor : .bike
-        case .hiking:
-            return .hike
-        default:
-            return isIndoor ? .indoor : .otherOutdoor
-        }
+        return ActivityType(hkType: workout.workoutActivityType, isIndoor: isIndoor)
     }
     
     nonisolated func workoutName(for workout: WorkoutProtocol) -> String? {
