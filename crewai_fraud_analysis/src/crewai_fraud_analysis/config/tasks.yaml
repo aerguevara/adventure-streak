@@ -1,0 +1,32 @@
+fetch_daily_workouts_task:
+  description: >
+    Fetch all workout activities from Firestore that were completed within the last 24 hours. 
+    Retrieve the main activity data and the precomputed route_metrics (which includes average speed based on total duration and GPS jump counts).
+  expected_output: >
+    A structured list of workouts, including activityId, userId, userName, distance, duration, route_metrics, activityType, startDate, endDate, and locationLabel.
+  agent: workout_speed_analyst
+
+analyze_workout_patterns_task:
+  description: >
+    Analyze the fetched workouts and route_metrics for signs of fraud. 
+    1. Check if the average speed in the route_metrics is realistic for the activity type.
+    2. Identify any GPS "jumps" (e.g. if gps_jumps_over_300m > 0).
+    3. Verify if territories were assigned logically, given the points or distance.
+  expected_output: >
+    A detailed list of findings for each workout, flagging any suspicious behavior with evidence 
+    (e.g., "User travelled 5km in 2 minutes, average speed 150km/h, 2 GPS jumps detected").
+  agent: spatial_integrity_auditor
+
+generate_fraud_report_task:
+  description: >
+    Take the findings from the analysts and generate a consolidated Daily Fraud Report. 
+    Group sessions by: "Confirmed Fraud", "Suspicious (Needs Review)", and "Clean".
+    Explain the reasoning for each flag.
+    For each reported activity, you MUST explicitly include the following data points:
+    - User ID y Nombre (from `userId` and `userName`)
+    - Hora (from `startDate` and `endDate`)
+    - Actividad (from `activityType`)
+    - Smartplace (from `locationLabel`)
+  expected_output: >
+    A markdown report summarizing the daily fraud audit. The entire report MUST be written in Spanish.
+  agent: fraud_reporting_officer

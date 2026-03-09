@@ -1,0 +1,26 @@
+[project]
+name = "crewai_fraud_analysis"
+version = "0.1.0"
+description = "crewai-fraud-analysis using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.16"
+dependencies = [
+    "crewai[tools]",
+    "firebase-admin>=6.5.0",
+    "python-dotenv>=1.0.1"
+]
+
+[project.scripts]
+crewai_fraud_analysis = "crewai_fraud_analysis.main:run"
+run_crew = "crewai_fraud_analysis.main:run"
+train = "crewai_fraud_analysis.main:train"
+replay = "crewai_fraud_analysis.main:replay"
+test = "crewai_fraud_analysis.main:test"
+run_with_trigger = "crewai_fraud_analysis.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"
