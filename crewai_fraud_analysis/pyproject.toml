@@ -5,14 +5,19 @@ description = "crewai-fraud-analysis using crewAI"
 authors = [{ name = "Your Name", email = "you@example.com" }]
 requires-python = ">=3.10,<3.16"
 dependencies = [
-    "crewai[tools]",
+    "crewai[google-genai,litellm,tools]",
     "firebase-admin>=6.5.0",
-    "python-dotenv>=1.0.1"
+    "google-genai>=0.1",
+    "litellm>=1.0",
+    "python-dotenv>=1.0.1",
+    "requests>=2.31.0",
 ]
 
 [project.scripts]
 crewai_fraud_analysis = "crewai_fraud_analysis.main:run"
 run_crew = "crewai_fraud_analysis.main:run"
+run_hourly = "crewai_fraud_analysis.main:run_hourly"
+run_chat = "crewai_fraud_analysis.main:run_chat"
 train = "crewai_fraud_analysis.main:train"
 replay = "crewai_fraud_analysis.main:replay"
 test = "crewai_fraud_analysis.main:test"

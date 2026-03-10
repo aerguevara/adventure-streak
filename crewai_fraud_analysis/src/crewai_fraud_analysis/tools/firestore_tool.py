@@ -1,5 +1,5 @@
 from crewai.tools import BaseTool
-from typing import Type, List, Dict, Any
+from typing import Type, List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 import os
 import json
@@ -67,8 +67,10 @@ def compute_route_metrics(routes):
 
 class FirestoreToolInput(BaseModel):
     """Input schema for FirestoreTool."""
-    days_back: int = Field(default=1, description="Number of days back to fetch workouts from.")
-    limit: int = Field(default=5, description="Maximum number of workouts to fetch for analysis to save API quota.")
+    hours_back: int = Field(default=1, description="Number of hours back to fetch workouts from.")
+    limit: int = Field(default=10, description="Maximum number of workouts to fetch for analysis.")
+    user_id: Optional[str] = Field(default=None, description="Optional: specific userId to fetch activities for.")
+    activity_id: Optional[str] = Field(default=None, description="Optional: specific activityId to fetch.")
 
 class FirestoreTool(BaseTool):
     name: str = "Firestore Workout Fetcher"
@@ -79,7 +81,7 @@ class FirestoreTool(BaseTool):
     )
     args_schema: Type[BaseModel] = FirestoreToolInput
 
-    def _run(self, days_back: int = 1, limit: int = 5) -> str:
+    def _run(self, hours_back: int = 1, limit: int = 10, user_id: str = None, activity_id: str = None) -> str:
         try:
             if not firebase_admin._apps:
                 cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -90,15 +92,28 @@ class FirestoreTool(BaseTool):
                 firebase_admin.initialize_app(cred)
 
             db = firestore.client()
-            
-            now = datetime.now()
-            start_date = now - timedelta(days=days_back)
-            
-            print(f"Fetching activities since {start_date.isoformat()}...")
-
             activities_ref = db.collection("activities")
-            query = activities_ref.where("endDate", ">=", start_date).order_by("endDate", direction=firestore.Query.DESCENDING).limit(limit)
-            docs = query.stream()
+
+            # Logic for filtering
+            if activity_id:
+                print(f"Fetching specific activity: {activity_id}...")
+                doc = activities_ref.document(activity_id).get()
+                if not doc.exists:
+                    return f"Activity {activity_id} not found."
+                docs = [doc]
+            else:
+                now = datetime.now()
+                start_date = now - timedelta(hours=hours_back)
+                
+                query = activities_ref
+                if user_id:
+                    print(f"Fetching activities for user {user_id} since {start_date.isoformat()}...")
+                    query = query.where("userId", "==", user_id)
+                else:
+                    print(f"Fetching all activities since {start_date.isoformat()}...")
+                
+                query = query.where("endDate", ">=", start_date).order_by("endDate", direction=firestore.Query.DESCENDING).limit(limit)
+                docs = query.stream()
 
             results = []
             for doc in docs:
@@ -150,7 +165,7 @@ class FirestoreTool(BaseTool):
                 })
 
             if not results:
-                return f"No activities found in the last {days_back} day(s)."
+                return f"No activities found in the last {hours_back} hour(s)."
 
             return json.dumps(results, indent=2, default=str)
 

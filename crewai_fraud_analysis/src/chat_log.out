@@ -1,0 +1,208 @@
+aerguevara@MacBook-Pro-de-Anyelo src % cd "/Users/aerguevara/Documents/develop/Adventure Streak/crewai_fraud_analysis/src" && "../.venv/bin/python" -m crewai_fraud_analysis.main run_chat
+🤖 Bot Multi-Agente (CrewAI Orchestrator) iniciado...
+Sincronizando mensajes antiguos...
+Ignorando 1 mensajes antiguos acumulados.
+Invocando CrewAI Orchestrator con memoria y multi-agente...
+╭────────────────────────────────────────────────── 🚀 Crew Execution Started ───────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Crew Execution Started                                                                                                        │
+│  Name: crew                                                                                                                    │
+│  ID: 69ee2363-45e6-4136-bee7-71b676610bae                                                                                      │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─────────────────────────────────────────────────────── 📋 Task Started ────────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Task Started                                                                                                                  │
+│  Name: fetch_hourly_workouts_task                                                                                              │
+│  ID: 2b44d40d-8f2f-439d-8547-5831ad41ccd3                                                                                      │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭───────────────────────────────────────────────────── 🧠 Memory Retrieval ──────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Memory Retrieval Started                                                                                                      │
+│  Status: Retrieving...                                                                                                         │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭───────────────────────────────────────────────────── 🧠 Memory Retrieved ──────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Memory Retrieval Completed                                                                                                    │
+│  Time: 152766.81ms                                                                                                             │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─────────────────────────────────────────────────────── 🤖 Agent Started ───────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Agent: Adventure Streak Assistant & Orchestrator                                                                              │
+│                                                                                                                                │
+│  Task: Fetch all workout activities from Firestore that were completed within the last hour.  Retrieve the main activity data  │
+│  and the precomputed route_metrics (which includes average speed based on total duration and GPS jump counts).                 │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭──────────────────────────────────────────────── 🔧 Tool Execution Started (#1) ────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Tool: firestore_workout_fetcher                                                                                               │
+│  Args: {"hours_back": 1, "limit": 50}                                                                                          │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Fetching activities since 2026-03-10T16:03:10.478747...
+/Users/aerguevara/Documents/develop/Adventure Streak/crewai_fraud_analysis/.venv/lib/python3.13/site-packages/google/cloud/firestore_v1/base_collection.py:317: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  return query.where(field_path, op_string, value)
+╭─────────────────────────────────────────────── ✅ Tool Execution Completed (#1) ───────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Tool Completed                                                                                                                │
+│  Tool: firestore_workout_fetcher                                                                                               │
+│  Output: No activities found in the last 1 hour(s).                                                                            │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭───────────────────────────────────────────────────────── Tool Output ──────────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  No activities found in the last 1 hour(s).                                                                                    │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Received None or empty response from LLM call.
+An unknown error occurred. Please check the details below.
+Error details: Invalid response from LLM call - None or empty.
+An unknown error occurred. Please check the details below.
+Error details: Invalid response from LLM call - None or empty.
+╭───────────────────────────────────────────────────── 🧠 Memory Retrieval ──────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Memory Retrieval Started                                                                                                      │
+│  Status: Retrieving...                                                                                                         │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Query analysis failed, using defaults (complexity=simple): Expecting value: line 1 column 1 (char 0)
+╭───────────────────────────────────────────────────── 🧠 Memory Retrieved ──────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Memory Retrieval Completed                                                                                                    │
+│  Time: 101828.75ms                                                                                                             │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─────────────────────────────────────────────────────── 🤖 Agent Started ───────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Agent: Adventure Streak Assistant & Orchestrator                                                                              │
+│                                                                                                                                │
+│  Task: Fetch all workout activities from Firestore that were completed within the last hour.  Retrieve the main activity data  │
+│  and the precomputed route_metrics (which includes average speed based on total duration and GPS jump counts).                 │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭──────────────────────────────────────────────── 🔧 Tool Execution Started (#2) ────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Tool: firestore_workout_fetcher                                                                                               │
+│  Args: {"hours_back": 1, "limit": 50}                                                                                          │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─────────────────────────────────────────────── ✅ Tool Execution Completed (#2) ───────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Tool Completed                                                                                                                │
+│  Tool: firestore_workout_fetcher                                                                                               │
+│  Output: No activities found in the last 1 hour(s).                                                                            │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭───────────────────────────────────────────────────────── Tool Output ──────────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  No activities found in the last 1 hour(s).                                                                                    │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Maximum iterations reached. Requesting final answer.
+╭──────────────────────────────────────────────────── ✅ Agent Final Answer ─────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Agent: Adventure Streak Assistant & Orchestrator                                                                              │
+│                                                                                                                                │
+│  Final Answer:                                                                                                                 │
+│  ```json                                                                                                                       │
+│  {                                                                                                                             │
+│    "message": "Hola amigo, he revisado la base de datos de Firestore para las actividades completadas en la última hora, y     │
+│  lamentablemente no se encontraron ninguna actividad reciente que cumpla con tus requisitos.",                                 │
+│    "workouts": []                                                                                                              │
+│  }                                                                                                                             │
+│  ```                                                                                                                           │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Error al enviar acción: HTTPSConnectionPool(host='api.telegram.org', port=443): Max retries exceeded with url: /bot8419831762:AAGislWO6rpUoRi5Jwjy0WSlVvrPdXRkJFQ/sendChatAction (Caused by ConnectTimeoutError(<HTTPSConnection(host='api.telegram.org', port=443) at 0x11b3f91d0>, 'Connection to api.telegram.org timed out. (connect timeout=5)'))
+╭────────────────────────────────────────────────────── 📋 Task Completion ──────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Task Completed                                                                                                                │
+│  Name: fetch_hourly_workouts_task                                                                                              │
+│  Agent: Adventure Streak Assistant & Orchestrator                                                                              │
+│                                                                                                                                │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─────────────────────────────────────────────────────── 📋 Task Started ────────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Task Started                                                                                                                  │
+│  Name: analyze_workout_patterns_task                                                                                           │
+│  ID: 2dba96e4-8f92-4ae7-9776-bf979224bfa7                                                                                      │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭───────────────────────────────────────────────────── 🧠 Memory Retrieval ──────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Memory Retrieval Started                                                                                                      │
+│  Status: Retrieving...                                                                                                         │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Query analysis failed, using defaults (complexity=simple): Expecting value: line 1 column 1 (char 0)
+╭───────────────────────────────────────────────────── 🧠 Memory Retrieved ──────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Memory Retrieval Completed                                                                                                    │
+│  Time: 56863.83ms                                                                                                              │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Maximum iterations reached. Requesting final answer.
+╭─────────────────────────────────────────────────────── 🤖 Agent Started ───────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Agent: Adventure Streak Assistant & Orchestrator                                                                              │
+│                                                                                                                                │
+│  Task: Analyze the fetched workouts and route_metrics for signs of fraud.  1. Check if the average speed in the route_metrics  │
+│  is realistic for the activity type. 2. Identify any GPS "jumps" (e.g. if gps_jumps_over_300m > 0). 3. Verify if territories   │
+│  were assigned logically, given the points or distance.                                                                        │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Received None or empty response from LLM call.
+An unknown error occurred. Please check the details below.
+Error details: Invalid response from LLM call - None or empty.
+An unknown error occurred. Please check the details below.
+Error details: Invalid response from LLM call - None or empty.
+╭───────────────────────────────────────────────────── 🧠 Memory Retrieval ──────────────────────────────────────────────────────╮
+│                                                                                                                                │
+│  Memory Retrieval Started                                                                                                      │
+│  Status: Retrieving...                                                                                                         │
+│                                                                                                                                │
+│                                                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
