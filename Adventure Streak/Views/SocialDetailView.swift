@@ -141,7 +141,7 @@ struct SocialPostDetailView: View {
                     
                     // Metrics Row
                     HStack(spacing: 15) {
-                        SocialDetailMetric(icon: "figure.run", value: String(format: "%.1f", post.activityData.distanceKm), unit: "km")
+                        SocialDetailMetric(icon: post.activityData.activityType.iconName, value: String(format: "%.1f", post.activityData.distanceKm), unit: "km")
                         SocialDetailMetric(icon: "clock", value: formatDuration(post.activityData.durationSeconds), unit: "")
                         SocialDetailMetric(icon: "star.fill", value: "+\(post.activityData.xpEarned)", unit: "XP", color: Color(hex: "A259FF"))
                     }

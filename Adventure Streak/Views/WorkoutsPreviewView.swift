@@ -29,7 +29,7 @@ struct WorkoutsPreviewView: View {
                     VStack(spacing: 20) {
                         // Card 1: Epic
                         WorkoutPreviewCard(
-                            icon: "figure.run",
+                            icon: "figure.outdoor.cycle",
                             title: "Exploración avanzada",
                             activity: "Running · 5,4 km · 32 min",
                             territoryNew: 12,

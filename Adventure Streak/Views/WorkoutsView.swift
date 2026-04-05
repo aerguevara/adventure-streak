@@ -525,7 +525,7 @@ struct WorkoutsView: View {
                 EmptyView() // El modal global de carga ya cubre este estado
             } else if viewModel.workouts.isEmpty {
                 VStack(spacing: 12) {
-                    Image(systemName: "figure.run")
+                    Image(systemName: "bolt.horizontal.fill")
                         .font(.largeTitle)
                         .foregroundColor(.gray)
                     Text("Aún no hay actividad")

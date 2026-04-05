@@ -143,7 +143,7 @@ struct ProfileDetailView: View {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                             StatCard(title: "XP Total", value: "\(profileViewModel.totalXP)", icon: "sparkles", color: .purple)
                             StatCard(title: "Zonas Totales", value: "\(profileViewModel.totalCellsConquered)", icon: "map.fill", color: .blue)
-                            StatCard(title: "Zonas Activas", value: "+\(profileViewModel.territoriesCount)", icon: "figure.run", color: .green)
+                            StatCard(title: "Zonas Activas", value: "+\(profileViewModel.territoriesCount)", icon: "bolt.fill", color: .green)
                             StatCard(title: "Actividades", value: "\(profileViewModel.activitiesCount)", icon: "bolt.horizontal.fill", color: .yellow)
                         }
                         .padding(.horizontal)

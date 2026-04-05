@@ -111,8 +111,8 @@ final class ActivitySyncService {
                 durationSeconds: workout.duration,
                 workoutName: workoutName(for: workout),
                 route: route,
-                calories: (workout as? HKWorkout)?.statistics(for: HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!)?.sumQuantity()?.doubleValue(for: .kilocalorie()),
-                averageHeartRate: nil, // Heart rate requires a separate query or HKQuantitySample
+                calories: (workout as? HKWorkout)?.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie()),
+                averageHeartRate: nil, // TODO: Considerar añadir consulta de ritmo cardíaco en el futuro si es necesario
                 hkActivityTypeRaw: workout.workoutActivityType.rawValue,
                 hkActivityTypeName: "\(workout.workoutActivityType)"
             )

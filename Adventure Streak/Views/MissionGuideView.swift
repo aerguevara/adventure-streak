@@ -51,7 +51,7 @@ struct MissionGuideView: View {
             description: "Mide distancia, ritmo, desnivel o duración. Ejemplos: mantener un ritmo, superar kilómetros, sesiones largas.",
             example: "Ejemplo: 5 km run a ritmo objetivo → ~90 XP base.",
             color: Color(hex: "FF6B6B"),
-            icon: "figure.run.circle.fill"
+            icon: "figure.strengthtraining.traditional"
         ),
         GuideItem(
             title: "Progresión",

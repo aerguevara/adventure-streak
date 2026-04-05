@@ -147,7 +147,7 @@ struct ActivityCardView: View {
                 
                 // Detailed Metrics Section
                 HStack(spacing: 0) {
-                    ProposalMetricSmall(icon: "figure.run", value: String(format: "%.1f km", activity.activityData.distanceKm))
+                    ProposalMetricSmall(icon: activity.activityData.activityType.iconName, value: String(format: "%.1f km", activity.activityData.distanceKm))
                     Spacer()
                     ProposalMetricSmall(icon: "clock", value: formatDuration(activity.activityData.durationSeconds))
                     Spacer()

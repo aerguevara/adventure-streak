@@ -35,6 +35,8 @@ private struct FirestoreActivity: Codable {
     let locationLabel: String?
     let hkActivityTypeRaw: UInt?
     let hkActivityTypeName: String?
+    let calories: Double?
+    let averageHeartRate: Int?
     
     init(activity: ActivitySession, userId: String, routeChunkCount: Int, territoryChunkCount: Int, includeProcessingStatus: Bool) {
         self.id = activity.id.uuidString
@@ -58,6 +60,8 @@ private struct FirestoreActivity: Codable {
         self.locationLabel = activity.locationLabel
         self.hkActivityTypeRaw = activity.hkActivityTypeRaw
         self.hkActivityTypeName = activity.hkActivityTypeName
+        self.calories = activity.calories
+        self.averageHeartRate = activity.averageHeartRate
     }
 }
 
@@ -142,7 +146,9 @@ final class ActivityRepository {
             "lastUpdatedAt": FieldValue.serverTimestamp(),
             "locationLabel": activity.locationLabel as Any,
             "hkActivityTypeRaw": activity.hkActivityTypeRaw as Any,
-            "hkActivityTypeName": activity.hkActivityTypeName as Any
+            "hkActivityTypeName": activity.hkActivityTypeName as Any,
+            "calories": activity.calories as Any,
+            "averageHeartRate": activity.averageHeartRate as Any
         ]
         
         if includeProcessingStatus {
@@ -484,6 +490,8 @@ final class ActivityRepository {
                         xpBreakdown: remote.xpBreakdown,
                         territoryStats: remote.territoryStats,
                         missions: remote.missions,
+                        calories: remote.calories,
+                        averageHeartRate: remote.averageHeartRate,
                         locationLabel: remote.locationLabel,
                         hkActivityTypeRaw: remote.hkActivityTypeRaw,
                         hkActivityTypeName: remote.hkActivityTypeName
@@ -539,6 +547,8 @@ final class ActivityRepository {
                 xpBreakdown: remote.xpBreakdown,
                 territoryStats: remote.territoryStats,
                 missions: remote.missions,
+                calories: remote.calories,
+                averageHeartRate: remote.averageHeartRate,
                 locationLabel: remote.locationLabel,
                 hkActivityTypeRaw: remote.hkActivityTypeRaw,
                 hkActivityTypeName: remote.hkActivityTypeName
@@ -670,7 +680,11 @@ final class ActivityRepository {
                     xpBreakdown: remote.xpBreakdown,
                     territoryStats: remote.territoryStats,
                     missions: remote.missions,
-                    locationLabel: remote.locationLabel
+                    calories: remote.calories,
+                    averageHeartRate: remote.averageHeartRate,
+                    locationLabel: remote.locationLabel,
+                    hkActivityTypeRaw: remote.hkActivityTypeRaw,
+                    hkActivityTypeName: remote.hkActivityTypeName
                 )
                 results.append(session)
             } catch { }
@@ -708,6 +722,8 @@ final class ActivityRepository {
                     xpBreakdown: remote.xpBreakdown,
                     territoryStats: remote.territoryStats,
                     missions: remote.missions,
+                    calories: remote.calories,
+                    averageHeartRate: remote.averageHeartRate,
                     locationLabel: remote.locationLabel,
                     processingStatus: ActivitySession.ProcessingStatus(rawValue: remote.processingStatus ?? "") ?? .completed,
                     hkActivityTypeRaw: remote.hkActivityTypeRaw,
