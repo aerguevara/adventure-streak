@@ -96,7 +96,7 @@ struct RankingView: View {
                             emptyStateView
                         } else {
                             // Leader Horizon (Replaces old Podium)
-                            if let leader = viewModel.entries.first {
+                            if let leader = viewModel.entries.first, leader.weeklyXP > 0 {
                                 LeaderHorizonView(entry: leader, scrollOffset: scrollOffset) {
                                     if !leader.isCurrentUser {
                                         viewModel.selectUser(userId: leader.userId)
@@ -223,13 +223,13 @@ struct RankingView: View {
     
     private var emptyStateView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "list.number")
+            Image(systemName: "trophy")
                 .font(.system(size: 50))
-                .foregroundColor(.gray)
-            Text("Aún no hay suficientes datos")
+                .foregroundColor(Color(hex: "FFD60A"))
+            Text("¡Nueva Temporada en marcha!")
                 .font(.headline)
                 .foregroundColor(.white)
-            Text("¡Sé el primero en aparecer en la clasificación!")
+            Text("Aún no hay puntos registrados en el ranking.\n¡Sé el primero en entrenar y reclamar el trono!")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)

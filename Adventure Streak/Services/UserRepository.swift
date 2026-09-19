@@ -85,18 +85,21 @@ class UserRepository: ObservableObject {
                 data["level"] = initialLevel ?? 1
                 data["displayName"] = name ?? "Aventurero"
             } else if let document = document, document.exists {
-                // Check for missing critical stats (e.g. if another service created the doc with just a token)
-                if !hasXP {
-                    data["xp"] = initialXP ?? 0
+                // PROTECTIVE SYNC: Only set if fields are strictly missing
+                // and avoid overwriting with 0 if we suspect a data loss scenario
+                if !hasXP, let initXP = initialXP, initXP > 0 {
+                    data["xp"] = initXP
                 }
-                if !hasLevel {
-                    data["level"] = initialLevel ?? 1
+                
+                if !hasLevel, let initLevel = initialLevel, initLevel > 1 {
+                    data["level"] = initLevel
                 }
+                
                 if document.get("joinedAt") == nil {
                     data["joinedAt"] = FieldValue.serverTimestamp()
                 }
-
-                // ALWAYS update email if we have one and it's missing or different (implicitly by merge)
+                
+                // ... rest of the existing logic ...
                 if let email = userEmail, !email.isEmpty {
                     data["email"] = email
                 }

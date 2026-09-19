@@ -64,6 +64,9 @@ struct UserProfileView: View {
                         
                         badgesSection
                         
+                        // NEW: Recent Activities
+                        activityHistorySection
+                        
                         Spacer(minLength: 40)
                     }
                 }
@@ -507,6 +510,67 @@ struct UserProfileView: View {
             }
             .frame(height: 8)
         }
+    }
+    
+    private var activityHistorySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Actividades Recientes")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                if comparisonViewModel.isLoadingActivities && comparisonViewModel.activities.isEmpty {
+                    ProgressView()
+                        .tint(.gray)
+                }
+            }
+            .padding(.horizontal)
+            
+            if comparisonViewModel.activities.isEmpty && !comparisonViewModel.isLoadingActivities {
+                VStack(spacing: 12) {
+                    Image(systemName: "figure.walk.circle")
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray.opacity(0.3))
+                    Text("Aún no hay actividades registradas")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color.white.opacity(0.02))
+                .cornerRadius(16)
+                .padding(.horizontal)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(comparisonViewModel.activities) { activity in
+                        ActivitySummaryCard(activity: activity)
+                    }
+                    
+                    if comparisonViewModel.canLoadMore {
+                        HStack {
+                            Spacer()
+                            if comparisonViewModel.isLoadingActivities {
+                                ProgressView()
+                                    .padding()
+                            } else {
+                                // Transparent view to trigger load more
+                                Color.clear
+                                    .frame(height: 20)
+                                    .onAppear {
+                                        comparisonViewModel.fetchMoreActivities()
+                                    }
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+        .padding(.top, 8)
     }
 }
 

@@ -1,6 +1,9 @@
 import Foundation
 import SwiftUI
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 @MainActor
 class RivalryViewModel: ObservableObject {
@@ -8,6 +11,13 @@ class RivalryViewModel: ObservableObject {
     @Published var viewerRanking: RankingEntry? = nil
     @Published var rivalry: RivalryRelationship? = nil
     @Published var isLoading: Bool = false
+    
+    // NEW: Activity history state
+    @Published var activities: [ActivitySession] = []
+    @Published var isLoadingActivities: Bool = false
+    @Published var canLoadMore: Bool = true
+    private var lastDoc: QueryDocumentSnapshot? = nil
+    private let pageSize = 15
     
     private let targetUserId: String
     private let viewerId: String?
@@ -18,6 +28,7 @@ class RivalryViewModel: ObservableObject {
         self.viewerId = AuthenticationService.shared.userId
         
         loadComparisonData()
+        fetchActivities()
     }
     
     func loadComparisonData() {
@@ -61,4 +72,54 @@ class RivalryViewModel: ObservableObject {
             }
         }
     }
+    
+    // NEW: Fetch activities for the target user
+    func fetchActivities() {
+        guard !isLoadingActivities else { return }
+        isLoadingActivities = true
+        
+        Task {
+            do {
+                let result = try await ActivityRepository.shared.fetchActivities(
+                    userId: targetUserId,
+                    limit: pageSize,
+                    lastDoc: nil
+                )
+                
+                self.activities = result.activities
+                self.lastDoc = result.lastDoc
+                self.canLoadMore = result.activities.count == pageSize
+                self.isLoadingActivities = false
+                print("DEBUG: [RivalryViewModel] Fetched \(result.activities.count) activities for \(targetUserId)")
+            } catch {
+                print("ERROR: [RivalryViewModel] Failed to fetch activities: \(error.localizedDescription)")
+                self.isLoadingActivities = false
+            }
+        }
+    }
+    
+    func fetchMoreActivities() {
+        guard !isLoadingActivities && canLoadMore, let lastDoc = lastDoc else { return }
+        isLoadingActivities = true
+        
+        Task {
+            do {
+                let result = try await ActivityRepository.shared.fetchActivities(
+                    userId: targetUserId,
+                    limit: pageSize,
+                    lastDoc: lastDoc
+                )
+                
+                self.activities.append(contentsOf: result.activities)
+                self.lastDoc = result.lastDoc
+                self.canLoadMore = result.activities.count == pageSize
+                self.isLoadingActivities = false
+                print("DEBUG: [RivalryViewModel] Fetched \(result.activities.count) MORE activities for \(targetUserId)")
+            } catch {
+                print("ERROR: [RivalryViewModel] Failed to fetch more activities: \(error.localizedDescription)")
+                self.isLoadingActivities = false
+            }
+        }
+    }
 }
+

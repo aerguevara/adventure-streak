@@ -130,6 +130,7 @@ class GamificationRepository: ObservableObject {
         }
         
         db.collection("users")
+            .whereField("xp", isGreaterThan: 0)
             .order(by: "xp", descending: true)
             .limit(to: limit)
             .getDocuments { (snapshot, error) in
@@ -157,6 +158,7 @@ class GamificationRepository: ObservableObject {
         }
         
         return db.collection("users")
+            .whereField("xp", isGreaterThan: 0)
             .order(by: "xp", descending: true)
             .limit(to: limit)
             .addSnapshotListener { (snapshot, error) in
@@ -177,30 +179,47 @@ class GamificationRepository: ObservableObject {
     
     #if canImport(FirebaseFirestore)
     private func processRankingDocuments(_ documents: [QueryDocumentSnapshot]) -> [RankingEntry] {
-        var entries: [RankingEntry] = []
-        for (index, doc) in documents.enumerated() {
+        var rawEntries: [(entry: RankingEntry, previousRank: Int)] = []
+        for doc in documents {
             let data = doc.data()
-            let currentRank = index + 1
+            let xp = data["xp"] as? Int ?? 0
+            guard xp > 0 else { continue }
+            
             let previousRank = data["previousRank"] as? Int ?? 0
-            var trend: RankingTrend = .neutral
-            
-            if previousRank > 0 {
-                if currentRank < previousRank {
-                    trend = .up
-                } else if currentRank > previousRank {
-                    trend = .down
-                }
-            }
-            
             var entry = RankingEntry(
                 userId: doc.documentID,
                 displayName: data["displayName"] as? String ?? "Unknown",
                 level: data["level"] as? Int ?? 1,
-                weeklyXP: data["xp"] as? Int ?? 0,
-                position: currentRank,
+                weeklyXP: xp,
+                position: 0,
                 isCurrentUser: false
             )
             entry.weeklyDistance = data["currentWeekDistanceKm"] as? Double ?? 0.0
+            rawEntries.append((entry: entry, previousRank: previousRank))
+        }
+        
+        // Tie-breaker: 1. Higher XP, 2. Higher Level
+        rawEntries.sort { a, b in
+            if a.entry.weeklyXP != b.entry.weeklyXP {
+                return a.entry.weeklyXP > b.entry.weeklyXP
+            }
+            return a.entry.level > b.entry.level
+        }
+        
+        var entries: [RankingEntry] = []
+        for (index, item) in rawEntries.enumerated() {
+            var entry = item.entry
+            let currentRank = index + 1
+            entry.position = currentRank
+            
+            var trend: RankingTrend = .neutral
+            if item.previousRank > 0 {
+                if currentRank < item.previousRank {
+                    trend = .up
+                } else if currentRank > item.previousRank {
+                    trend = .down
+                }
+            }
             entry.trend = trend
             entries.append(entry)
         }

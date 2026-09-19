@@ -1,10 +1,126 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helper: Is the user authenticated?
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Is the user accessing their own data?
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. Users collection and its subcollections
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+
+      // Subcollection: followers
+      // Path: users/{userId}/followers/{followerId}
+      // - Any authenticated user can read followers
+      // - Only the follower itself can write/delete their follower document
+      match /followers/{followerId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && request.auth.uid == followerId;
+      }
+
+      // Subcollection: following
+      // Path: users/{userId}/following/{followingId}
+      // - Any authenticated user can read following
+      // - Only the owner user can write/delete their own following document
+      match /following/{followingId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
+
+      // Subcollection: badges
+      match /badges/{badgeId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
+
+      // Subcollection: vengeance_targets
+      match /vengeance_targets/{targetId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // 2. Activities collection
+    match /activities/{activityId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Subcollection: routes
+      match /routes/{routeId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && get(/databases/$(database)/documents/activities/$(activityId)).data.userId == request.auth.uid;
+      }
+
+      // Subcollection: territories
+      match /territories/{territoryId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && get(/databases/$(database)/documents/activities/$(activityId)).data.userId == request.auth.uid;
+      }
+    }
+
+    // 3. Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.recipientId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.recipientId == request.auth.uid;
+    }
+
+    // 4. Feed collection
+    match /feed/{feedId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // 5. Remote Territories
+    match /remote_territories/{territoryId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 6. Activity Reactions and Stats
+    match /activity_reactions/{reactionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (reactionId.matches('.*_' + request.auth.uid) || request.resource.data.userId == request.auth.uid || (resource != null && resource.data.userId == request.auth.uid));
+    }
+
+    match /activity_reaction_stats/{statsId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // 7. Other collections: reports, incidents, reserved_icons, debug_mock_workouts
+    match /reports/{reportId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if false;
+    }
+
+    match /incidents/{incidentId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if false;
+    }
+
+    match /reserved_icons/{iconId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /debug_mock_workouts/{workoutId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Legacy / Boilerplate fallback (retaining babies / events matches for safety)
     match /babies/{babyId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated();
       match /events/{eventId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isAuthenticated();
       }
     }
   }

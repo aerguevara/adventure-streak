@@ -22,7 +22,7 @@ class RankingViewModel: ObservableObject {
     }
     
     var hasEntries: Bool {
-        !entries.isEmpty
+        !entries.isEmpty && entries.contains { $0.weeklyXP > 0 }
     }
     
     // MARK: - Dependencies
